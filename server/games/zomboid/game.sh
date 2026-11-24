@@ -23,7 +23,7 @@ GAME_COMPOSE_SERVICE="zomboid"
 # The port a player types after the address the connectivity strategy publishes.
   # 16262/udp is opened beside it, but players type only this one.
 GAME_CONNECT_PORT="16261"
-GAME_RCON_PORT="27015"
+GAME_PROBE_PORT="27015"
 # Not yet: the server tells a client to continue on its second port
 # (UDPPort, 16262 by default), which a slot's host mapping would not carry.
 # Rendering DefaultPort and UDPPort into the server's ini from the slot is
@@ -51,7 +51,7 @@ source "${ZOMBOID_GAME_DIR}/../_probes/rcon.sh"
 # The host side of the RCON mapping follows the slot (ADR-0054), read when a
 # command is sent: the slot's ports are exported after the module loads.
 zomboid_rcon_port() {
-  printf '%s' "${ZOMBOID_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
+  printf '%s' "${ZOMBOID_RCON_PORT:-${SPAWNPOINT_PROBE_PORT:-27015}}"
   return 0
 }
 # Unlike factorio, this server does not generate its own password: the image

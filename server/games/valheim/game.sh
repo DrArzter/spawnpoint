@@ -15,9 +15,9 @@ GAME_COMPOSE_SERVICE="valheim"
 GAME_CONNECT_PORT="2456"
 GAME_CONNECT_PROTOCOL="udp"
 # Valheim has no RCON. Its Steam query port, always the game port plus one, is
-# the probe's transport and takes the slot's RCON place, so the host side stays
-# the game port plus one in every slot. It is bound to localhost.
-GAME_RCON_PORT="2457"
+# the probe port, so the host side stays the game port plus one in every slot.
+# It is bound to localhost.
+GAME_PROBE_PORT="2457"
 # The client connects to the port the address names, and the query port keeps
 # its offset in every slot. The server names no other port.
 GAME_SLOTTABLE="true"
@@ -42,7 +42,7 @@ source "${VALHEIM_GAME_DIR}/../_probes/a2s.sh"
 # The host side of the query port follows the slot (ADR-0054), read when the
 # probe runs: the slot's ports are exported after the module loads.
 valheim_query_port() {
-  printf '%s' "${VALHEIM_QUERY_PORT:-${SPAWNPOINT_RCON_PORT:-2457}}"
+  printf '%s' "${VALHEIM_QUERY_PORT:-${SPAWNPOINT_PROBE_PORT:-2457}}"
   return 0
 }
 

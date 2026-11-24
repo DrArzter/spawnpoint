@@ -15,9 +15,9 @@ GAME_COMPOSE_SERVICE="palworld"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="8211"
 GAME_CONNECT_PROTOCOL="udp"
-# Palworld's RCON is off. Its REST API port is the probe's transport and takes
-# the slot's RCON place; it is bound to localhost (ADR-0076).
-GAME_RCON_PORT="8212"
+# Palworld's RCON is off. Its REST API port is the probe port; it is bound to
+# localhost (ADR-0076).
+GAME_PROBE_PORT="8212"
 # The client connects to the port the address names. The server names another
 # port only to the community list, which this server is not on; compose still
 # sets PublicPort from the slot. Not yet proven on a slot other than zero.
@@ -46,7 +46,7 @@ source "${PALWORLD_GAME_DIR}/../_probes/http.sh"
 # The host side of the API port follows the slot (ADR-0054), read when a
 # request is sent: the slot's ports are exported after the module loads.
 palworld_rest_port() {
-  printf '%s' "${PALWORLD_REST_PORT:-${SPAWNPOINT_RCON_PORT:-8212}}"
+  printf '%s' "${PALWORLD_REST_PORT:-${SPAWNPOINT_PROBE_PORT:-8212}}"
   return 0
 }
 

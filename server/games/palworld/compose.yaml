@@ -12,7 +12,7 @@ services:
       - "${SPAWNPOINT_GAME_BIND:-0.0.0.0}:${SPAWNPOINT_GAME_PORT:-8211}:8211/udp"
       # The REST API stays host-local: the probe's transport (ADR-0076), never a
       # player surface. Its maker says it must not face the Internet.
-      - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-8212}:8212/tcp"
+      - "127.0.0.1:${SPAWNPOINT_PROBE_PORT:-8212}:8212/tcp"
     environment:
       # Game settings (ADR-0064): no value, so one a world never set never
       # reaches the container. See settings.json.

@@ -39,6 +39,7 @@ files_for() {
     printf 'project=%s\n' "${SERVER_COMPOSE_PROJECT:-}"
     printf 'game_port=%s\n' "${SPAWNPOINT_GAME_PORT:-}"
     printf 'game_port_2=%s\n' "${SPAWNPOINT_GAME_PORT_2:-}"
+    printf 'probe_port=%s\n' "${SPAWNPOINT_PROBE_PORT:-}"
     printf 'rcon_port=%s\n' "${SPAWNPOINT_RCON_PORT:-}"
     printf 'connect_port=%s\n' "${SPAWNPOINT_CONNECT_PORT:-}"
     printf 'footprint=%s\n' "${SPAWNPOINT_FOOTPRINT_MEMORY_MIB:-}"
@@ -75,7 +76,7 @@ zero="$(WORLD_ID=world WORLD_FOOTPRINT_MEMORY_MIB=7168 SPAWNPOINT_SLOT=0 files_f
 grep -Fxq "files=${server}/compose.yaml:${server}/compose.release.yaml:${server}/compose.minecraft-host-observability.yaml:${server}/games/minecraft/compose.footprint.yaml" <<<"${zero}"
 grep -Fxq 'project=spawnpoint-world' <<<"${zero}"
 grep -Fxq 'game_port=25565' <<<"${zero}"
-grep -Fxq 'rcon_port=25575' <<<"${zero}"
+grep -Fxq 'probe_port=25575' <<<"${zero}"
 grep -Fxq 'game_port_2=' <<<"${zero}"
 grep -Fxq 'connect_port=25565' <<<"${zero}"
 grep -Fxq 'footprint=7168' <<<"${zero}"
@@ -86,6 +87,8 @@ third="$(WORLD_ID=magic WORLD_FOOTPRINT_MEMORY_MIB=7168 SPAWNPOINT_SLOT=3 files_
 grep -Fxq "files=${server}/compose.yaml:${server}/compose.release.yaml:${server}/compose.minecraft-host-observability.yaml:${server}/games/minecraft/compose.footprint.yaml" <<<"${third}"
 grep -Fxq 'project=spawnpoint-magic' <<<"${third}"
 grep -Fxq 'game_port=30030' <<<"${third}"
+grep -Fxq 'probe_port=30031' <<<"${third}"
+# The old name carries the same port, for a module that still reads it.
 grep -Fxq 'rcon_port=30031' <<<"${third}"
 grep -Fxq 'game_port_2=30032' <<<"${third}"
 grep -Fxq 'connect_port=30030' <<<"${third}"
@@ -93,7 +96,18 @@ grep -Fxq 'connect_port=30030' <<<"${third}"
 factorio_first="$(WORLD_ID=base WORLD_FOOTPRINT_MEMORY_MIB=2048 SPAWNPOINT_SLOT=1 files_for factorio)"
 grep -Fxq "files=${server}/games/factorio/compose.yaml:${server}/games/factorio/compose.footprint.yaml" <<<"${factorio_first}"
 grep -Fxq 'game_port=30010' <<<"${factorio_first}"
-grep -Fxq 'rcon_port=30011' <<<"${factorio_first}"
+grep -Fxq 'probe_port=30011' <<<"${factorio_first}"
+
+# A module that still names the old GAME_RCON_PORT keeps its probe port.
+legacy="$(
+  # shellcheck source=../games/_dispatch.sh
+  source "${server}/games/_dispatch.sh"
+  export GAME_CONNECT_PORT=7777 GAME_RCON_PORT=7778
+  unset GAME_PROBE_PORT
+  configure_slot_ports 0
+  printf 'probe_port=%s\n' "${SPAWNPOINT_PROBE_PORT}"
+)"
+grep -Fxq 'probe_port=7778' <<<"${legacy}"
 
 # An explicit project name is kept: the control plane may name one.
 named="$(WORLD_ID=world WORLD_FOOTPRINT_MEMORY_MIB=7168 SPAWNPOINT_SLOT=0 SERVER_COMPOSE_PROJECT=custom files_for minecraft)"
@@ -108,6 +122,6 @@ expect_failure "placed session without a footprint" env WORLD_ID=world SPAWNPOIN
 expect_failure "zomboid off slot zero" env WORLD_ID=z WORLD_FOOTPRINT_MEMORY_MIB=8192 SPAWNPOINT_SLOT=1 bash -c "$(declare -f files_for); server='${server}'; files_for zomboid"
 zomboid_zero="$(WORLD_ID=z WORLD_FOOTPRINT_MEMORY_MIB=8192 SPAWNPOINT_SLOT=0 files_for zomboid)"
 grep -Fxq 'game_port=16261' <<<"${zomboid_zero}"
-grep -Fxq 'rcon_port=27015' <<<"${zomboid_zero}"
+grep -Fxq 'probe_port=27015' <<<"${zomboid_zero}"
 
 printf 'result=passed\n'

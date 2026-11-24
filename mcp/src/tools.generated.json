@@ -28,16 +28,21 @@
   {
     "name": "get_host_metrics",
     "title": "Get host metrics",
-    "description": "Read recent metrics for one host shown by get_control_plane.",
+    "description": "Read recent metrics for one host shown by get_control_plane. Name it by hostId.",
     "readOnly": true,
     "destructive": false,
     "inputSchema": {
       "type": "object",
       "properties": {
+        "hostId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Host ID from get_control_plane"
+        },
         "instanceId": {
           "type": "string",
           "minLength": 1,
-          "description": "Host instance ID"
+          "description": "The old name of hostId: give hostId instead"
         },
         "range": {
           "type": "string",
@@ -49,9 +54,7 @@
           "default": "24h"
         }
       },
-      "required": [
-        "instanceId"
-      ],
+      "required": [],
       "additionalProperties": false
     }
   },

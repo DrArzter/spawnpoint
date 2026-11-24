@@ -14,7 +14,7 @@ services:
       - "${SPAWNPOINT_GAME_BIND:-0.0.0.0}:${SPAWNPOINT_GAME_PORT:-16261}:16261/udp"
       - "${SPAWNPOINT_GAME_BIND:-0.0.0.0}:${SPAWNPOINT_GAME_PORT_2:-16262}:16262/udp"
       # RCON stays host-local: the probe's transport, never a player surface.
-      - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-27015}:27015"
+      - "127.0.0.1:${SPAWNPOINT_PROBE_PORT:-27015}:27015"
     environment:
       # The image documents no variable for the server name and none for
       # Workshop items, so this world is vanilla until the mod list can be

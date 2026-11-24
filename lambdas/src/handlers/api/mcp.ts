@@ -41,10 +41,12 @@ function worldToolArguments(args: Record<string, unknown>): readonly [string, st
     : null;
 }
 
-function metricsToolArguments(args: Record<string, unknown>): readonly [string, string] | null {
+/** A host by `hostId`, or by `instanceId`, its old name (review R43), which clients configured before it still send. */
+export function metricsToolArguments(args: Record<string, unknown>): readonly [string, string] | null {
   const range = args.range ?? "24h";
-  return typeof args.instanceId === "string" && typeof range === "string" && METRIC_RANGE_NAMES.includes(range)
-    ? [args.instanceId, range]
+  const hostId = args.hostId ?? args.instanceId;
+  return typeof hostId === "string" && typeof range === "string" && METRIC_RANGE_NAMES.includes(range)
+    ? [hostId, range]
     : null;
 }
 

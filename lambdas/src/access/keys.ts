@@ -81,6 +81,8 @@ export const playerInvitationSenderIndex = (senderId: string, gameId: string, wo
 
 export const consolePrefix = "CONSOLE#";
 export const consolePartition = (worldId: string): string => `${consolePrefix}${worldId}`;
+/** One console command's record in its world's partition, ordered by when it was sent. */
+export const consoleSortKey = (at: string, commandId: string): string => `${at}#${commandId}`;
 
 export const downloadPrefix = "DOWNLOAD#";
 export const downloadPartition = (worldId: string): string => `${downloadPrefix}${worldId}`;

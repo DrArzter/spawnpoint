@@ -9,7 +9,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
-import { GetCommandInvocationCommand, SendCommandCommand, SSMClient } from "@aws-sdk/client-ssm";
+import { SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
@@ -40,7 +40,6 @@ import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput,
 import type { ControlPlaneSources, HostMetricPoint, HostMetricsWindow, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
 import { expectationFromRuns, type FinishedRun } from "./operation-eta.ts";
-import type { ConsoleInvocation } from "./console.ts";
 import type { HostRecord, SessionPolicy } from "../domain/placement.ts";
 
 type MachineType = OperationObservation["type"];
@@ -812,7 +811,7 @@ export async function replaceWorldAccess(
   }
 }
 
-// --- The console gateway (ADR-0063) -------------------------------------------
+// --- Where a session runs (ADR-0054) ------------------------------------------
 
 /** Which host and slot a session holds, from the host records beside the lifecycle. */
 export async function findSessionPlacement(sessionId: string): Promise<Readonly<{ hostId: string; slot: number }> | null> {
@@ -833,53 +832,4 @@ export async function findSessionPlacement(sessionId: string): Promise<Readonly<
     exclusiveStartKey = page.LastEvaluatedKey;
   } while (exclusiveStartKey);
   return null;
-}
-
-export async function sendConsoleCommand(args: Readonly<{ hostId: string; worldId: string; slot: string; encodedCommand: string }>): Promise<string> {
-  requireWorldId(args.worldId);
-  const sent = await ssm.send(new SendCommandCommand({
-    DocumentName: requiredEnv("CONSOLE_DOCUMENT_NAME"),
-    InstanceIds: [args.hostId],
-    Parameters: { worldId: [args.worldId], slot: [args.slot], command: [args.encodedCommand] },
-    TimeoutSeconds: 60,
-    Comment: `console ${args.worldId}`,
-  }));
-  const commandId = sent.Command?.CommandId;
-  if (!commandId) throw new Error("console command did not return an id");
-  return commandId;
-}
-
-/**
- * Asks a running world's host to write the whitelist from the world's record
- * and reload it (ADR-0066). Only the world and the slot travel: the host reads
- * the names from S3 itself.
- */
-export async function sendWhitelistReload(args: Readonly<{ hostId: string; worldId: string; slot: string }>): Promise<string> {
-  requireWorldId(args.worldId);
-  const sent = await ssm.send(new SendCommandCommand({
-    DocumentName: requiredEnv("WHITELIST_DOCUMENT_NAME"),
-    InstanceIds: [args.hostId],
-    Parameters: { worldId: [args.worldId], slot: [args.slot] },
-    TimeoutSeconds: 60,
-    Comment: `whitelist ${args.worldId}`,
-  }));
-  const commandId = sent.Command?.CommandId;
-  if (!commandId) throw new Error("whitelist reload did not return an id");
-  return commandId;
-}
-
-export async function readConsoleInvocation(commandId: string, hostId: string): Promise<ConsoleInvocation> {
-  try {
-    const invocation = await ssm.send(new GetCommandInvocationCommand({ CommandId: commandId, InstanceId: hostId }));
-    return {
-      status: invocation.Status ?? "Pending",
-      responseCode: invocation.ResponseCode ?? null,
-      output: invocation.StandardOutputContent ?? "",
-      error: invocation.StandardErrorContent ?? "",
-    };
-  } catch (error) {
-    // A command just sent may not have reached the host's invocation list yet.
-    if (error instanceof Error && error.name === "InvocationDoesNotExist") return { status: "Pending", responseCode: null, output: "", error: "" };
-    throw error;
-  }
 }

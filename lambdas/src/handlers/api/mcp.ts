@@ -2,7 +2,8 @@ import { type Identity, type Permission, can, permissionsOf, roleOf } from "../.
 import { type McpToolName, mcpTools } from "../../access/mcp-tools.ts";
 import { type OAuthScope, verifyOAuthAccessToken } from "../../access/oauth.ts";
 import { type Response, type JsonObject, InvalidBodyError, parseJsonObject, parseJsonText, response, responseWithHeaders, type Event } from "./http.ts";
-import { type ConsoleAgent, runConsoleCommand, consoleCommandResult } from "./console.ts";
+import { type ConsoleAgent } from "./console.ts";
+import { deployedConsole } from "./console-wiring.ts";
 import { oauthClient, oauthProtectedResourceMetadata, oauthIssuer, oauthResource } from "./oauth.ts";
 import { controlPlane } from "./control-plane.ts";
 import { hostMetrics } from "./metrics.ts";
@@ -107,11 +108,11 @@ const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
     const worldArgs = worldToolArguments(args);
     if (worldArgs === null || typeof args.command !== "string") return null;
     const body = JSON.stringify({ command: args.command });
-    return consoleAgent(caller.clientId).then((agent) => runConsoleCommand(identity, ...worldArgs, body, agent));
+    return consoleAgent(caller.clientId).then((agent) => deployedConsole.runConsoleCommand(identity, ...worldArgs, body, agent));
   },
   get_console_result: (_identity, args) => {
     const worldArgs = worldToolArguments(args);
-    return worldArgs === null || typeof args.commandId !== "string" ? null : consoleCommandResult(...worldArgs, args.commandId);
+    return worldArgs === null || typeof args.commandId !== "string" ? null : deployedConsole.consoleCommandResult(...worldArgs, args.commandId);
   },
   start_world: (identity, args) => {
     const worldArgs = worldToolArguments(args);

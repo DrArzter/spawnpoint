@@ -56,6 +56,38 @@ export type ConsoleInvocation = Readonly<{
   error: string;
 }>;
 
+/** The host a world's ready session runs on, as the console gateway addresses it. */
+export type ConsoleTarget = Readonly<{ hostId: string; worldId: string; slot: string }>;
+
+/**
+ * The console gateway's port (ADR-0063): one fixed document per purpose on
+ * the world's host. A command is sent and answered later; nothing waits.
+ */
+export type ConsoleGateway = Readonly<{
+  send: (target: ConsoleTarget, encodedCommand: string) => Promise<string>;
+  read: (commandId: string, hostId: string) => Promise<ConsoleInvocation>;
+  /** Asks the host to write the world's whitelist from its record and reload it (ADR-0066). */
+  reloadWhitelist: (target: ConsoleTarget) => Promise<string>;
+}>;
+
+/** One command as the console keeps it: the entry the panel shows, and where it ran. */
+export type ConsoleRecord = Readonly<{
+  entry: ConsoleEntry;
+  gameId: string;
+  sessionId: string;
+  hostId: string;
+  agentClientId: string | null;
+}>;
+
+/** Where the console keeps its commands (ADR-0063), for CONSOLE_RECORD_DAYS. */
+export type ConsoleRecords = Readonly<{
+  append: (record: ConsoleRecord) => Promise<void>;
+  /** The world's most recent commands of this game, newest first, with the host a pending one ran on. */
+  recent: (gameId: string, worldId: string, limit: number) => Promise<readonly Readonly<{ entry: ConsoleEntry; hostId: string | null }>[]>;
+  /** Records a pending command's answer. A command another reader settled first keeps that answer. */
+  settle: (entry: ConsoleEntry, result: Readonly<{ status: ConsoleStatus; output: string | null }>) => Promise<void>;
+}>;
+
 function clip(text: string): string {
   const trimmed = text.trimEnd();
   return trimmed.length > CONSOLE_OUTPUT_LIMIT ? `${trimmed.slice(0, CONSOLE_OUTPUT_LIMIT)}\n…` : trimmed;

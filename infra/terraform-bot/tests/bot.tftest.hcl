@@ -52,7 +52,7 @@ run "bot_is_an_isolated_webhook" {
 
   variables {
     enable_notifications = false
-    mini_app_url          = "https://spawnpoint.example.dev/"
+    mini_app_url         = "https://spawnpoint.example.dev/"
   }
 
   assert {
@@ -73,8 +73,9 @@ run "bot_is_an_isolated_webhook" {
   assert {
     condition = alltrue([
       for key in [
-        "START_STATE_MACHINE_ARN",
-        "SERVER_ID",
+        "ACCESS_API_FUNCTION",
+        "GAME_ID",
+        "WORLD_ID",
         "INSTANCE_ID",
         "RELEASE_BUCKET",
         "PANEL_ADDRESS",

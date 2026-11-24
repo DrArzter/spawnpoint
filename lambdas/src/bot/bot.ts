@@ -73,7 +73,7 @@ export function buildBot(token: string, accessStore: AccessStore): Bot {
   });
   bot.callbackQuery(callbacks.confirmStart, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await startCommand(ctx, accessStore, "edit");
+    await startCommand(ctx, "edit");
   });
   // Reached only when no command above matched: an authorised user typing
   // an unknown command gets the menu, not silence.

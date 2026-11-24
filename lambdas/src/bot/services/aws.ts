@@ -4,11 +4,8 @@
 import { EC2Client, DescribeInstancesCommand } from "@aws-sdk/client-ec2";
 import { GetObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
-import { ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { randomUUID } from "node:crypto";
 
-import { buildLifecycleStartInput } from "../../domain/telegram-bot.ts";
 import { attachmentDisposition, packAttachmentName, releaseManifestKey } from "../../control-plane/release-artifacts.ts";
 import { releasePackStorageKey } from "../../control-plane/release-objects.ts";
 import { S3ReleaseStateReader } from "../../control-plane/s3-release-state-store.ts";
@@ -21,7 +18,6 @@ export const env = (name: string): string => {
 };
 
 const region = env("AWS_REGION");
-const sfn = new SFNClient({ region });
 const ec2 = new EC2Client({ region });
 const s3 = new S3Client({ region });
 const ssm = new SSMClient({ region });
@@ -73,43 +69,6 @@ export async function describeHost(): Promise<Readonly<{ state: string; publicIp
 
 export async function instanceState(): Promise<string> {
   return (await describeHost()).state;
-}
-
-export async function startIsRunning(): Promise<boolean> {
-  const [running, host] = await Promise.all([
-    sfn.send(new ListExecutionsCommand({
-      stateMachineArn: env("START_STATE_MACHINE_ARN"),
-      statusFilter: "RUNNING",
-      maxResults: 1,
-    })),
-    instanceState(),
-  ]);
-  return (running.executions ?? []).length > 0 || host !== "stopped";
-}
-
-// One session = the start machine plus its watchdog, attributed to whoever asked.
-export async function startSession(requestedBy: string): Promise<string> {
-  const operationId = `bot-${new Date().toISOString().replace(/[:.]/g, "").slice(0, 15)}Z`;
-  await sfn.send(
-    new StartExecutionCommand({
-      stateMachineArn: env("START_STATE_MACHINE_ARN"),
-      name: operationId,
-      input: JSON.stringify(
-        buildLifecycleStartInput({
-          serverId: env("SERVER_ID"),
-          operationId,
-          sessionId: `session-${randomUUID()}`,
-          instanceId: env("INSTANCE_ID"),
-          // The bot has no world picker yet, so it names the world it is
-          // configured for rather than relying on a machine default, which no
-          // longer exists.
-          worldId: env("WORLD_ID"),
-          requestedBy,
-        }),
-      ),
-    }),
-  );
-  return operationId;
 }
 
 // An objects-v1 release keeps its pack as an object named by digest, so the

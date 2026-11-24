@@ -6,11 +6,12 @@ bucket and Lifecycle V2 workflows without owning or modifying them. Therefore a
 bot plan cannot replace EC2, detach EBS or alter a state machine.
 
 The Lambda is invoked only by Telegram webhooks; no bot compute runs between
-messages. `/start` only opens the menu, `/server_start` starts the Lifecycle V2
-start, which registers the session's watchdog itself; `/status` is read-only, and `/pack` returns a
+messages. `/start` only opens the menu, `/server_start` asks the API's start route
+for the `bot_world` world, through the same permission check and placement as the panel
+(ADR-0087); `/status` is read-only, and `/pack` returns a
 short-lived presigned S3 link when one exists. `/network` gives the ZeroTier join
-command, while `/address` gives the stable Minecraft and session-scoped Grafana
-addresses. Telegram's webhook secret gates the public Function URL, then the
+command, while `/address` gives the world's stable address and the session-scoped Grafana
+address. Telegram's webhook secret gates the public Function URL, then the
 shared access table resolves the Telegram account to one Spawnpoint identity and checks the command's permission.
 
 Secrets live in SSM; identities and roles live in the shared DynamoDB access table:

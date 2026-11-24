@@ -28,6 +28,8 @@ One word per thing. If a word here disagrees with a word in the product, the pro
 
 **Log assistant**: An AI model an Owner asks to explain a world log, paid for by the deployment and capped per day and per month. _Avoid_: Bot, which names the Telegram bot.
 
+**Proposal**: A change the log assistant asked for in a conversation, which runs only when the Owner applies it. _Avoid_: Action or suggestion, which name nothing stored.
+
 **World generation**: One save lineage in a world's history, created from a specific release and carrying its own desired and active release state. Regenerating a world closes the current generation with a recoverable final backup and starts a fresh generation from a selected release without reusing the previous save. Promoting a compatible release may update an existing generation without creating a new one. A generation may have many backups; it is not itself a backup.
 
 **Wipe**: The player-facing name for a world generation and, by extension, the deliberate transition that closes the current generation and starts the next one. Interfaces may say “current wipe”, “wipe history” and “start new wipe”; internal records retain the precise term world generation.

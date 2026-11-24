@@ -4,7 +4,9 @@
 
 locals {
   assistant_function_name = "spawnpoint-assistant"
-  assistant_models        = [var.assistant_haiku_model_id, var.assistant_sonnet_model_id]
+  # Named, not referenced: the API names the worker too, and the two would depend on each other.
+  access_api_function_name = "spawnpoint-access-api"
+  assistant_models         = [var.assistant_haiku_model_id, var.assistant_sonnet_model_id]
   assistant_environment = {
     ASSISTANT_ENABLED         = var.assistant_enabled ? "true" : "false"
     ASSISTANT_MONTHLY_CAP_USD = tostring(var.assistant_monthly_cap_usd)
@@ -36,12 +38,20 @@ resource "aws_iam_role_policy_attachment" "assistant_logs" {
 }
 
 data "aws_iam_policy_document" "assistant" {
-  # The worker settles the answer it was handed and adds what it cost to the
-  # month. It reads nothing else.
+  # The worker settles the answer it was handed, reads and writes the
+  # conversation it was handed (ADR-0096), and adds what it cost to the month.
   statement {
-    sid       = "SettleAnswersAndAddSpend"
-    actions   = ["dynamodb:UpdateItem"]
+    sid       = "KeepAnswersConversationsAndSpend"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]
     resources = [data.aws_dynamodb_table.access.arn]
+  }
+
+  # A conversation's reads run in the API, as the owner, through the routes'
+  # own gate (ADR-0096). The worker holds no grant to the data itself.
+  statement {
+    sid       = "RunReadsThroughTheApi"
+    actions   = ["lambda:InvokeFunction"]
+    resources = ["arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${local.access_api_function_name}"]
   }
 
   # An EU inference profile routes a call to the model in one of the EU
@@ -88,6 +98,7 @@ resource "aws_lambda_function" "assistant" {
   environment {
     variables = {
       ACCESS_TABLE_NAME         = data.aws_dynamodb_table.access.name
+      ACCESS_API_FUNCTION_NAME  = local.access_api_function_name
       ASSISTANT_ENABLED         = local.assistant_environment.ASSISTANT_ENABLED
       ASSISTANT_MONTHLY_CAP_USD = local.assistant_environment.ASSISTANT_MONTHLY_CAP_USD
       ASSISTANT_HAIKU_MODEL_ID  = local.assistant_environment.ASSISTANT_HAIKU_MODEL_ID

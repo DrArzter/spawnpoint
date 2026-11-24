@@ -60,6 +60,10 @@ function targetRecords(roleId = "operator"): Item[] {
     { pk: "INVITATION#p1", sk: "EVENT", sender_identity_id: t, recipient_identity_ids: [ids.owner], gsi1pk: `INVITATION#SENDER#${t}#GAME#minecraft#WORLD#w1` },
     { pk: "CONSOLE#w1", sk: "2026-11-20T10:00:00.000Z#cmd1", identity_id: t, display_name: person.name, command: "list" },
     { pk: "DOWNLOAD#w1", sk: "2026-11-20T11:00:00.000Z#d1", identity_id: t, display_name: person.name, key: "worlds/w1/archives/a.tar.zst" },
+    // The assistant's records of the person go whole (ADR-0094, ADR-0096).
+    { pk: `ASSISTANT_CONVERSATION#${t}`, sk: "c1", identity_id: t, conversation_id: "c1", title: "Why the lag?" },
+    { pk: "ASSISTANT#w1", sk: "a1", identity_id: t, answer_id: "a1", model: "haiku" },
+    { pk: "WORLD_LOG#w1", sk: "r1", identity_id: t, read_id: "r1", host_id: "i-1" },
   ];
 }
 
@@ -73,6 +77,7 @@ function unrelatedRecords(): Item[] {
     profile(ids.other, "player", { created_by: ids.target, approved_by: ids.target }),
     { pk: "INVITATION#p2", sk: "EVENT", sender_identity_id: ids.owner, recipient_identity_ids: [ids.target] },
     { pk: "CONSOLE#w1", sk: "2026-11-20T09:00:00.000Z#cmd0", identity_id: ids.owner, display_name: "name-a1", command: "say hi" },
+    { pk: `ASSISTANT_CONVERSATION#${ids.owner}`, sk: "c0", identity_id: ids.owner, conversation_id: "c0", title: "Mine" },
     { pk: "ACCESS_INVITATION#i4", sk: "TOKEN", entity_type: "ACCESS_INVITATION", status: "PENDING", created_by: ids.owner },
   ];
 }
@@ -165,6 +170,11 @@ test("every record of the person goes, and records about other people stay", asy
   assert.equal(download.display_name, undefined);
   assert.equal(download.identity_id, ids.target);
 
+  assert.equal(f.get(`ASSISTANT_CONVERSATION#${ids.target}`, "c1"), undefined);
+  assert.equal(f.get("ASSISTANT#w1", "a1"), undefined);
+  assert.equal(f.get("WORLD_LOG#w1", "r1"), undefined);
+  assert.ok(f.get(`ASSISTANT_CONVERSATION#${ids.owner}`, "c0"), "another person's conversation stays");
+
   const rewritten = worlds.stored.get("w1")!.record;
   assert.deepEqual(rewritten.gameSettings?.updatedBy, { identityId: ids.target, displayName: deletedUserName });
   assert.deepEqual(rewritten.whitelist?.updatedBy, { identityId: ids.target, displayName: deletedUserName });
@@ -176,7 +186,7 @@ test("every record of the person goes, and records about other people stay", asy
   assert.deepEqual(JSON.parse(f.audit[0]!), {
     ...JSON.parse(f.audit[0]!),
     event: "identity_deleted", actorIdentityId: ids.owner, deletedIdentityId: ids.target, roleId: "operator",
-    removed: { accounts: 2, credentials: 1, loginSessions: 2, oauth: 3, emailActions: 1, invitations: 2, playerInvitations: 1, avatars: 1 },
+    removed: { accounts: 2, credentials: 1, loginSessions: 2, oauth: 3, emailActions: 1, invitations: 2, playerInvitations: 1, avatars: 1, assistant: 3 },
     revoked: { accessInvitations: 1 },
     anonymised: { console: 1, downloads: 1, worlds: 1, bootstrap: 0 },
     sweep2: "complete",

@@ -42,7 +42,7 @@ export const routes = composeRoutes(
   consoleRoutes,
   worldConfigRoutes,
   worldLogRoutes,
-  withoutTools("the assistant's own conversation", assistantRoutes),
+  withoutTools("the assistant's own conversation", assistantRoutes(deployedTools)),
   invitationsRoutes,
   withoutTools("connects an agent", oauthRoutes),
   withoutTools("an agent's own way in", mcpRoutes(deployedTools)),

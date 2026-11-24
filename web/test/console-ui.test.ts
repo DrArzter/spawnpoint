@@ -32,6 +32,7 @@ import { TablePreferences } from "../src/skins/console/ui/Preferences.tsx";
 import { HostLog } from "../src/skins/console/ui/HostLog.tsx";
 import { Segmented } from "../src/skins/console/ui/Segmented.tsx";
 import { SidePanel } from "../src/skins/console/ui/SidePanel.tsx";
+import { clampPanelWidth, PANEL_MIN_WIDTH, PANEL_PAGE_STRIP } from "../src/skins/console/ui/panel-width.ts";
 import { Skeleton, SkeletonGroup } from "../src/skins/console/ui/Skeleton.tsx";
 import { SplitPage } from "../src/skins/console/ui/SplitPage.tsx";
 import { StatCard, StatSkeleton } from "../src/skins/console/ui/StatCard.tsx";
@@ -161,6 +162,28 @@ test("Dialog and SidePanel: labelled modal surfaces whose Cancel runs the model'
   assert.match(dialog, /aria-label="Close"/);
   assert.match(html(createElement(SidePanel, { title: "Game settings", cancel: action("sheet.close", "Cancel", noop) })), /class="c-panel"/);
   assert.match(html(createElement(SidePanel, { title: "config/a.toml", cancel: action("sheet.close", "Cancel", noop), wide: true })), /class="c-panel c-panel-wide"/);
+});
+
+test("SidePanel: every drawer carries a labelled, focusable separator; one without a footer closes from its head", () => {
+  const drawer = html(createElement(SidePanel, { title: "Assistant", cancel: action("assistant.close", "Close", noop), footer: false, wide: true }, "body"));
+  assert.match(drawer, /class="c-panel-grip"/);
+  assert.match(drawer, /role="separator"/);
+  assert.match(drawer, /aria-orientation="vertical"/);
+  assert.match(drawer, /aria-label="Panel width"/);
+  assert.match(drawer, /tabindex="0"/i);
+  assert.doesNotMatch(drawer, /c-panel-foot/);
+  assert.match(drawer, /data-action="assistant\.close"/, "the head's close button is the Action's control");
+  const form = html(createElement(SidePanel, { title: "Game settings", cancel: action("sheet.close", "Cancel", noop) }));
+  assert.match(form, /class="c-panel-grip"/, "a form drawer is resized the same way");
+  assert.match(form, /c-panel-foot/);
+  assert.doesNotMatch(html(createElement(Dialog, { title: "Delete?", cancel: action("cancel", "Cancel", noop) })), /c-panel-grip/, "a centred dialog is not a drawer");
+});
+
+test("a dragged panel width stays between the narrowest panel and the screen less its strip", () => {
+  assert.equal(clampPanelWidth(100, 1600), PANEL_MIN_WIDTH);
+  assert.equal(clampPanelWidth(900, 1600), 900);
+  assert.equal(clampPanelWidth(5000, 1600), 1600 - PANEL_PAGE_STRIP);
+  assert.equal(clampPanelWidth(900, 420), PANEL_MIN_WIDTH, "a screen narrower than a panel keeps the narrowest panel");
 });
 
 test("SidePanel: every edge of its border is the panel's own, never the browser's dialog border", () => {

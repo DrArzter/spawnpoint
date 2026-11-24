@@ -1,10 +1,21 @@
-/* The Owner's assistant panel (ADR-0096): the conversations beside the open one, the message box under it. */
+/* The Owner's assistant panel (ADR-0096): the conversations beside the open one, the composer under it.
+   It fills the panel's body; the list and the thread each scroll on their own. Below 640px of panel
+   the list sits above the thread. */
 
-html[data-skin="console"] .c-assistant {
+html[data-skin="console"] .c-dialog-body > .c-assistant {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: inline-size;
+}
+
+html[data-skin="console"] .c-assistant-layout {
   display: grid;
-  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  flex: 1 1 auto;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 20px;
-  min-height: 100%;
+  min-height: 0;
 }
 
 html[data-skin="console"] .c-assistant-list {
@@ -13,6 +24,10 @@ html[data-skin="console"] .c-assistant-list {
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
+  padding-right: 20px;
+  border-right: 1px solid var(--c-line);
+  overflow: auto;
 }
 
 html[data-skin="console"] .c-assistant-list .c-tracklist {
@@ -24,13 +39,16 @@ html[data-skin="console"] .c-assistant-thread {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  min-height: 0;
 }
 
 html[data-skin="console"] .c-assistant-entries {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow: auto;
 }
 
 html[data-skin="console"] .c-assistant-message {
@@ -99,13 +117,30 @@ html[data-skin="console"] .c-assistant-note {
 
 html[data-skin="console"] .c-assistant-compose {
   display: flex;
+  flex: none;
   flex-direction: column;
-  align-items: flex-start;
   gap: 10px;
 }
 
-@media (max-width: 759px) {
-  html[data-skin="console"] .c-assistant {
+/* The model on the start, Send on the end, right under the message. */
+html[data-skin="console"] .c-assistant-compose-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@container (max-width: 640px) {
+  html[data-skin="console"] .c-assistant-layout {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  html[data-skin="console"] .c-assistant-list {
+    max-height: 30vh;
+    padding-right: 0;
+    padding-bottom: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--c-line);
   }
 }

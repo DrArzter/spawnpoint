@@ -1,9 +1,10 @@
-import type { FormEvent } from "react";
+import { useEffect, useRef, type FormEvent, type KeyboardEvent } from "react";
 
 import type { AssistantChatModel, ConversationRow, ThreadEntry } from "../../core/models";
 import { ActionButton } from "./ui/ActionButton";
 import { Ago } from "./ui/Ago";
-import { Empty, LoadError } from "./ui/Empty";
+import { LoadError } from "./ui/Empty";
+import { Indicator } from "./ui/Indicator";
 import { TextArea } from "./ui/Fields";
 import { Segmented } from "./ui/Segmented";
 import { SidePanel } from "./ui/SidePanel";
@@ -13,32 +14,49 @@ import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
 
 const tracks: readonly Track<ConversationRow>[] = [
   { id: "conversation", header: "Conversation", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle action={row.select} current={row.current} line={<Ago at={row.updatedAt} />} title={row.title} /> },
-  { id: "state", header: "State", width: "auto", kind: "end", quietHeader: true, render: (row) => <Status status={row.status} /> },
+  // The list is narrow: the state is a mark, its label the tooltip.
+  { id: "state", header: "State", width: "auto", kind: "end", quietHeader: true, render: (row) => <Indicator status={row.status} /> },
 ];
 
-/** The Owner's assistant, over any page (ADR-0096): the conversations, the open one, and the message box. */
+/**
+ * The Owner's assistant, over any page (ADR-0096): the conversations beside the
+ * open one, and under it one composer, the message with its model and Send.
+ * Enter sends; Shift+Enter starts a new line. The panel closes from its head.
+ */
 export function AssistantPanel({ model }: Readonly<{ model: AssistantChatModel }>) {
+  const ready = !model.send.disabled && !model.send.busy;
   const send = (event: FormEvent) => {
     event.preventDefault();
-    if (!model.send.disabled && !model.send.busy) model.send.run();
+    if (ready) model.send.run();
+  };
+  const sendOnEnter = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    if (ready) model.send.run();
   };
   const list = model.conversations;
   return (
-    <SidePanel actions={<ActionButton action={model.send} variant="primary" />} cancel={model.close} title="Assistant" wide>
+    <SidePanel cancel={model.close} footer={false} title="Assistant" wide>
       <div className="c-assistant">
-        <section aria-label="Conversations" className="c-assistant-list">
-          <ActionButton action={model.startNew} size="sm" />
-          {list.status === "error"
-            ? <LoadError error={list.error} kind={list.kind} retry={list.retry} size="sm" title="Conversations could not be loaded" verb="use the assistant" />
-            : <TrackList empty={<Empty icon="bolt" size="sm" title="No conversations" />} header={false} label="Conversations" loading={list.status === "loading"} rowKey={(row) => row.id} rows={list.status === "ready" ? list.value : []} tracks={tracks} />}
-        </section>
-        <section aria-label={model.thread?.title ?? "New conversation"} className="c-assistant-thread">
-          {model.thread === null ? <Empty icon="bolt" size="sm" title="New conversation" /> : <Thread thread={model.thread} />}
-          <form className="c-assistant-compose" onSubmit={send}>
-            <Segmented label="Model" onChange={model.setModel} options={model.choices.map((choice) => ({ value: choice.value, label: choice.label, hint: choice.hint }))} value={model.model} />
-            <TextArea aria-label="Message" maxLength={4000} onChange={(event) => model.setDraft(event.target.value)} placeholder="Message" prose rows={3} value={model.draft} />
-          </form>
-        </section>
+        <div className="c-assistant-layout">
+          <section aria-label="Conversations" className="c-assistant-list">
+            <ActionButton action={model.startNew} size="sm" />
+            {list.status === "error" && <LoadError error={list.error} kind={list.kind} retry={list.retry} size="sm" title="Conversations could not be loaded" verb="use the assistant" />}
+            {list.status !== "error" && (list.status === "loading" || list.value.length > 0) && (
+              <TrackList header={false} label="Conversations" loading={list.status === "loading"} rowKey={(row) => row.id} rows={list.status === "ready" ? list.value : []} tracks={tracks} />
+            )}
+          </section>
+          <section aria-label={model.thread?.title ?? "New conversation"} className="c-assistant-thread">
+            {model.thread === null ? <div className="c-assistant-entries" /> : <Thread thread={model.thread} />}
+            <form className="c-assistant-compose" onSubmit={send}>
+              <TextArea aria-label="Message" maxLength={4000} onChange={(event) => model.setDraft(event.target.value)} onKeyDown={sendOnEnter} placeholder="Message" prose rows={3} value={model.draft} />
+              <div className="c-assistant-compose-bar">
+                <Segmented label="Model" onChange={model.setModel} options={model.choices.map((choice) => ({ value: choice.value, label: choice.label, hint: choice.hint }))} value={model.model} />
+                <ActionButton action={model.send} variant="primary" />
+              </div>
+            </form>
+          </section>
+        </div>
       </div>
     </SidePanel>
   );
@@ -46,8 +64,14 @@ export function AssistantPanel({ model }: Readonly<{ model: AssistantChatModel }
 
 function Thread({ thread }: Readonly<{ thread: NonNullable<AssistantChatModel["thread"]> }>) {
   const entries = thread.entries;
+  const log = useRef<HTMLDivElement>(null);
+  const count = entries.status === "ready" ? entries.value.length : 0;
+  // The newest entry stays in view as the conversation grows.
+  useEffect(() => {
+    log.current?.scrollTo({ top: log.current.scrollHeight });
+  }, [count, thread.working]);
   return (
-    <div aria-live="polite" className="c-assistant-entries" role="log">
+    <div aria-live="polite" className="c-assistant-entries" ref={log} role="log">
       {entries.status === "loading" && <SkeletonGroup label="Reading the conversation"><Skeleton text width="70%" /><Skeleton text width="50%" /></SkeletonGroup>}
       {entries.status === "error" && <LoadError error={entries.error} kind={entries.kind} retry={entries.retry} size="sm" title="The conversation could not be loaded" verb="use the assistant" />}
       {entries.status === "ready" && entries.value.map((entry) => <Entry entry={entry} key={entry.id} />)}

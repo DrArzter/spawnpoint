@@ -45,9 +45,13 @@ A feature that needs a cloud API takes it as a port, the way the console does:
 record store are types in `control-plane/console.ts`), the adapters are
 `control-plane/aws-ssm-console-gateway.ts` and `console-store.ts`, and
 `console-wiring.ts` binds them once for the routes and MCP. Its tests use
-in-memory fakes; only an adapter's own test fakes the SDK. The other features
-move to this shape one at a time; `test/module-boundaries.test.ts` lists the
-files that still call the SDK directly.
+in-memory fakes; only an adapter's own test fakes the SDK. The backups,
+releases, world operations and promotion follow the same shape. The ports are
+`ControlPlaneSources` (`read-model.ts`, adapter `aws.ts`), `WorldRecords`
+(`world-records.ts`, adapter `aws-world-records.ts`), `SessionMachines`
+(`session-machines.ts`, adapter `aws-session-machines.ts`), `ReleaseLinks`,
+`BackupArchives` and the console's two. `test/module-boundaries.test.ts` lists
+the files that still call the SDK directly; the access feature is most of them.
 
 ## Changing a feature
 

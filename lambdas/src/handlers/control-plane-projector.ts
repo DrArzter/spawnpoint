@@ -1,13 +1,16 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
+import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 import { Route53Client } from "@aws-sdk/client-route-53";
-import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import { awsControlPlaneSources } from "../control-plane/aws.ts";
 import { awsSessionMachines } from "../control-plane/aws-session-machines.ts";
 import { eventJournalItem, hostOwnsSession, recoveryTarget, type ControlPlaneEvent } from "../control-plane/dynamic-projection.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
-import { dnsLedgerRecords, parkDnsRecord, terminalHostInstanceId } from "../control-plane/dns-ledger.ts";
+import { parkDnsRecord } from "../control-plane/aws-dns-ledger.ts";
+import { dnsLedgerRecords, terminalHostInstanceId } from "../control-plane/dns-ledger.ts";
+import { eventBus } from "../control-plane/aws-event-bus.ts";
+import { dynamoTable } from "../control-plane/dynamo-table.ts";
 
 const viewTable = process.env.CONTROL_PLANE_VIEW_TABLE;
 if (!viewTable) throw new Error("CONTROL_PLANE_VIEW_TABLE is required");
@@ -15,7 +18,8 @@ if (!viewTable) throw new Error("CONTROL_PLANE_VIEW_TABLE is required");
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
-const events = new EventBridgeClient({});
+const table = dynamoTable(document);
+const events = eventBus(new EventBridgeClient({}));
 const route53 = new Route53Client({});
 const dnsZoneId = process.env.GAME_DNS_ZONE_ID;
 const dnsSuffix = process.env.GAME_DNS_SUFFIX;
@@ -27,11 +31,11 @@ function conditionalFailure(error: unknown): boolean {
 
 async function recordEvent(event: ControlPlaneEvent, nowEpochSeconds: number): Promise<void> {
   try {
-    await document.send(new PutCommand({
+    await table.put({
       TableName: viewTable,
       Item: eventJournalItem(event, nowEpochSeconds + 90 * 24 * 60 * 60),
       ConditionExpression: "attribute_not_exists(pk) AND attribute_not_exists(sk)",
-    }));
+    });
   } catch (error) {
     if (!conditionalFailure(error)) throw error;
   }
@@ -48,7 +52,7 @@ async function writeProjection(eventId: string, observedAtEpochMilliseconds: num
   ]);
   let written = true;
   try {
-    await document.send(new PutCommand({
+    await table.put({
       TableName: viewTable,
       Item: {
         pk: "PROJECTION#CONTROL_PLANE",
@@ -62,7 +66,7 @@ async function writeProjection(eventId: string, observedAtEpochMilliseconds: num
       },
       ConditionExpression: "attribute_not_exists(pk) OR observed_at_epoch_ms < :observed_at",
       ExpressionAttributeValues: { ":observed_at": observedAtEpochMilliseconds },
-    }));
+    });
   } catch (error) {
     if (!conditionalFailure(error)) throw error;
     written = false;
@@ -74,14 +78,11 @@ async function publishProjectionInvalidation(
   eventId: string,
   observedAtEpochMilliseconds: number,
 ): Promise<void> {
-  const published = await events.send(new PutEventsCommand({ Entries: [{
-    Source: "spawnpoint.control-plane",
-    DetailType: "Projection Updated",
-    Detail: JSON.stringify({ schemaVersion: 1, sourceEventId: eventId, observedAtEpochMilliseconds }),
-  }] }));
-  if ((published.FailedEntryCount ?? 0) > 0) {
-    throw new Error(published.Entries?.[0]?.ErrorMessage ?? "EventBridge rejected projection invalidation");
-  }
+  const refused = await events.publish({
+    source: "spawnpoint.control-plane", detailType: "Projection Updated",
+    detail: { schemaVersion: 1, sourceEventId: eventId, observedAtEpochMilliseconds },
+  });
+  if (refused !== null) throw new Error(refused);
 }
 
 async function reconcileStoppedHost(
@@ -97,11 +98,11 @@ async function reconcileStoppedHost(
   // The projection observes the configured EC2 host, but an active Fleet
   // session may live elsewhere. Never reconcile it just because that unrelated
   // configured host is stopped.
-  const placedHost = await document.send(new GetCommand({
+  const placedHost = await table.get({
     TableName: lifecycleTable,
     Key: { server_id: `host#${target.instanceId}` },
     ConsistentRead: true,
-  }));
+  });
   if (!hostOwnsSession(placedHost.Item?.host, target.instanceId, target.sessionId)) return;
   const operationId = `reconcile-${target.serverId}-${eventId}`.slice(0, 80);
   try {
@@ -122,10 +123,10 @@ async function cleanTerminalHostDns(event: ControlPlaneEvent): Promise<void> {
   const instanceId = terminalHostInstanceId(event);
   if (instanceId === null || !dnsZoneId || !dnsSuffix || !lifecycleTable) return;
   const key = { server_id: `dns-host#${instanceId}` };
-  const result = await document.send(new GetCommand({ TableName: lifecycleTable, Key: key }));
+  const result = await table.get({ TableName: lifecycleTable, Key: key });
   if (!result.Item) return;
   for (const record of dnsLedgerRecords(result.Item, dnsZoneId, dnsSuffix)) await parkDnsRecord(route53, record); // NOSONAR sequential to stay inside the Route 53 change rate
-  await document.send(new DeleteCommand({ TableName: lifecycleTable, Key: key }));
+  await table.delete({ TableName: lifecycleTable, Key: key });
 }
 
 export async function handler(event: ControlPlaneEvent): Promise<void> {

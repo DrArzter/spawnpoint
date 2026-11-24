@@ -5,30 +5,19 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 // Dependency direction in the Lambdas. Business code depends on ports; only
-// adapters and Lambda entries touch the AWS SDK. LEGACY_SDK_IMPORTERS records
-// the code that still calls AWS directly. It may only get shorter.
+// adapters send to AWS. A Lambda entry is its composition root: it may build
+// the SDK's clients and hand them to adapters, and it sends nothing itself.
 
 const SOURCE = resolve(dirname(fileURLToPath(import.meta.url)), "../src");
 
 // An adapter says what it adapts in its file name.
 const ADAPTER = /(?:^|\/)(?:aws|aws-[a-z-]+|s3-[a-z-]+|dynamo-[a-z-]+|ses-[a-z-]+|[a-z-]+-store|[a-z-]+-port)\.ts$/;
 
-const LEGACY_SDK_IMPORTERS: readonly string[] = [
-  "bot/notifier.ts",
-  "builder/release-writer-main.ts",
-  "control-plane/dns-ledger.ts",
-  "control-plane/release-refs.ts",
-  "handlers/api/control-plane.ts",
-  "handlers/backup-retention.ts",
-  "handlers/control-plane-projector.ts",
-  "handlers/control-plane-subscriptions.ts",
-  "handlers/fleet-sweeper.ts",
-  "handlers/lifecycle-coordinator.ts",
-  "handlers/release-reconciler.ts",
-  "handlers/release-retirement.ts",
-  "handlers/release-state.ts",
-  "handlers/world-lifecycle.ts",
-];
+// A Lambda's entry: the API and worker handlers, the bot's two, the release writer.
+const ENTRY = /^(?:handlers\/[a-z-]+|bot\/(?:handler|notifier)|builder\/[a-z-]+-main)\.ts$/;
+
+// What an entry may take from the SDK: a client to construct, or a type.
+const CLIENT_ONLY = /^(?:type\s+)?[A-Za-z0-9]+Client$/;
 
 type Source = Readonly<{ path: string; packages: readonly string[]; local: readonly string[] }>;
 
@@ -47,15 +36,17 @@ async function sources(): Promise<readonly Source[]> {
   }));
 }
 
-test("only adapters and the recorded legacy files import the AWS SDK", async () => {
-  const importers = (await sources()).filter((source) => source.packages.some((name) => name.startsWith("@aws-sdk/")));
-  for (const { path } of importers) {
-    assert.ok(ADAPTER.test(path) || LEGACY_SDK_IMPORTERS.includes(path),
-      `${path} imports the AWS SDK: put the call behind a port in an adapter file (aws-*, s3-*, dynamo-*, ses-*, *-store, *-port)`);
-  }
-  const still = new Set(importers.map((source) => source.path));
-  for (const path of LEGACY_SDK_IMPORTERS) {
-    assert.ok(still.has(path), `${path} no longer imports the AWS SDK: remove it from LEGACY_SDK_IMPORTERS`);
+test("only adapters send to the AWS SDK; an entry only builds its clients", async () => {
+  for (const source of await sources()) {
+    if (!source.packages.some((name) => name.startsWith("@aws-sdk/")) || ADAPTER.test(source.path)) continue;
+    assert.ok(ENTRY.test(source.path),
+      `${source.path} imports the AWS SDK: put the call behind a port in an adapter file (aws-*, s3-*, dynamo-*, ses-*, *-store, *-port)`);
+    const text = await readFile(join(SOURCE, source.path), "utf8");
+    for (const [, names = "", from = ""] of text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"(@aws-sdk\/[^"]+)"/g)) {
+      for (const name of names.split(",").map((item) => item.trim()).filter(Boolean)) {
+        assert.match(name, CLIENT_ONLY, `${source.path} takes ${name} from ${from}: an entry builds clients; an adapter sends commands`);
+      }
+    }
   }
 });
 

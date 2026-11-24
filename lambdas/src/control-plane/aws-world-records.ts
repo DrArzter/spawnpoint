@@ -4,7 +4,7 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import { type PresetObservation } from "./preset-catalog.ts";
 import { ReleaseHolders, resolveFromWorldRecords } from "./release-holders.ts";
-import { ReleaseRefs } from "./release-refs.ts";
+import { ReleaseRefs } from "./dynamo-release-refs.ts";
 import { type ReleaseState } from "./release-state.ts";
 import { switchBeforeFirstStart } from "./release-switch.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";

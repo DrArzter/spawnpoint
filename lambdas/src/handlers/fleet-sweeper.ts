@@ -1,14 +1,17 @@
-import { DescribeInstancesCommand, EC2Client, TerminateInstancesCommand, type Instance } from "@aws-sdk/client-ec2";
+import { EC2Client } from "@aws-sdk/client-ec2";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
-import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { SFNClient } from "@aws-sdk/client-sfn";
 
 import { fleetSweepAction } from "../domain/fleet-sweep.ts";
 import { WARM_HOST_RETENTION_SECONDS, type HostRecord } from "../domain/placement.ts";
+import { awsFleetOps, type FleetInstance } from "../control-plane/aws-fleet-ops.ts";
+import { dynamoTable } from "../control-plane/dynamo-table.ts";
 
-const ec2 = new EC2Client({});
+// The composition root: the clients, then the ports over them.
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const states = new SFNClient({});
+const table = dynamoTable(document);
+const fleet = awsFleetOps(new EC2Client({}), new SFNClient({}));
 
 function required(name: string): string {
   const value = process.env[name];
@@ -16,40 +19,18 @@ function required(name: string): string {
   return value;
 }
 
-async function hostRecord(table: string, hostId: string): Promise<HostRecord | null> {
-  const result = await document.send(new GetCommand({
-    TableName: table,
+async function hostRecord(tableName: string, hostId: string): Promise<HostRecord | null> {
+  const result = await table.get({
+    TableName: tableName,
     Key: { server_id: `host#${hostId}` },
     ConsistentRead: true,
-  }));
+  });
   return (result.Item?.host as HostRecord | undefined) ?? null;
 }
 
-async function runningDrainHosts(drainArn: string): Promise<Set<string>> {
-  const hosts = new Set<string>();
-  let nextToken: string | undefined;
-  do {
-    const page = await states.send(new ListExecutionsCommand({ // NOSONAR paginated: the next token comes from the previous page
-      stateMachineArn: drainArn,
-      statusFilter: "RUNNING",
-      ...(nextToken ? { nextToken } : {}),
-    }));
-    const arns = (page.executions ?? []).flatMap((execution) => execution.executionArn ? [execution.executionArn] : []);
-    const details = await Promise.all(arns.map((executionArn) => states.send(new DescribeExecutionCommand({ executionArn })))); // NOSONAR one page at a time, within the paginated listing
-    for (const detail of details) {
-      if (!detail.input) continue;
-      const input: unknown = JSON.parse(detail.input);
-      if (typeof input === "object" && input !== null && "hostId" in input && typeof input.hostId === "string") {
-        hosts.add(input.hostId);
-      }
-    }
-    nextToken = page.nextToken;
-  } while (nextToken);
-  return hosts;
-}
 
 async function inspectInstance(
-  instance: Instance,
+  instance: FleetInstance,
   table: string,
   drainArn: string,
   now: number,
@@ -57,10 +38,9 @@ async function inspectInstance(
   warmRetention: number,
   activeDrains: () => Promise<Set<string>>,
 ): Promise<string | null> {
-  const hostId = instance.InstanceId;
-  if (!hostId || !instance.State?.Name || !instance.LaunchTime) return null;
+  const { hostId } = instance;
   const host = await hostRecord(table, hostId);
-  const action = fleetSweepAction(instance.State.Name, Math.floor(instance.LaunchTime.getTime() / 1000), host, now, grace, warmRetention);
+  const action = fleetSweepAction(instance.state, instance.launchedAtEpochSeconds, host, now, grace, warmRetention);
   switch (action) {
     case "drain": {
       // The drain rechecks the current record, reservations, headroom and a
@@ -69,11 +49,7 @@ async function inspectInstance(
       const running = await activeDrains();
       if (running.has(hostId)) return null;
       const name = `sweep-${hostId}-${Math.floor(now / 1800)}`;
-      try {
-        await states.send(new StartExecutionCommand({ stateMachineArn: drainArn, name, input: JSON.stringify({ hostId }) }));
-      } catch (error) {
-        if (!(error instanceof Error && error.name === "ExecutionAlreadyExists")) throw error;
-      }
+      await fleet.startDrain(drainArn, name, hostId);
       running.add(hostId);
       console.info("restarted stale Fleet drain", hostId);
       return null;
@@ -81,11 +57,11 @@ async function inspectInstance(
     case "terminate":
       // A terminating record cannot take a new reservation. This retries
       // the EC2 call that may have failed after the fenced DDB transition.
-      await ec2.send(new TerminateInstancesCommand({ InstanceIds: [hostId] }));
+      await fleet.terminate(hostId);
       console.info("retried Fleet termination", hostId);
       return null;
     case "alarm":
-      return `${hostId}: ${host?.state ?? "no host record"}, EC2 ${instance.State.Name}`;
+      return `${hostId}: ${host?.state ?? "no host record"}, EC2 ${instance.state}`;
     case "none":
       return null;
   }
@@ -101,20 +77,8 @@ export async function handler(): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   const alarms: string[] = [];
   let activeDrainsPromise: Promise<Set<string>> | undefined;
-  const activeDrains = () => activeDrainsPromise ??= runningDrainHosts(drainArn);
-  const instances: Instance[] = [];
-  let nextToken: string | undefined;
-  do {
-    const page = await ec2.send(new DescribeInstancesCommand({ // NOSONAR paginated: the next token comes from the previous page
-      Filters: [
-        { Name: "tag:ManagedBy", Values: ["spawnpoint-fleet"] },
-        { Name: "instance-state-name", Values: ["pending", "running", "stopping", "stopped"] },
-      ],
-      ...(nextToken ? { NextToken: nextToken } : {}),
-    }));
-    instances.push(...(page.Reservations ?? []).flatMap((reservation) => reservation.Instances ?? []));
-    nextToken = page.NextToken;
-  } while (nextToken);
+  const activeDrains = () => activeDrainsPromise ??= fleet.runningDrainHosts(drainArn);
+  const instances = await fleet.managedInstances();
   // Each host is its own decision; the running drains are read once and shared.
   const found = await Promise.all(instances.map((instance) => inspectInstance(instance, table, drainArn, now, grace, warmRetention, activeDrains)));
   alarms.push(...found.filter((alarm): alarm is string => Boolean(alarm)));

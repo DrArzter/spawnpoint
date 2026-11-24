@@ -2,7 +2,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
-import { ReleaseRefs } from "../control-plane/release-refs.ts";
+import { ReleaseRefs } from "../control-plane/dynamo-release-refs.ts";
 import { runCommand } from "./release-writer-cli.ts";
 import { s3ObjectPort } from "./s3-object-port.ts";
 

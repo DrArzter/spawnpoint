@@ -5,7 +5,8 @@ import { join } from "node:path";
 
 import { LEGACY_GAME_ID } from "../control-plane/game-modules.ts";
 import { isSha256, manifestPackObject, objectKey, OBJECT_LAYOUT, type ManifestPack } from "../control-plane/release-objects.ts";
-import { holderKey, type ClaimOptions, type FileClaim, type ObjectMode, type ReleaseRef, type ReleaseRefs } from "../control-plane/release-refs.ts";
+import { holderKey, type ClaimOptions, type FileClaim, type ObjectMode, type ReleaseRef } from "../control-plane/release-refs.ts";
+import { type ReleaseRefs } from "../control-plane/dynamo-release-refs.ts";
 
 // The builder's writer for the objects-v1 layout (ADR-0080, design 4.6). The
 // core owns the order of steps and the rules; it builds no AWS client, so a

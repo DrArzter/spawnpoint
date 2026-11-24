@@ -10,7 +10,8 @@ import {
 } from "../src/control-plane/s3-release-marks.ts";
 import type { TableItem } from "../src/control-plane/release-reconciler.ts";
 import { worldRecordDocument, type WorldRecord } from "../src/control-plane/world-registry.ts";
-import { cloudWatchMetrics, reconcile, type Metric, type ReconcilerDeps } from "../src/handlers/release-reconciler.ts";
+import { reconcile, type Metric, type ReconcilerDeps } from "../src/handlers/release-reconciler.ts";
+import { cloudWatchMetrics } from "../src/control-plane/aws-release-metrics.ts";
 import { legacyReleaseStateKey } from "../src/control-plane/release-state.ts";
 
 const OPEN = `gen-${"a".repeat(32)}`;
@@ -320,6 +321,7 @@ test("the reconciler modules contain no write call to S3, DynamoDB or any other 
     "../src/control-plane/release-reconciler.ts",
     "../src/control-plane/s3-release-marks.ts",
     "../src/handlers/release-reconciler.ts",
+    "../src/control-plane/aws-release-metrics.ts",
   ];
   const write = /\b(Put|Delete|Copy|Update|Restore|Upload|Complete|Abort)\w*(Object|Item|Objects|Items|Version|Table)\w*Command\b|TransactWrite|BatchWrite|S3WorldRepository|S3ReleaseStateStore/;
   for (const file of files) {
@@ -327,7 +329,9 @@ test("the reconciler modules contain no write call to S3, DynamoDB or any other 
     assert.doesNotMatch(source, write, file);
   }
   const handler = await readFile(new URL(files[2]!, import.meta.url), "utf8");
-  assert.deepEqual([...handler.matchAll(/new (\w+Command)\(/g)].map((match) => match[1]), ["PutMetricDataCommand"]);
+  assert.deepEqual([...handler.matchAll(/new (\w+Command)\(/g)].map((match) => match[1]), [], "the entry sends nothing itself");
+  const metrics = await readFile(new URL(files[3]!, import.meta.url), "utf8");
+  assert.deepEqual([...metrics.matchAll(/new (\w+Command)\(/g)].map((match) => match[1]), ["PutMetricDataCommand"]);
 });
 
 test("only the sweep writer file holds write commands, and none can delete a version or a table item", async () => {

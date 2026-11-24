@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  applyBackupRetention, archivesToRemove, protectedKeys, s3RetentionStore,
+  applyBackupRetention, archivesToRemove, protectedKeys,
   type ArchiveObject, type RetentionStore,
-} from "../src/handlers/backup-retention.ts";
+} from "../src/control-plane/backup-retention.ts";
+import { s3RetentionStore } from "../src/control-plane/s3-backup-retention.ts";
 import { backupInventory } from "../src/control-plane/backups.ts";
 import type { WorldRecord } from "../src/control-plane/world-registry.ts";
 

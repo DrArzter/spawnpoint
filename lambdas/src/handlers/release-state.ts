@@ -1,4 +1,4 @@
-import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+import { S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
@@ -8,9 +8,10 @@ import {
   commitPromotion, preparePromotion, recordPrePromotionBackup, restorePromotion, rollbackPromotion,
 } from "../control-plane/release-state-transitions.ts";
 import { ReleaseHolders, resolveFromWorldRecords } from "../control-plane/release-holders.ts";
-import { ReleaseRefs } from "../control-plane/release-refs.ts";
+import { ReleaseRefs } from "../control-plane/dynamo-release-refs.ts";
 import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
 import { S3WorldReader } from "../control-plane/s3-world-repository.ts";
+import { s3WorldObjects } from "../control-plane/s3-world-objects.ts";
 
 type Action = "read" | "prepare" | "commit" | "restore" | "rollback" | "protect";
 export type Input = Readonly<{
@@ -55,25 +56,7 @@ function previousState(value: unknown, ref: WorldRef): ReleaseState {
 }
 
 async function listWipeArchives(ref: WorldRef): Promise<BackupObject[]> {
-  const objects: BackupObject[] = [];
-  let token: string | undefined;
-  do {
-    const page = await s3.send(new ListObjectsV2Command({ // NOSONAR paginated: the next token comes from the previous page
-      Bucket: requiredEnv("BACKUP_BUCKET"),
-      Prefix: `worlds/${ref.worldId}/archives/${ref.worldId}-${ref.generationId}-`,
-      ...(token ? { ContinuationToken: token } : {}),
-    }));
-    for (const object of page.Contents ?? []) {
-      if (object.Key && object.LastModified) {
-        objects.push({
-          key: object.Key, sizeBytes: object.Size ?? 0, storedAt: object.LastModified.toISOString(),
-          checksumAlgorithms: object.ChecksumAlgorithm ?? [],
-        });
-      }
-    }
-    token = page.IsTruncated ? page.NextContinuationToken : undefined;
-  } while (token);
-  return objects;
+  return s3WorldObjects(s3).listAll(requiredEnv("BACKUP_BUCKET"), `worlds/${ref.worldId}/archives/${ref.worldId}-${ref.generationId}-`);
 }
 
 /**

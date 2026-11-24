@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { FakeRefsTable } from "./fake-refs-table.ts";
 import { candidateReleases, planLegacyRegistration, type RegistrationInput } from "../src/control-plane/legacy-registration.ts";
-import { ReleaseRefs } from "../src/control-plane/release-refs.ts";
+import { ReleaseRefs } from "../src/control-plane/dynamo-release-refs.ts";
 import type { WorldRecord } from "../src/control-plane/world-registry.ts";
 
 const GEN1 = `gen-${"1".repeat(32)}`;

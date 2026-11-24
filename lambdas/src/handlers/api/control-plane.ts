@@ -2,9 +2,8 @@ import { type Identity, can } from "../../access/domain.ts";
 import { readControlPlaneSnapshot } from "../../control-plane/read-model.ts";
 import { dashboardControlPlaneSources } from "../../control-plane/aws.ts";
 import { issueSubscriptionTicket, subscriptionTicketItem, subscriptionTicketLifetimeSeconds } from "../../control-plane/subscriptions.ts";
-import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { type Response, response } from "./http.ts";
-import { document } from "./access-store.ts";
+import { accessTable } from "./access-store.ts";
 import type { ControlPlaneSnapshot, Deployment } from "../../../../contract/control-plane.ts";
 
 const controlPlaneViewTable = process.env.CONTROL_PLANE_VIEW_TABLE;
@@ -38,11 +37,11 @@ function deployment(): Deployment {
 export async function createControlPlaneSubscription(identity: Identity): Promise<Response> {
   const ticket = issueSubscriptionTicket();
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
-  await document.send(new PutCommand({
+  await accessTable.put({
     TableName: controlPlaneViewTable,
     Item: subscriptionTicketItem(ticket, identity.id, nowEpochSeconds),
     ConditionExpression: "attribute_not_exists(pk) AND attribute_not_exists(sk)",
-  }));
+  });
   return response(201, {
     url: controlPlaneWebSocketUrl,
     ticket,

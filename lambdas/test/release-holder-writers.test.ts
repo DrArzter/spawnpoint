@@ -9,7 +9,7 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { PutCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 import { ReleaseHolders, resolveFromWorldRecords } from "../src/control-plane/release-holders.ts";
-import { ReleaseRefs } from "../src/control-plane/release-refs.ts";
+import { ReleaseRefs } from "../src/control-plane/dynamo-release-refs.ts";
 import { releaseStateDocument, type ReleaseState } from "../src/control-plane/release-state.ts";
 import { S3ReleaseStateStore } from "../src/control-plane/s3-release-state-store.ts";
 import { S3WorldReader, S3WorldRepository } from "../src/control-plane/s3-world-repository.ts";
@@ -70,7 +70,8 @@ function files(directory: string): string[] {
 }
 
 const KEYS = /world\.json|release\.json|releaseStateKey\(|legacyReleaseStateKey\(|release-source|--metadata[^\n]*release=|Metadata:[^\n]*release/;
-const WRITES = /PutObjectCommand|CopyObjectCommand|DeleteObjectsCommand|put-object|copy-object|delete-object|aws-sdk:s3:(?:put|copy|delete)Object/;
+// A write through the world-objects port counts as the S3 write it is (control-plane/s3-world-objects.ts).
+const WRITES = /PutObjectCommand|CopyObjectCommand|DeleteObjectsCommand|put-object|copy-object|delete-object|aws-sdk:s3:(?:put|copy|delete)Object|objects\.(?:createJson|replaceJson|purge)\(/;
 
 const scanned = ["lambdas/src", "lambdas/tools", "scripts", "server/scripts", "workflows", "infra"].flatMap(files);
 const flagged = scanned.filter((path) => {

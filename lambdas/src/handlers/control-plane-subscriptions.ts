@@ -1,8 +1,10 @@
-import { ApiGatewayManagementApiClient, GoneException, PostToConnectionCommand } from "@aws-sdk/client-apigatewaymanagementapi";
+import { ApiGatewayManagementApiClient } from "@aws-sdk/client-apigatewaymanagementapi";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DeleteCommand, DynamoDBDocumentClient, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import { controlPlaneConnectionItem, subscriptionTicketKey } from "../control-plane/subscriptions.ts";
+import { websocketConnections } from "../control-plane/aws-websocket-connections.ts";
+import { dynamoTable } from "../control-plane/dynamo-table.ts";
 
 type WebSocketEvent = Readonly<{
   routeKey?: string;
@@ -24,7 +26,8 @@ const callbackUrl = process.env.CONTROL_PLANE_WEBSOCKET_CALLBACK_URL;
 if (!callbackUrl) throw new Error("CONTROL_PLANE_WEBSOCKET_CALLBACK_URL is required");
 
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const connections = new ApiGatewayManagementApiClient({ endpoint: callbackUrl });
+const table = dynamoTable(document);
+const connections = websocketConnections(new ApiGatewayManagementApiClient({ endpoint: callbackUrl }));
 
 function response(statusCode: number, body: string): Response {
   return { statusCode, body };
@@ -35,11 +38,11 @@ async function connect(event: WebSocketEvent): Promise<Response> {
   const ticket = event.queryStringParameters?.ticket;
   if (!connectionId || !ticket || !/^[A-Za-z0-9_-]{43}$/.test(ticket)) return response(401, "Unauthorized");
 
-  const consumed = await document.send(new DeleteCommand({
+  const consumed = await table.delete({
     TableName: viewTable,
     Key: { pk: subscriptionTicketKey(ticket), sk: "CONTROL_PLANE" },
     ReturnValues: "ALL_OLD",
-  }));
+  });
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
   const identityId = consumed.Attributes?.identity_id;
   const expiresAt = consumed.Attributes?.expires_at;
@@ -47,29 +50,29 @@ async function connect(event: WebSocketEvent): Promise<Response> {
     return response(401, "Unauthorized");
   }
 
-  await document.send(new PutCommand({
+  await table.put({
     TableName: viewTable,
     Item: controlPlaneConnectionItem(connectionId, identityId, nowEpochSeconds),
-  }));
+  });
   return response(200, "Connected");
 }
 
 async function disconnect(event: WebSocketEvent): Promise<Response> {
   const connectionId = event.requestContext?.connectionId;
   if (connectionId) {
-    await document.send(new DeleteCommand({
+    await table.delete({
       TableName: viewTable,
       Key: { pk: "SUBSCRIPTIONS#CONTROL_PLANE", sk: `CONNECTION#${connectionId}` },
-    }));
+    });
   }
   return response(200, "Disconnected");
 }
 
 async function removeConnection(connectionId: string): Promise<void> {
-  await document.send(new DeleteCommand({
+  await table.delete({
     TableName: viewTable,
     Key: { pk: "SUBSCRIPTIONS#CONTROL_PLANE", sk: `CONNECTION#${connectionId}` },
-  }));
+  });
 }
 
 async function publishInvalidation(event: ProjectionEvent): Promise<void> {
@@ -78,27 +81,18 @@ async function publishInvalidation(event: ProjectionEvent): Promise<void> {
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
   let exclusiveStartKey: Record<string, unknown> | undefined;
   do {
-    const page = await document.send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
+    const page = await table.query({ // NOSONAR paginated: the next token comes from the previous page
       TableName: viewTable,
       KeyConditionExpression: "pk = :pk",
       FilterExpression: "expires_at > :now",
       ExpressionAttributeValues: { ":pk": "SUBSCRIPTIONS#CONTROL_PLANE", ":now": nowEpochSeconds },
       ExclusiveStartKey: exclusiveStartKey,
-    }));
+    });
     await Promise.all((page.Items ?? []).map(async (item) => { // NOSONAR one page of items at a time, within the paginated scan
       const connectionId = item.connection_id;
       if (typeof connectionId !== "string") return;
-      try {
-        await connections.send(new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: Buffer.from(JSON.stringify({ type: "control-plane-invalidated", observedAt })),
-        }));
-      } catch (error) {
-        if (error instanceof GoneException || (error instanceof Error && error.name === "GoneException")) {
-          await removeConnection(connectionId);
-          return;
-        }
-        throw error;
+      if (await connections.post(connectionId, { type: "control-plane-invalidated", observedAt }) === "gone") {
+        await removeConnection(connectionId);
       }
     }));
     exclusiveStartKey = page.LastEvaluatedKey;

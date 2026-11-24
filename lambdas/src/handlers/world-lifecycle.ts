@@ -1,7 +1,4 @@
-import {
-  DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, ListObjectVersionsCommand,
-  NoSuchKey, PutObjectCommand, S3Client,
-} from "@aws-sdk/client-s3";
+import { S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
@@ -10,13 +7,14 @@ import { backupInventory } from "../control-plane/backups.ts";
 import { dynamoReleaseStateReader } from "../control-plane/dynamo-release-state.ts";
 import { parsePresetCatalog, usableByNewWipe } from "../control-plane/preset-catalog.ts";
 import { ReleaseHolders, resolveFromWorldRecords } from "../control-plane/release-holders.ts";
-import { ReleaseRefs } from "../control-plane/release-refs.ts";
+import { ReleaseRefs } from "../control-plane/dynamo-release-refs.ts";
 import { requireReleaseUsable } from "../control-plane/release-usable.ts";
 import { type ReleaseState } from "../control-plane/release-state.ts";
 import { releaseManifestKey } from "../control-plane/release-artifacts.ts";
 import { restoreWithPublishedRelease } from "../control-plane/restore-guard.ts";
 import { s3BackupReleaseSources } from "../control-plane/s3-backup-release.ts";
 import { S3ReleaseStateStore } from "../control-plane/s3-release-state-store.ts";
+import { s3WorldObjects, type StoredJson } from "../control-plane/s3-world-objects.ts";
 import { S3WorldReader, S3WorldRepository } from "../control-plane/s3-world-repository.ts";
 import {
   archiveWorldRecord, parseWorldRecord, purgeGenerationIds, regenerateWorldRecord, type WorldRecord,
@@ -37,6 +35,7 @@ const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const GENERATION_ID = /^gen-[0-9a-f]{32}$/;
 const s3 = new S3Client({});
+const objects = s3WorldObjects(s3);
 const table = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const readReleaseState = dynamoReleaseStateReader(table);
 
@@ -51,23 +50,7 @@ function releaseHolders(bucket: string): ReleaseHolders {
   return new ReleaseHolders(new ReleaseRefs(table), resolveFromWorldRecords(new S3WorldReader(s3, bucket)));
 }
 
-async function jsonObject(bucket: string, key: string): Promise<{ value: Record<string, unknown>; etag: string }> {
-  const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-  const body = await response.Body?.transformToString();
-  if (!body || !response.ETag) throw new Error(`invalid object: ${key}`);
-  const value = JSON.parse(body) as unknown;
-  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error(`invalid object: ${key}`);
-  return { value: value as Record<string, unknown>, etag: response.ETag };
-}
 
-async function optionalJsonObject(bucket: string, key: string): Promise<{ value: Record<string, unknown>; etag: string } | null> {
-  try {
-    return await jsonObject(bucket, key);
-  } catch (error) {
-    if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) return null;
-    throw error;
-  }
-}
 
 function parseInput(value: unknown): Input {
   if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_input");
@@ -85,33 +68,7 @@ function parseInput(value: unknown): Input {
   return input as Input;
 }
 
-async function versionedObjects(bucket: string, prefix: string, exactKey?: string) {
-  const objects: Array<{ Key: string; VersionId: string }> = [];
-  let keyMarker: string | undefined;
-  let versionIdMarker: string | undefined;
-  do {
-    const page = await s3.send(new ListObjectVersionsCommand({ // NOSONAR paginated: the next token comes from the previous page
-      Bucket: bucket, Prefix: prefix, KeyMarker: keyMarker, VersionIdMarker: versionIdMarker,
-    }));
-    for (const object of [...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])]) {
-      if (object.Key && object.VersionId && (exactKey === undefined || object.Key === exactKey)) {
-        objects.push({ Key: object.Key, VersionId: object.VersionId });
-      }
-    }
-    keyMarker = page.IsTruncated ? page.NextKeyMarker : undefined;
-    versionIdMarker = page.IsTruncated ? page.NextVersionIdMarker : undefined;
-  } while (keyMarker !== undefined);
-  return objects;
-}
 
-async function permanentlyDelete(bucket: string, prefix: string, exactKey?: string): Promise<void> {
-  const objects = await versionedObjects(bucket, prefix, exactKey);
-  for (let offset = 0; offset < objects.length; offset += 1000) {
-    const page = objects.slice(offset, offset + 1000);
-    const deleted = await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: page, Quiet: true } })); // NOSONAR ordered, fail-fast purge batches
-    if ((deleted.Errors ?? []).length > 0) throw new Error("purge_delete_failed");
-  }
-}
 
 function purgeMarker(value: Record<string, unknown>, worldId: string, targetGenerationId: string) {
   const generations = value.generation_ids;
@@ -123,7 +80,6 @@ function purgeMarker(value: Record<string, unknown>, worldId: string, targetGene
   return { status: value.status, generations: generations as string[] };
 }
 
-type StoredJson = Awaited<ReturnType<typeof jsonObject>>;
 type PurgeMarker = Readonly<{ stored: StoredJson; generations: readonly string[]; completed: boolean }>;
 
 // The world's record now names another generation: the purge either finished
@@ -150,19 +106,16 @@ async function openPurgeMarker(
     schema_version: 1, world_id: input.worldId, target_generation_id: targetGenerationId,
     status: "pending", generation_ids: generations, requested_at: input.requestedAt, requested_by: input.requestedBy,
   };
-  await s3.send(new PutObjectCommand({
-    Bucket: releaseBucket, Key: markerKey, IfNoneMatch: "*", ContentType: "application/json",
-    ServerSideEncryption: "AES256", Body: JSON.stringify(document),
-  }));
-  return { stored: await jsonObject(releaseBucket, markerKey), generations, completed: false };
+  await objects.createJson(releaseBucket, markerKey, document);
+  return { stored: await objects.readJson(releaseBucket, markerKey), generations, completed: false };
 }
 
 async function purgeWorld(input: Input, releaseBucket: string) {
   const targetGenerationId = input.targetGenerationId!;
   const markerKey = `worlds/${input.worldId}/purges/${targetGenerationId}.json`;
   const recordKey = `worlds/${input.worldId}/world.json`;
-  const existingMarker = await optionalJsonObject(releaseBucket, markerKey);
-  const storedRecord = await optionalJsonObject(releaseBucket, recordKey);
+  const existingMarker = await objects.readJsonIfAny(releaseBucket, markerKey);
+  const storedRecord = await objects.readJsonIfAny(releaseBucket, recordKey);
   const currentRecord = storedRecord === null ? null : parseWorldRecord(storedRecord.value);
   if (storedRecord !== null && currentRecord === null) throw new Error("invalid_world_record");
   if (currentRecord !== null && currentRecord.currentGeneration.id !== targetGenerationId) {
@@ -170,35 +123,26 @@ async function purgeWorld(input: Input, releaseBucket: string) {
   }
   const marker = await openPurgeMarker(input, releaseBucket, markerKey, existingMarker, currentRecord);
   if (marker.completed) {
-    if (storedRecord !== null) await permanentlyDelete(releaseBucket, recordKey, recordKey);
+    if (storedRecord !== null) await objects.purge(releaseBucket, recordKey, recordKey);
     return { result: storedRecord === null ? "already_applied" : "purge", worldId: input.worldId, generationId: targetGenerationId };
   }
 
   const backupBucket = requiredEnv("BACKUP_BUCKET");
-  await permanentlyDelete(backupBucket, `worlds/${input.worldId}/archives/`);
-  await permanentlyDelete(releaseBucket, `worlds/${input.worldId}/generations/`);
-  await permanentlyDelete(releaseBucket, `worlds/${input.worldId}/release.json`, `worlds/${input.worldId}/release.json`);
-  await s3.send(new PutObjectCommand({
-    Bucket: releaseBucket, Key: markerKey, IfMatch: marker.stored.etag, ContentType: "application/json",
-    ServerSideEncryption: "AES256", Body: JSON.stringify({ ...marker.stored.value, status: "completed", purged_at: input.requestedAt }),
-  }));
-  await permanentlyDelete(releaseBucket, recordKey, recordKey);
+  await objects.purge(backupBucket, `worlds/${input.worldId}/archives/`);
+  await objects.purge(releaseBucket, `worlds/${input.worldId}/generations/`);
+  await objects.purge(releaseBucket, `worlds/${input.worldId}/release.json`, `worlds/${input.worldId}/release.json`);
+  await objects.replaceJson(releaseBucket, markerKey, marker.stored.etag, { ...marker.stored.value, status: "completed", purged_at: input.requestedAt });
+  await objects.purge(releaseBucket, recordKey, recordKey);
   return { result: "purge", worldId: input.worldId, generationId: targetGenerationId, generations: marker.generations };
 }
 
 async function verifiedBackups(worldId: string) {
-  const listing = await s3.send(new ListObjectsV2Command({
-    Bucket: requiredEnv("BACKUP_BUCKET"), Prefix: `worlds/${worldId}/archives/`, MaxKeys: 1000,
-  }));
-  return backupInventory((listing.Contents ?? []).flatMap((object) => object.Key && object.LastModified ? [{
-    key: object.Key, sizeBytes: object.Size ?? 0, storedAt: object.LastModified.toISOString(),
-    checksumAlgorithms: object.ChecksumAlgorithm ?? [],
-  }] : []), 1000).entries;
+  return backupInventory(await objects.list(requiredEnv("BACKUP_BUCKET"), `worlds/${worldId}/archives/`, 1000), 1000).entries;
 }
 
 async function latestPreset(record: WorldRecord) {
   const releaseBucket = requiredEnv("RELEASE_BUCKET");
-  const { value } = await jsonObject(releaseBucket, `presets/${record.gameId}/catalog.json`);
+  const { value } = await objects.readJson(releaseBucket, `presets/${record.gameId}/catalog.json`);
   const presets = parsePresetCatalog(value, record.gameId);
   if (presets === null) throw new Error("invalid_preset_catalog");
   const preset = presets.find((candidate) => candidate.id === record.preset.id);
@@ -207,16 +151,7 @@ async function latestPreset(record: WorldRecord) {
 }
 
 async function publishedReleaseExists(gameId: string, presetId: string, release: string): Promise<boolean> {
-  try {
-    await s3.send(new HeadObjectCommand({
-      Bucket: requiredEnv("RELEASE_BUCKET"),
-      Key: releaseManifestKey(gameId, presetId, release),
-    }));
-    return true;
-  } catch (error) {
-    if (error instanceof NoSuchKey || (error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound"))) return false;
-    throw error;
-  }
+  return objects.exists(requiredEnv("RELEASE_BUCKET"), releaseManifestKey(gameId, presetId, release));
 }
 
 async function writeInitialReleaseState(record: WorldRecord, input: Input): Promise<void> {

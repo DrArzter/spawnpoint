@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { fileItemPk, objectKey } from "../src/control-plane/release-objects.ts";
-import { ReleaseRefs } from "../src/control-plane/release-refs.ts";
+import { ReleaseRefs } from "../src/control-plane/dynamo-release-refs.ts";
 import { compare, mark, tableView, type ManifestSource, type TableItem } from "../src/control-plane/release-reconciler.ts";
 import {
   describeSweep, executeSweep, planSweep, sweepCandidates, sweepCutoff, sweepDryRun, sweepGraceDays, type SweepPlan, type SweepWriter,

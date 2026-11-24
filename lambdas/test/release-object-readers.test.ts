@@ -7,8 +7,14 @@ process.env.AWS_ACCESS_KEY_ID ??= "test";
 process.env.AWS_SECRET_ACCESS_KEY ??= "test";
 process.env.RELEASE_BUCKET = "releases";
 
-const { awsControlPlaneSources, packDownloadUrl, releasePackUrl } = await import("../src/control-plane/aws.ts");
-const { releaseModDownload } = await import("../src/handlers/api/releases.ts");
+const { awsControlPlaneSources } = await import("../src/control-plane/aws.ts");
+const { deployedReleases } = await import("../src/handlers/api/releases-wiring.ts");
+const { s3ReleaseLinks } = await import("../src/control-plane/s3-release-links.ts");
+const { releaseModDownload } = deployedReleases;
+const links = s3ReleaseLinks(new S3Client({}), () => process.env.RELEASE_BUCKET!, (gameId, presetId, release) =>
+  awsControlPlaneSources.readReleaseManifest?.(gameId, presetId, release) ?? Promise.resolve(null));
+const packDownloadUrl = (gameId: string, presetId: string, release: string) => links.pack(gameId, presetId, release, "client", 3600);
+const releasePackUrl = links.pack;
 const { packUrl } = await import("../src/bot/services/aws.ts");
 const { digestOfObjectKey, manifestPackObject, manifestUsesObjects, objectKey, releasePackStorageKey } = await import("../src/control-plane/release-objects.ts");
 

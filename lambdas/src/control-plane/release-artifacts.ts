@@ -101,3 +101,11 @@ export function attachmentDisposition(filename: string): string {
 export function packAttachmentName(presetId: string, release: string, pack: ReleasePack): string {
   return `${presetId}-${release}-${pack}.zip`;
 }
+
+/** Short-lived links to a release's files (ADR-0065, ADR-0069), named for what they hold. */
+export type ReleaseLinks = Readonly<{
+  /** One pack of a release, or null when it was not published. */
+  pack: (gameId: string, presetId: string, release: string, pack: ReleasePack, expiresIn: number) => Promise<string | null>;
+  /** One mod of a release; a digest names the object of an objects-v1 release. */
+  mod: (gameId: string, presetId: string, release: string, location: Readonly<{ file: string; store: ModStore }>, expiresIn: number, objectDigest?: string) => Promise<string>;
+}>;

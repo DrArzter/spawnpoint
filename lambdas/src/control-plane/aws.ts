@@ -2,12 +2,10 @@ import { DescribeInstancesCommand, EC2Client, type Instance } from "@aws-sdk/cli
 import { CloudWatchClient, GetMetricDataCommand, type MetricDataResult } from "@aws-sdk/client-cloudwatch";
 import {
   GetObjectCommand,
-  HeadObjectCommand,
   ListObjectsV2Command,
   NoSuchKey,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetCommand, DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -15,8 +13,6 @@ import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { randomUUID } from "node:crypto";
 
-import { attachmentDisposition, packAttachmentName, releaseModKey, type ModStore, type ReleasePack } from "./release-artifacts.ts";
-import { objectKey, releasePackStorageKey } from "./release-objects.ts";
 import { dynamoReleaseStateReader } from "./dynamo-release-state.ts";
 import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts";
 import { presetBuildView, runningReleaseBuilds } from "./aws-release-builds.ts";
@@ -648,58 +644,6 @@ export async function worldLifecycleExecution(args: Readonly<{
   }));
   if (!started.executionArn) throw new Error("world lifecycle execution did not return an ARN");
   return started.executionArn;
-}
-
-// The pack a player installs: the same object the bot serves, presigned for an
-// hour. A missing object is a normal answer — releases published before packs
-// were part of publication have none — so it is reported, not thrown.
-export async function packDownloadUrl(gameId: string, presetId: string, release: string): Promise<string | null> {
-  return releasePackUrl(gameId, presetId, release, "client", 3600);
-}
-
-/**
- * One pack of a release, by name, when it was published; named for the preset
- * and release it holds. An objects-v1 release keeps its packs as objects named
- * by digest, so the attachment name is what tells a player which pack it is.
- */
-export async function releasePackUrl(gameId: string, presetId: string, release: string, pack: ReleasePack, expiresIn: number): Promise<string | null> {
-  const bucket = requiredEnv("RELEASE_BUCKET");
-  const key = releasePackStorageKey(await readReleaseManifest(gameId, presetId, release), gameId, presetId, release, pack);
-  if (key === null) return null;
-  try {
-    await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-  } catch {
-    return null;
-  }
-  return getSignedUrl(s3, new GetObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    ResponseContentDisposition: attachment(packAttachmentName(presetId, release, pack)),
-  }), { expiresIn });
-}
-
-// A file the panel hands to someone, named as it is stored, so the browser
-// saves it under that name whatever characters it holds.
-const attachment = attachmentDisposition;
-
-/**
- * One mod of a release, from either set, presigned for this role's read of
- * releases. A digest names the object of an objects-v1 release; without one the
- * mod is under its release's own keys.
- */
-export function releaseModUrl(
-  gameId: string,
-  presetId: string,
-  release: string,
-  location: Readonly<{ file: string; store: ModStore }>,
-  expiresIn: number,
-  objectDigest?: string,
-): Promise<string> {
-  return getSignedUrl(s3, new GetObjectCommand({
-    Bucket: requiredEnv("RELEASE_BUCKET"),
-    Key: objectDigest === undefined ? releaseModKey(gameId, presetId, release, location.file, location.store) : objectKey(objectDigest),
-    ResponseContentDisposition: attachment(location.file),
-  }), { expiresIn });
 }
 
 export async function readWorldRecord(worldId: string): Promise<WorldRecord | null> {

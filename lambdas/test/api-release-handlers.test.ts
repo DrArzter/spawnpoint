@@ -4,7 +4,9 @@ import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
 import { releaseRetirement } from "../src/control-plane/aws-release-retirement.ts";
 import { InvalidBodyError } from "../src/handlers/api/http.ts";
 import { createDispatcher } from "../src/handlers/api/dispatcher.ts";
-import { buildRelease, releaseManifest, releasePackDownload, requestReleaseRetirement } from "../src/handlers/api/releases.ts";
+import { deployedReleases } from "../src/handlers/api/releases-wiring.ts";
+
+const { buildRelease, releaseManifest, releasePackDownload, requestReleaseRetirement } = deployedReleases;
 import { releasesRoutes } from "../src/handlers/api/releases-routes.ts";
 import { composeRoutes } from "../src/handlers/api/routing.ts";
 

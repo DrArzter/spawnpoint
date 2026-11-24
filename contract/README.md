@@ -13,3 +13,5 @@ They are plain TypeScript: no `node:` module, no AWS SDK, no DOM and no React, s
 - `login.ts`: the browser login providers and the test that a value names one.
 - `console.ts`: one console command as the API answers it.
 - `settings.ts`: a game setting's definition and the rule that a value is valid for it.
+- `world-log.ts`: a world's recent log, with addresses and player names replaced by tokens.
+- `assistant.ts`: the owner's log assistant: its models, its answer and the question's limit.

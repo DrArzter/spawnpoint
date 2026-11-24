@@ -11,6 +11,7 @@ import { TabPanel, Tabs } from "./ui/Tabs";
 import { BackupsTab } from "./tabs/Backups";
 import { ConfigTab } from "./tabs/Config";
 import { ConsoleTab } from "./tabs/Console";
+import { LogTab } from "./tabs/Log";
 import { CARD_ACTIONS, DetailsTab } from "./tabs/Details";
 import { Hero } from "./tabs/Hero";
 import { MetricsTab } from "./tabs/Metrics";
@@ -27,6 +28,7 @@ const tabIcons: Readonly<Record<WorldTab, IconName>> = {
   whitelist: "verified_user",
   config: "tune",
   console: "terminal",
+  log: "table_rows",
   metrics: "monitoring",
 };
 
@@ -72,6 +74,7 @@ function Panel({ model }: Readonly<{ model: WorldModel }>) {
     case "whitelist": return model.whitelist ? <WhitelistTab model={model.whitelist} /> : <DetailsTab model={model} />;
     case "config": return model.config ? <ConfigTab model={model.config} /> : <DetailsTab model={model} />;
     case "console": return model.console ? <ConsoleTab model={model.console} world={model.world.displayName} /> : <DetailsTab model={model} />;
+    case "log": return model.log ? <LogTab model={model.log} /> : <DetailsTab model={model} />;
     case "metrics": return model.metrics ? <MetricsTab model={model.metrics} worldId={model.world.id} /> : <DetailsTab model={model} />;
     default: return <DetailsTab model={model} />;
   }

@@ -6,9 +6,9 @@ import type { ConsoleGateway, ConsoleInvocation, ConsoleTarget } from "./console
 // parameters, so its shape is checked here as well as by load_world there.
 const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
-type Documents = Readonly<{ console: () => string; whitelist: () => string }>;
+type Documents = Readonly<{ console: () => string; whitelist: () => string; worldLog: () => string }>;
 
-/** The console gateway over SSM Run Command: one fixed document each (ADR-0063, ADR-0066). */
+/** The console gateway over SSM Run Command: one fixed document each (ADR-0063, ADR-0066, ADR-0094). */
 export function ssmConsoleGateway(ssm: SSMClient, documents: Documents): ConsoleGateway {
   const run = async (document: string, target: ConsoleTarget, parameters: Record<string, string[]>, comment: string): Promise<string> => {
     if (!WORLD_ID.test(target.worldId)) throw new Error(`invalid world id: ${target.worldId}`);
@@ -26,6 +26,7 @@ export function ssmConsoleGateway(ssm: SSMClient, documents: Documents): Console
   return {
     send: (target, encodedCommand) => run(documents.console(), target, { command: [encodedCommand] }, "console"),
     reloadWhitelist: (target) => run(documents.whitelist(), target, {}, "whitelist"),
+    readLog: (target) => run(documents.worldLog(), target, {}, "world-log"),
     read: async (commandId, hostId): Promise<ConsoleInvocation> => {
       try {
         const invocation = await ssm.send(new GetCommandInvocationCommand({ CommandId: commandId, InstanceId: hostId }));
@@ -54,4 +55,5 @@ function requiredEnv(name: string): string {
 export const awsConsoleGateway: ConsoleGateway = ssmConsoleGateway(new SSMClient({}), {
   console: () => requiredEnv("CONSOLE_DOCUMENT_NAME"),
   whitelist: () => requiredEnv("WHITELIST_DOCUMENT_NAME"),
+  worldLog: () => requiredEnv("WORLD_LOG_DOCUMENT_NAME"),
 });

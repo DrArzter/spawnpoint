@@ -94,8 +94,23 @@ mock_provider "aws" {
     values = { arn = "arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-whitelist" }
   }
 
+  override_resource {
+    target = aws_ssm_document.world_log
+    values = { arn = "arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-world-log" }
+  }
+
+  override_resource {
+    target = aws_lambda_function.assistant
+    values = { arn = "arn:aws:lambda:eu-central-1:123456789012:function:spawnpoint-assistant" }
+  }
+
   override_data {
     target = data.aws_iam_policy_document.control_plane_subscriptions
+    values = { json = "{}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.assistant
     values = { json = "{}" }
   }
 
@@ -788,14 +803,14 @@ run "api_may_invoke_only_the_release_retirement_function" {
     error_message = "The API routes the retire request and may invoke exactly the retirement function: no wildcard, no other function."
   }
 
-  # Only that statement may invoke a Lambda.
+  # Only that statement and the assistant's (ADR-0094) may invoke a Lambda.
   assert {
     condition = alltrue([
       for statement in data.aws_iam_policy_document.access_api.statement :
-      statement.sid == "RequestReleaseRetirement"
+      contains(["RequestReleaseRetirement", "StartAssistantAnswers"], statement.sid)
       if length([for action in statement.actions : action if startswith(action, "lambda:")]) > 0
     ])
-    error_message = "The access API role has no Lambda action outside the retirement request."
+    error_message = "The access API role has no Lambda action outside the retirement request and the assistant's worker."
   }
 }
 
@@ -872,5 +887,52 @@ run "an_ses_sender_outside_the_zone_gets_no_records" {
   assert {
     condition     = length(output.ses_dkim_records) == 3
     error_message = "The owner must get the DKIM records to add by hand."
+  }
+}
+
+run "the_log_assistant_is_off_by_default_and_reaches_only_its_eu_models" {
+  command = plan
+
+  variables {
+    bootstrap_owner_telegram_id      = "123456789"
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+  }
+
+  assert {
+    condition = alltrue([
+      aws_lambda_function.access_api.environment[0].variables["ASSISTANT_ENABLED"] == "false",
+      aws_lambda_function.assistant.environment[0].variables["ASSISTANT_ENABLED"] == "false",
+      aws_lambda_function.access_api.environment[0].variables["ASSISTANT_MONTHLY_CAP_USD"] == "5",
+      aws_lambda_function_event_invoke_config.assistant.maximum_retry_attempts == 0,
+    ])
+    error_message = "The assistant must be off unless switched on, capped at five dollars a month, and never retried."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.assistant.statement :
+      alltrue([for action in statement.actions : contains(["dynamodb:UpdateItem", "bedrock:InvokeModel"], action)])
+    ])
+    error_message = "The assistant's worker may only settle answers and call Bedrock."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for statement in data.aws_iam_policy_document.assistant.statement : [
+        for resource in statement.resources : can(regex("^arn:aws:bedrock:eu-[a-z0-9-*]+:[0-9]*:(inference-profile/eu\\.|foundation-model/)anthropic\\.", resource))
+      ] if contains(statement.actions, "bedrock:InvokeModel")
+    ]))
+    error_message = "The assistant may call only EU Anthropic profiles and the models behind them."
+  }
+
+  assert {
+    condition = alltrue([
+      contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/log"),
+      contains(local.access_routes, "GET /games/{gameId}/worlds/{worldId}/log/{readId}"),
+      contains(local.access_routes, "POST /games/{gameId}/worlds/{worldId}/assistant"),
+      contains(local.access_routes, "GET /games/{gameId}/worlds/{worldId}/assistant/{answerId}"),
+    ])
+    error_message = "The log and the assistant are routed."
   }
 }

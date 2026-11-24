@@ -157,6 +157,15 @@ export const API_ERROR_TEXT: Readonly<Record<ApiErrorCode, string>> = {
   invalid_config_path: "This path is not a config file of this game.",
   unknown_config_file: "This file is not in the list. Refresh it.",
 
+  // World log and assistant (ADR-0094)
+  log_not_ready: "The log has not been read yet. Read it again.",
+  unknown_log_read: "This log read has expired. Read the log again.",
+  assistant_disabled: "The assistant is switched off for this deployment.",
+  assistant_daily_limit: "You have asked the assistant 20 questions today. Try again tomorrow.",
+  assistant_monthly_limit: "The assistant has reached this month's spending cap.",
+  invalid_assistant_request: "Choose a model, and keep the question under 500 characters.",
+  unknown_assistant_answer: "This answer has expired. Ask again.",
+
   // Promotion (a variable carries these)
   release_retired: "That release is retired or being retired. Choose another.",
   release_not_ready: "That release is not built yet. Choose another.",

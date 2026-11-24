@@ -1,4 +1,4 @@
-import type { ConfigFileContent, ConfigFileList, SavedConfigFile, AccessCandidate, AccessIdentity, AccessRole, AccessRoleDirectory, AccessRoleDraft, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../api/contract";
+import type { AssistantAnswer, AssistantModel, WorldLogRead, ConfigFileContent, ConfigFileList, SavedConfigFile, AccessCandidate, AccessIdentity, AccessRole, AccessRoleDirectory, AccessRoleDraft, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../api/contract";
 import { ApiError, identityDeletionRefusal, type ApiErrorCode, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { API_ERROR_TEXT } from "../api/error-text";
 import { startableReleases } from "../core/presets";
@@ -1227,6 +1227,70 @@ export function runConsoleCommand(gameId: string, worldId: string, command: stri
     list[index] = { ...entry, status: "succeeded", output: demoReply(trimmed) };
   }, CONSOLE_REPLY_MS);
   return entry;
+}
+
+// A world's recent log and the owner's assistant (ADR-0094). The demo's log
+// is already redacted, as the API serves it; an answer arrives after a while.
+const LOG_REPLY_MS = 700;
+const ANSWER_MS = 2500;
+const DEMO_LOG = [
+  "[18:40:01] [Server thread/INFO]: Starting minecraft server version 1.20.1",
+  "[18:40:09] [Server thread/INFO]: Preparing level \"world\"",
+  "[18:40:22] [Server thread/WARN]: Mod sophisticatedbackpacks loaded a config with an unknown key: legacyStorage",
+  "[18:40:31] [Server thread/INFO]: Done (21.940s)! For help, type \"help\"",
+  "[18:41:02] [User Authenticator #1/INFO]: UUID of player player-1 is <uuid>",
+  "[18:41:03] [Server thread/INFO]: player-1[/<ip>] logged in with entity id 412",
+  "[18:41:03] [Server thread/INFO]: player-1 joined the game",
+  "[18:43:17] [Server thread/WARN]: Can't keep up! Is the server overloaded? Running 2453ms or 49 ticks behind",
+  "[18:43:18] [Server thread/INFO]: <player-1> [chat removed]",
+  "[18:44:40] [Server thread/ERROR]: Exception ticking block entity create:mechanical_crafter at 120 64 -88",
+  "[18:44:40] [Server thread/INFO]: player-2 joined the game",
+];
+const DEMO_ANSWERS: Readonly<Record<AssistantModel, string>> = {
+  haiku: "The server is up and players can join. Two things stand out:\n\n- At 18:43 the server fell 49 ticks behind. That is lag, most likely from the Create contraption that failed a minute later.\n- At 18:44 a Create mechanical crafter at 120 64 -88 threw an exception while ticking.\n\nNext step: break or reset that crafter. If the lag goes on, look for other large Create machines near it.",
+  sonnet: "The world started cleanly in 22 seconds, and the only startup warning (an unknown key in Sophisticated Backpacks' config) is harmless.\n\nThe real problem began at 18:43:\n\n1. The server reported running 2.4 seconds (49 ticks) behind. Players feel this as rubber-banding and slow block breaking.\n2. One minute later a Create mechanical crafter at 120 64 -88 threw an exception while ticking. A block entity that throws every tick is a common cause of exactly this kind of lag.\n\nWhat to do:\n\n- Remove or rebuild the crafter at 120 64 -88, for example with the console command `setblock 120 64 -88 air`.\n- Read the log again in a few minutes. If the \"Can't keep up\" lines stop, that crafter was the cause.\n- If they continue, run a profiler such as Spark to find the next heaviest block entity.",
+};
+
+export function requestWorldLog(gameId: string, worldId: string): WorldLogRead {
+  settle();
+  const target = world(gameId, worldId);
+  if (heldSession(gameId, target)?.observedState !== "ready") refuse(409, "session_not_ready");
+  state.counter += 1;
+  const read: WorldLogRead = { id: `log-${state.counter + 100}`, at: iso(), status: "pending", lines: null };
+  state.worldLogs[read.id] = { world: worldKey(gameId, worldId), read };
+  window.setTimeout(() => {
+    const held = state.worldLogs[read.id];
+    if (held) held.read = { ...read, status: "succeeded", lines: DEMO_LOG };
+  }, LOG_REPLY_MS);
+  return read;
+}
+
+export function worldLog(gameId: string, worldId: string, readId: string): WorldLogRead {
+  const held = state.worldLogs[readId];
+  if (held?.world !== worldKey(gameId, worldId)) refuse(404, "unknown_log_read");
+  return held.read;
+}
+
+export function askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>): AssistantAnswer {
+  const read = worldLog(gameId, worldId, question.logReadId);
+  if (read.status !== "succeeded") refuse(409, "log_not_ready");
+  if (question.question !== null && question.question.length > 500) refuse(400, "invalid_assistant_request");
+  if (state.questionsToday >= 20) refuse(429, "assistant_daily_limit");
+  state.questionsToday += 1;
+  state.counter += 1;
+  const answer: AssistantAnswer = { id: `answer-${state.counter + 100}`, at: iso(), logReadId: read.id, model: question.model, question: question.question, status: "pending", text: null };
+  state.answers[answer.id] = { world: worldKey(gameId, worldId), answer };
+  window.setTimeout(() => {
+    const held = state.answers[answer.id];
+    if (held) held.answer = { ...answer, status: "succeeded", text: DEMO_ANSWERS[question.model] };
+  }, ANSWER_MS);
+  return answer;
+}
+
+export function assistantAnswer(gameId: string, worldId: string, answerId: string): AssistantAnswer {
+  const held = state.answers[answerId];
+  if (held?.world !== worldKey(gameId, worldId)) refuse(404, "unknown_assistant_answer");
+  return held.answer;
 }
 
 // `?operation=` (flag.ts) puts one promotion on the Creative world: running

@@ -1,6 +1,6 @@
 import { cx } from "../../../lib/cx";
 
-export type SegmentOption<Value extends string> = Readonly<{ value: Value; label: string; count?: number }>;
+export type SegmentOption<Value extends string> = Readonly<{ value: Value; label: string; count?: number; /** What the choice means, as its tooltip. */ hint?: string }>;
 
 /**
  * One value out of a few, as a pill track: a metric range, a backup wipe, an
@@ -27,6 +27,7 @@ export function Segmented<Value extends string>({ label, options, value, onChang
           <button
             aria-checked={checked}
             className="c-segment"
+            data-tip={option.hint}
             key={option.value}
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => {

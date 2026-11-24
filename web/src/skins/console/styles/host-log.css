@@ -17,6 +17,11 @@ html[data-skin="console"] .c-host-log[data-live] {
   height: 224px;
 }
 
+/* A game's whole recent log (ADR-0094) reads as a page, not a box. */
+html[data-skin="console"] .c-host-log[data-size="tall"] {
+  max-height: clamp(320px, 60vh, 640px);
+}
+
 html[data-skin="console"] .c-host-line {
   display: flex;
   gap: 12px;

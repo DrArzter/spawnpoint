@@ -12,6 +12,9 @@ import { backupsRoutes } from "./backups-routes.ts";
 import { promotionRoutes } from "./promotion-routes.ts";
 import { consoleRoutes } from "./console-routes.ts";
 import { worldConfigRoutes } from "./world-config-routes.ts";
+import { worldLogRoutes } from "./world-log-routes.ts";
+import { assistantRoutes } from "./assistant-routes.ts";
+import { assistantConfig } from "./assistant-wiring.ts";
 import { invitationsRoutes } from "./invitations-routes.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
 import { mcpRoutes } from "./mcp-routes.ts";
@@ -35,11 +38,13 @@ export const routes = composeRoutes(
   promotionRoutes,
   consoleRoutes,
   worldConfigRoutes,
+  worldLogRoutes,
+  assistantRoutes,
   invitationsRoutes,
   oauthRoutes,
   mcpRoutes,
 );
 
 export function deployedCapabilities(): readonly string[] {
-  return capabilitiesForRoutes(routes);
+  return capabilitiesForRoutes(routes, new Set(assistantConfig.enabled ? [] : ["assistant"]));
 }

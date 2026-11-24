@@ -1,5 +1,5 @@
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
-import { ApiError, type ApiErrorBody, type ConfigFileContent, type ConfigFileList, type SavedConfigFile, type FileLink, type ReleaseDiff, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type StopPlayersPolicy, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
+import { ApiError, type ApiErrorBody, type AssistantAnswer, type AssistantModel, type WorldLogRead, type ConfigFileContent, type ConfigFileList, type SavedConfigFile, type FileLink, type ReleaseDiff, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type StopPlayersPolicy, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { API_ERROR_TEXT } from "../error-text";
 import { request, requestOrNull } from "./request";
 
@@ -237,6 +237,44 @@ export const worldsApi = {
       failure: "The file could not be reset.",
       refusals: { forbidden: "Your role cannot edit config files." },
     });
+  },
+
+  async requestWorldLog(gameId: string, worldId: string): Promise<WorldLogRead> {
+    const body = await request<{ read: WorldLogRead }>(`${worldPath(gameId, worldId)}/log`, {
+      method: "POST", body: {},
+      failure: "The log could not be requested.",
+      refusals: { forbidden: "Your role cannot read the log.", session_not_ready: "This world is not running. Start it first." },
+      valid: (answer) => typeof answer.read?.id === "string",
+    });
+    return body.read;
+  },
+
+  async loadWorldLog(gameId: string, worldId: string, readId: string): Promise<WorldLogRead> {
+    const body = await request<{ read: WorldLogRead }>(`${worldPath(gameId, worldId)}/log/${encodeURIComponent(readId)}`, {
+      failure: "The log could not be read.",
+      refusals: { forbidden: "Your role cannot read the log." },
+      valid: (answer) => typeof answer.read?.status === "string",
+    });
+    return body.read;
+  },
+
+  async askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>): Promise<AssistantAnswer> {
+    const body = await request<{ answer: AssistantAnswer }>(`${worldPath(gameId, worldId)}/assistant`, {
+      method: "POST", body: question,
+      failure: "The question could not be sent.",
+      refusals: { forbidden: "Only an Owner can ask the assistant." },
+      valid: (answer) => typeof answer.answer?.id === "string",
+    });
+    return body.answer;
+  },
+
+  async loadAssistantAnswer(gameId: string, worldId: string, answerId: string): Promise<AssistantAnswer> {
+    const body = await request<{ answer: AssistantAnswer }>(`${worldPath(gameId, worldId)}/assistant/${encodeURIComponent(answerId)}`, {
+      failure: "The answer could not be read.",
+      refusals: { forbidden: "Only an Owner can ask the assistant." },
+      valid: (answer) => typeof answer.answer?.status === "string",
+    });
+    return body.answer;
   },
 
   async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage> {

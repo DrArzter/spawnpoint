@@ -45,6 +45,7 @@ const ROUTES = [
   ["world-whitelist", `${WORLD}/whitelist`],
   ["world-config", `${WORLD}/config`],
   ["world-console", `${WORLD}/console`],
+  ["world-log", `${WORLD}/log`],
   ["world-metrics", `${WORLD}/metrics`],
   ["world-factorio", "/?demo&latency=0#/worlds/factorio/factorio"],
   ["world-vanilla", "/?demo&latency=0#/worlds/minecraft/vanilla"],

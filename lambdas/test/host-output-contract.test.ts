@@ -50,3 +50,11 @@ test("every console exit code is declared where it is made", async () => {
   assert.deepEqual([...made].sort(), Object.keys(hostOutput.console.exitCodes).sort());
   for (const code of hostOutput.console.unavailable) assert.ok(made.has(String(code)), `exit ${code} is made somewhere`);
 });
+
+test("every world log exit code is declared where it is made", async () => {
+  const script = all.get("world-log.sh") ?? "";
+  const document = await readFile(new URL("../../infra/terraform-access-api/world-log.tf", import.meta.url), "utf8");
+  const made = new Set([...`${script}\n${document}`.matchAll(/\bexit ([2-9])\b/g)].map((match) => match[1]!));
+  assert.deepEqual([...made].sort(), Object.keys(hostOutput.worldLog.exitCodes).sort());
+  for (const code of hostOutput.worldLog.unavailable) assert.ok(made.has(String(code)), `exit ${code} is made somewhere`);
+});

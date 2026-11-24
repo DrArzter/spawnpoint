@@ -94,3 +94,16 @@ export const roleKey = (roleId: string): TableKey => ({ pk: `ROLE#${roleId}`, sk
 /** Every stored role is indexed under one value, so the list is one query. */
 export const roleIndex = "ROLE";
 export const accessDefaultsKey: TableKey = { pk: "SYSTEM", sk: "ACCESS_DEFAULTS" };
+
+// A world's log reads and the owner's log assistant (ADR-0094).
+export const worldLogPrefix = "WORLD_LOG#";
+/** One log read in its world's partition: who asked, and the host that answers. */
+export const worldLogKey = (worldId: string, readId: string): TableKey => ({ pk: `${worldLogPrefix}${worldId}`, sk: readId });
+
+export const assistantAnswerPrefix = "ASSISTANT#";
+/** One assistant answer in its world's partition. */
+export const assistantAnswerKey = (worldId: string, answerId: string): TableKey => ({ pk: `${assistantAnswerPrefix}${worldId}`, sk: answerId });
+/** How many questions one identity asked on one UTC day. */
+export const assistantDailyUseKey = (identityId: string, day: string): TableKey => ({ pk: `ASSISTANT_USE#${identityId}`, sk: day });
+/** What the deployment's assistant cost in one UTC month, in millionths of a dollar. */
+export const assistantMonthlySpendKey = (month: string): TableKey => ({ pk: "ASSISTANT_SPEND", sk: month });

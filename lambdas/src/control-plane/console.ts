@@ -60,6 +60,8 @@ export type ConsoleGateway = Readonly<{
   read: (commandId: string, hostId: string) => Promise<ConsoleInvocation>;
   /** Asks the host to write the world's whitelist from its record and reload it (ADR-0066). */
   reloadWhitelist: (target: ConsoleTarget) => Promise<string>;
+  /** Asks the host for the world's recent log (ADR-0094); read the answer with `read`. */
+  readLog: (target: ConsoleTarget) => Promise<string>;
 }>;
 
 /** One command as the console keeps it: the entry the panel shows, and where it ran. */

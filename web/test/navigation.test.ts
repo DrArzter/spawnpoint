@@ -29,6 +29,6 @@ const world: World = {
 
 test("a world offers its console and its host's metrics as tabs, when the role and the deployment do", () => {
   const ids = (offered: Parameters<typeof worldTabs>[1]) => worldTabs(world, offered).map((tab) => tab.id);
-  assert.deepEqual(ids({ releases: true, whitelist: true, config: true, console: true, metrics: true }), ["details", "wipes", "backups", "releases", "whitelist", "config", "console", "metrics"]);
-  assert.deepEqual(ids({ releases: true, whitelist: false, config: false, console: false, metrics: false }), ["details", "wipes", "backups", "releases"]);
+  assert.deepEqual(ids({ releases: true, whitelist: true, config: true, console: true, log: true, metrics: true }), ["details", "wipes", "backups", "releases", "whitelist", "config", "console", "log", "metrics"]);
+  assert.deepEqual(ids({ releases: true, whitelist: false, config: false, console: false, log: false, metrics: false }), ["details", "wipes", "backups", "releases"]);
 });

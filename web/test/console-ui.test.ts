@@ -29,6 +29,7 @@ import { PageHeader } from "../src/skins/console/ui/PageHeader.tsx";
 import { pageOf, Pager } from "../src/skins/console/ui/Pager.tsx";
 import { Person } from "../src/skins/console/ui/Person.tsx";
 import { TablePreferences } from "../src/skins/console/ui/Preferences.tsx";
+import { HostLog } from "../src/skins/console/ui/HostLog.tsx";
 import { Segmented } from "../src/skins/console/ui/Segmented.tsx";
 import { SidePanel } from "../src/skins/console/ui/SidePanel.tsx";
 import { Skeleton, SkeletonGroup } from "../src/skins/console/ui/Skeleton.tsx";
@@ -326,6 +327,19 @@ test("Address, Copy, Person and Indicator: one line, names for every icon", () =
   assert.match(person, /<span aria-hidden="true" class="c-avatar c-avatar-sm">NE<\/span>/);
   assert.match(person, /c-person-detail/);
   assert.match(html(createElement(Indicator, { status: { kind: "ok", label: "Granted" } })), /aria-label="Granted" class="c-indicator c-tone-ok" data-status="ok" data-tip="Granted" role="img"/);
+});
+
+test("Segmented: a choice's meaning is its tooltip", () => {
+  const seg = html(createElement(Segmented<"haiku" | "sonnet">, { label: "Model", options: [{ value: "haiku", label: "Haiku", hint: "Fast and cheap" }, { value: "sonnet", label: "Sonnet" }], value: "haiku", onChange: noop }));
+  assert.match(seg, /class="c-segment" data-tip="Fast and cheap"/);
+  assert.doesNotMatch(seg.slice(seg.indexOf("Sonnet") - 120), /data-tip/);
+});
+
+test("HostLog: a game's own line has no time of ours, and a whole log is the tall variant", () => {
+  const markup = html(createElement(HostLog, { label: "World A: game log", rows: [{ id: "a", at: null, text: "[12:00:01] Done", tone: "plain" }], tall: true }));
+  assert.match(markup, /data-size="tall"/);
+  assert.doesNotMatch(markup, /<time/);
+  assert.match(markup, /\[12:00:01\] Done/);
 });
 
 test("Segmented and Tabs: one value chosen, tied to its panel", () => {

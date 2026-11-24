@@ -33,6 +33,8 @@ export const toolCalls: Readonly<Record<string, Call>> = {
     const entry = history.entries?.find((candidate) => candidate.id === args.commandId);
     return entry === undefined ? { error: "unknown_command" } : { entry };
   },
+  read_world_log: (client, args) => client.request(`${world(args)}/log`, { method: "POST", body: "{}" }),
+  get_world_log_result: (client, args) => client.request(`${world(args)}/log/${encodeURIComponent(args.readId!)}`),
   start_world: (client, args) => client.request(`${world(args)}/start`, { method: "POST", body: "{}" }),
   stop_world: (client, args) => client.request(`${world(args)}/stop`, { method: "POST", body: "{}" }),
 };

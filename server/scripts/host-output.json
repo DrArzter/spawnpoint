@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "_comment": "What a host prints for the control plane (review X1, R20). The host writes these names; lambdas/src/control-plane/host-log.ts and console.ts read them from here, and lambdas/test/host-output-contract.test.ts checks the scripts against this file.",
+ "_comment": "What a host prints for the control plane (review X1, R20). The host writes these names; lambdas/src/control-plane/host-log.ts, console.ts and world-log.ts read them from here, and lambdas/test/host-output-contract.test.ts checks the scripts against this file.",
  "steps": {
   "session_start": "Session started",
   "world_catalog": "World catalogue read",
@@ -68,6 +68,16 @@
   },
   "unavailable": [
    4,
+   9
+  ]
+ },
+ "worldLog": {
+  "exitCodes": {
+   "3": "The game has no container to read.",
+   "9": "This host has no log script yet."
+  },
+  "unavailable": [
+   3,
    9
   ]
  }

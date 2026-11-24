@@ -520,7 +520,7 @@ export function Details({ items, label, className }: Readonly<{ items: readonly 
 const LOG_WAITING = ["medium", "long", "short"] as const;
 
 /** A `live` log keeps one height while lines arrive, with placeholders until the first one. */
-export function Log({ label, rows, live = false, className }: Readonly<{ label: string; rows: readonly HostLogRow[]; live?: boolean; className?: string }>) {
+export function Log({ label, rows, live = false, tall = false, className }: Readonly<{ label: string; rows: readonly HostLogRow[]; live?: boolean; /** A game's whole recent log: a taller region. */ tall?: boolean; className?: string }>) {
   const region = useRef<HTMLDivElement>(null);
   const newest = rows.at(-1)?.id;
   useEffect(() => {
@@ -528,11 +528,11 @@ export function Log({ label, rows, live = false, className }: Readonly<{ label: 
     if (element) element.scrollTop = element.scrollHeight;
   }, [newest]);
   return (
-    <div aria-busy={live && rows.length === 0 ? true : undefined} aria-label={label} aria-live="polite" className={cx("t-log", className)} data-live={live ? "" : undefined} ref={region} role="log">
+    <div aria-busy={live && rows.length === 0 ? true : undefined} aria-label={label} aria-live="polite" className={cx("t-log", tall && "t-log-tall", className)} data-live={live ? "" : undefined} ref={region} role="log">
       {live && rows.length === 0 && LOG_WAITING.map((width) => <div className="t-log-line" key={width}><Skeleton width={width} /></div>)}
       {rows.map((row) => (
         <div className={cx("t-log-line", row.tone !== "plain" && `t-log-${row.tone}`)} key={row.id}>
-          <time className="t-log-time" dateTime={row.at}>{logTime(row.at)}</time>
+          {row.at !== null && <time className="t-log-time" dateTime={row.at}>{logTime(row.at)}</time>}
           <span className="t-log-text">{row.tone !== "plain" && <span className="visually-hidden">{row.tone === "error" ? "Error: " : "Warning: "}</span>}{row.text}</span>
         </div>
       ))}

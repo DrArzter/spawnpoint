@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, ModSortKey, ModSource, ModSourceFilter, SubscriptionState } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, AssistantModel, BackupEntry, HostMetrics, LinkedLoginAccount, MetricRange, ModSortKey, ModSource, ModSourceFilter, SubscriptionState } from "../api/contract";
 import type { ModSortDirection } from "./release-mods";
 import type { StatusDescriptor } from "./status";
 import type { AccessTab, ControlPlaneSnapshot, Game, Member, Operation, OwnerBootstrap, Page, PermissionInfo, Preset, Role, ServerState, Wipe, World, WorldTab } from "../model";
@@ -252,6 +252,33 @@ export type ConfigFilesModel = Readonly<{
   editor: ConfigEditorModel | null;
 }>;
 
+/** One model the owner may ask, with what it is good for as its tooltip (ADR-0094). */
+export type AssistantChoice = Readonly<{ value: AssistantModel; label: string; hint: string }>;
+
+/** The owner's log assistant: a model, an optional question, and the answer to the last one. */
+export type AssistantPanelModel = Readonly<{
+  choices: readonly AssistantChoice[];
+  model: AssistantModel;
+  setModel: (value: AssistantModel) => void;
+  question: string;
+  setQuestion: (value: string) => void;
+  /** Explains the log read last; refused until a read has finished. */
+  ask: Action;
+  /** The answer to the last question; null before the first. */
+  answer: Loading<Readonly<{ text: string; at: string }>> | null;
+}>;
+
+/** A world's recent log (ADR-0094), read on demand, with its addresses and player names replaced by tokens. */
+export type WorldLogModel = Readonly<{
+  world: World;
+  /** Reads the newest lines; refused while the world is not running. */
+  read: Action;
+  /** The lines read last, oldest first; null before the first read. */
+  log: Loading<Readonly<{ at: string; rows: readonly HostLogRow[] }>> | null;
+  /** Null unless the person is an Owner and the deployment switched the assistant on. */
+  assistant: AssistantPanelModel | null;
+}>;
+
 /** One mod of the release a world starts with, of either side, and its download (ADR-0065, ADR-0069). `source` is null for a release built before sources were recorded. */
 export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; source: ModSource | null; download: Action }>;
 /** The rows of the page on screen: what the search and filter match (`total`) and the whole release (`all`). */
@@ -333,6 +360,8 @@ export type WorldModel = Readonly<{
   whitelist: WhitelistModel | null;
   /** The files the world may edit; null when the role, the deployment or the world offers none. */
   config: ConfigFilesModel | null;
+  /** The world's recent log; null when the role or the deployment offers none. */
+  log: WorldLogModel | null;
   /** This world's console and its host's metrics; null when the role or the deployment offers neither tab. */
   console: ConsoleModel | null;
   metrics: MetricsModel | null;
@@ -378,7 +407,8 @@ export type OperationProgressModel = Readonly<{
 }>;
 
 /** One line of the host log: `tone` marks a fault; `at` is a time the skin prints. */
-export type HostLogRow = Readonly<{ id: string; at: string; text: string; tone: "plain" | "warning" | "error" }>;
+/** One log line; `at` is null for a game's own line, which carries its time in its text. */
+export type HostLogRow = Readonly<{ id: string; at: string | null; text: string; tone: "plain" | "warning" | "error" }>;
 
 /** This world's session in a few facts; `busy` while an operation holds it. */
 export type WorldGlance = Readonly<{ live: boolean; players: number | null; address: AddressFacts | null; launchedAt: string | null; busy: boolean }>;

@@ -355,7 +355,7 @@ export function siblingRow(row: WorldRow): SiblingRow {
   };
 }
 
-export function worldTabs(world: World, offered: Readonly<{ releases: boolean; whitelist: boolean; config: boolean; console: boolean; metrics: boolean }>): { id: WorldTab; label: string; count?: number }[] {
+export function worldTabs(world: World, offered: Readonly<{ releases: boolean; whitelist: boolean; config: boolean; console: boolean; log: boolean; metrics: boolean }>): { id: WorldTab; label: string; count?: number }[] {
   const tabs: { id: WorldTab; label: string; count?: number }[] = [{ id: "details", label: "Details" }];
   if (world.worldLifecycleAvailable) tabs.push({ id: "wipes", label: "Wipes", count: world.wipes.length });
   tabs.push({ id: "backups", label: "Backups" });
@@ -364,6 +364,7 @@ export function worldTabs(world: World, offered: Readonly<{ releases: boolean; w
   if (offered.config) tabs.push({ id: "config", label: "Config" });
   // A world's own console and its own host's metrics (ADR-0062, ADR-0063).
   if (offered.console) tabs.push({ id: "console", label: "Console" });
+  if (offered.log) tabs.push({ id: "log", label: "Log" });
   if (offered.metrics) tabs.push({ id: "metrics", label: "Metrics" });
   return tabs;
 }

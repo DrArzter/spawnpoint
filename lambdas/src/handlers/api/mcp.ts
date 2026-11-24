@@ -11,6 +11,7 @@ import { METRIC_RANGE_NAMES } from "../../control-plane/metric-ranges.ts";
 import { deployedBackups } from "./backups-wiring.ts";
 import { deployedReleases } from "./releases-wiring.ts";
 import { deployedWorlds } from "./worlds-wiring.ts";
+import { deployedWorldLog } from "./world-log-wiring.ts";
 import { sessionSigningSecret } from "./aws-secrets.ts";
 import { identityById } from "./identity-store.ts";
 
@@ -113,6 +114,14 @@ const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
   get_console_result: (_identity, args) => {
     const worldArgs = worldToolArguments(args);
     return worldArgs === null || typeof args.commandId !== "string" ? null : deployedConsole.consoleCommandResult(...worldArgs, args.commandId);
+  },
+  read_world_log: (identity, args) => {
+    const worldArgs = worldToolArguments(args);
+    return worldArgs === null ? null : deployedWorldLog.requestLog(identity, ...worldArgs);
+  },
+  get_world_log_result: (_identity, args) => {
+    const worldArgs = worldToolArguments(args);
+    return worldArgs === null || typeof args.readId !== "string" ? null : deployedWorldLog.logResult(...worldArgs, args.readId);
   },
   start_world: (identity, args) => {
     const worldArgs = worldToolArguments(args);

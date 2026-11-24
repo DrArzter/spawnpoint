@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
 import { releasePlan, storedReleasePlan } from "../src/control-plane/release-plan.ts";
-import { releaseDiff } from "../src/handlers/api/releases.ts";
+import { deployedReleases } from "../src/handlers/api/releases-wiring.ts";
+
+const { releaseDiff } = deployedReleases;
 
 // The builder's plan-release.sh is held to the same files (server/tests/release-plan-test.sh).
 const fixtures = new URL("../../server/tests/fixtures/release-plan/", import.meta.url);

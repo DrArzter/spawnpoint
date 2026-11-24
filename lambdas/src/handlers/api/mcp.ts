@@ -9,7 +9,7 @@ import { controlPlane } from "./control-plane.ts";
 import { hostMetrics } from "./metrics.ts";
 import { METRIC_RANGE_NAMES } from "../../control-plane/metric-ranges.ts";
 import { deployedBackups } from "./backups-wiring.ts";
-import { packDownload, releaseManifest, releaseModDownload } from "./releases.ts";
+import { deployedReleases } from "./releases-wiring.ts";
 import { controlSession } from "./worlds.ts";
 import { sessionSigningSecret } from "./secrets.ts";
 import { identityById } from "./identity-store.ts";
@@ -90,15 +90,15 @@ const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
   },
   get_world_pack: (_identity, args) => {
     const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : packDownload(...worldArgs);
+    return worldArgs === null ? null : deployedReleases.packDownload(...worldArgs);
   },
   get_release: (_identity, args) => {
     const releaseArgs = releaseToolArguments(args);
-    return releaseArgs === null ? null : releaseManifest(...releaseArgs);
+    return releaseArgs === null ? null : deployedReleases.releaseManifest(...releaseArgs);
   },
   get_release_mod_link: (_identity, args) => {
     const releaseArgs = releaseToolArguments(args);
-    return releaseArgs === null || typeof args.sha256 !== "string" ? null : releaseModDownload(...releaseArgs, args.sha256);
+    return releaseArgs === null || typeof args.sha256 !== "string" ? null : deployedReleases.releaseModDownload(...releaseArgs, args.sha256);
   },
   get_backup_download_link: (identity, args) => {
     const worldArgs = worldToolArguments(args);

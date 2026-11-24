@@ -1,0 +1,74 @@
+{
+ "schema_version": 1,
+ "_comment": "What a host prints for the control plane (review X1, R20). The host writes these names; lambdas/src/control-plane/host-log.ts and console.ts read them from here, and lambdas/test/host-output-contract.test.ts checks the scripts against this file.",
+ "steps": {
+  "session_start": "Session started",
+  "world_catalog": "World catalogue read",
+  "world_prepared": "World prepared",
+  "connectivity_prepared": "Network prepared",
+  "release_pointer_read": "Release pointer read",
+  "release_downloaded": "Release downloaded",
+  "release_reconciled": "Release reconciled",
+  "game_starting": "Game starting",
+  "game_ready": "Game ready",
+  "address_published": "Address published"
+ },
+ "resultKeyPattern": "^[a-z_]{1,20}$",
+ "resultValuePattern": "^[A-Za-z0-9._:+/-]{1,60}$",
+ "results": {
+  "shown": {
+   "release": "Release",
+   "downloaded": "Downloaded",
+   "kept": "Kept",
+   "reused": "Reused",
+   "seconds": "Seconds",
+   "layout": "Layout",
+   "fetched": "Fetched",
+   "fetch": "Copy",
+   "fetch_reason": "Copy reason",
+   "fetched_bytes": "Bytes copied",
+   "discarded": "Discarded",
+   "shards": "Shards",
+   "mods": "Mods",
+   "files": "Files",
+   "roots": "Roots",
+   "world_data": "World data",
+   "observability": "Observability",
+   "result": "Result"
+  },
+  "hidden": [
+   "connection_address",
+   "connection_host",
+   "connectivity",
+   "desired_release",
+   "game",
+   "generation_id",
+   "kept_folders",
+   "payload",
+   "preset",
+   "reconcile",
+   "target",
+   "world",
+   "zerotier_network"
+  ]
+ },
+ "sessionScripts": [
+  "start-session.sh",
+  "download-release.sh",
+  "reconcile-release.sh",
+  "reconcile-server-overrides.sh",
+  "ensure-host-observability.sh"
+ ],
+ "console": {
+  "exitCodes": {
+   "2": "The request was refused before the game was asked.",
+   "3": "The game did not answer.",
+   "4": "This world's game has no console.",
+   "9": "This host has no console script yet."
+  },
+  "unavailable": [
+   4,
+   9
+  ]
+ }
+}

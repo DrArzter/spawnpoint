@@ -319,13 +319,13 @@ variable "assistant_sonnet_model_id" {
 }
 
 variable "assistant_prices" {
-  description = "Each assistant model's price in US dollars per million input and output tokens, for the monthly cap's estimate. Check them against Amazon Bedrock's pricing for the EU profiles."
+  description = "Each assistant model's price in US dollars per million input and output tokens, for the monthly cap's estimate. The defaults are the regional (EU profile) rates in the Bedrock Marketplace offers accepted on 2026-11-24, 10% above the global rates."
   type = object({
     haiku  = object({ input = number, output = number })
     sonnet = object({ input = number, output = number })
   })
   default = {
-    haiku  = { input = 0.1, output = 0.5 }
-    sonnet = { input = 2, output = 10 }
+    haiku  = { input = 0.11, output = 0.55 }
+    sonnet = { input = 2.2, output = 11 }
   }
 }

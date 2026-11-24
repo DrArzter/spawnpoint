@@ -159,6 +159,14 @@ test("Dialog and SidePanel: labelled modal surfaces whose Cancel runs the model'
   assert.ok(dialog.indexOf('data-action="cancel"') < dialog.indexOf('data-action="confirm"'), "Cancel comes before the primary");
   assert.match(dialog, /aria-label="Close"/);
   assert.match(html(createElement(SidePanel, { title: "Game settings", cancel: action("sheet.close", "Cancel", noop) })), /class="c-panel"/);
+  assert.match(html(createElement(SidePanel, { title: "config/a.toml", cancel: action("sheet.close", "Cancel", noop), wide: true })), /class="c-panel c-panel-wide"/);
+});
+
+test("SidePanel: every edge of its border is the panel's own, never the browser's dialog border", () => {
+  const css = readFileSync(new URL("../src/skins/console/styles/panel.css", import.meta.url), "utf8");
+  const rule = css.match(/html\[data-skin="console"\] \.c-panel \{([^}]*)\}/)?.[1] ?? "";
+  assert.match(rule, /border-width: 0 0 0 1px;/);
+  assert.match(rule, /border-style: solid;/);
 });
 
 test("Frame: Home is current on the overview and Worlds is not; Access carries the request count", () => {
@@ -339,6 +347,7 @@ test("TextArea: a monospaced block that never wraps, tied to its Field like any 
   assert.match(markup, new RegExp(`id="${id}" aria-invalid="true" aria-describedby="${id}-error"`));
   assert.match(markup, /spellCheck|spellcheck="false"/i);
   assert.match(html(createElement(TextArea, { "aria-label": "Contents of config/a.toml", value: "", onChange: noop })), /aria-label="Contents of config\/a\.toml"/);
+  assert.match(html(createElement(TextArea, { "aria-label": "Contents", fill: true, value: "", onChange: noop })), /class="c-textarea c-mono c-textarea-fill"/);
 });
 
 test("Fields: a label tied to its control, an error tied with aria-describedby", () => {

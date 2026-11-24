@@ -228,9 +228,10 @@ export function Toggle({ action, checked, note, labelHidden = false, className }
 
 // An error is why the value cannot be saved; the input it belongs to carries
 // aria-invalid. It stays under the hint, which often names what may be typed.
-export function Field({ label, hint, error = null, hideLabel = false, children, className }: Readonly<{ label: string; hint?: ReactNode; error?: string | null; hideLabel?: boolean; children: ReactNode; className?: string }>) {
+/** A labelled control. `fill` lets the control take the height its column leaves, for a whole file. */
+export function Field({ label, hint, error = null, hideLabel = false, fill = false, children, className }: Readonly<{ label: string; hint?: ReactNode; error?: string | null; hideLabel?: boolean; fill?: boolean; children: ReactNode; className?: string }>) {
   return (
-    <label className={cx("t-field", className)}>
+    <label className={cx("t-field", fill && "t-field-fill", className)}>
       <span className={cx("t-field-label", hideLabel && "visually-hidden")}>{label}</span>
       {children}
       {hint && <small className="t-field-hint">{hint}</small>}
@@ -243,9 +244,9 @@ export function TextInput({ className, mono = false, ...props }: Omit<ComponentP
   return <input className={cx("t-input", mono && "t-input-mono", className)} {...props} />;
 }
 
-/** Text of many lines, monospaced and never wrapped, for a file's contents. */
-export function TextArea({ className, ...props }: Omit<ComponentPropsWithRef<"textarea">, "className"> & Readonly<{ className?: string }>) {
-  return <textarea className={cx("t-textarea", className)} spellCheck={false} {...props} />;
+/** Text of many lines, monospaced and never wrapped, for a file's contents. `fill` takes the height its field leaves. */
+export function TextArea({ className, fill = false, ...props }: Omit<ComponentPropsWithRef<"textarea">, "className"> & Readonly<{ className?: string; fill?: boolean }>) {
+  return <textarea className={cx("t-textarea", fill && "t-textarea-fill", className)} spellCheck={false} {...props} />;
 }
 
 export function SelectInput({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
@@ -715,7 +716,7 @@ export function Modal({ open, onClose, title, children, verbs, className, dismis
 
 /** A form or a reading in the middle of the screen: the same box as a
     question, with a close key and a scrolling body. */
-export function Drawer({ open, onClose, title, description, children, footer, closeActionId, cancel, cancelLabel = "Cancel", className }: Readonly<{
+export function Drawer({ open, onClose, title, description, children, footer, closeActionId, cancel, cancelLabel = "Cancel", wide = false, className }: Readonly<{
   open: boolean;
   onClose: () => void;
   title: ReactNode;
@@ -725,12 +726,14 @@ export function Drawer({ open, onClose, title, description, children, footer, cl
   closeActionId?: string;
   cancel?: Action;
   cancelLabel?: string;
+  /** Holds a whole file: as wide and as tall as the screen allows. */
+  wide?: boolean;
   className?: string;
 }>) {
   const ref = useModal(open, onClose);
   const titleId = useId();
   return (
-    <dialog aria-labelledby={titleId} className={cx("t-drawer", className)} ref={ref}>
+    <dialog aria-labelledby={titleId} className={cx("t-drawer", wide && "t-drawer-wide", className)} ref={ref}>
       {open && (
         <div className="t-panel t-drawer-panel">
           <div className="t-dialog-head">

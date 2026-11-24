@@ -15,13 +15,14 @@ export function ConfigFileSheet({ editor }: Readonly<{ editor: ConfigEditorModel
       cancel={editor.close}
       start={editor.reset ? <ActionButton action={editor.reset} variant="ghost" /> : undefined}
       title={editor.path}
+      wide
     >
       {editor.reload && <Notice notice={{ id: "config.changed", tone: "warning", title: "Someone changed this file", action: editor.reload }} />}
       {content.status === "loading" && <SkeletonGroup><Skeleton height="320px" /></SkeletonGroup>}
       {content.status === "error" && <LoadError error={content.error} kind={content.kind} retry={content.retry} size="sm" title="The file could not be loaded" verb="edit config files" />}
       {content.status === "ready" && (
         <>
-          <TextArea aria-label={`Contents of ${editor.path}`} onChange={(event) => editor.setText(event.target.value)} value={editor.text} />
+          <TextArea fill aria-label={`Contents of ${editor.path}`} onChange={(event) => editor.setText(event.target.value)} value={editor.text} />
           <p className="c-faint c-config-note">Changes apply at the world's next start.</p>
         </>
       )}

@@ -71,6 +71,12 @@ html[data-skin="console"] .c-input-colour {
 }
 
 html[data-skin="console"] .c-input:hover,
+/* A text area that fills its column: the space a panel's body leaves above its note. */
+html[data-skin="console"] .c-dialog-body > .c-textarea-fill {
+  flex: 1 1 auto;
+  resize: none;
+}
+
 html[data-skin="console"] .c-textarea:hover {
   border-color: var(--c-ink-3);
 }

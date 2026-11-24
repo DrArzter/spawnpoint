@@ -1,14 +1,8 @@
 import { type Identity } from "../../access/domain.ts";
-import { consolePartition } from "../../access/keys.ts";
-import { awsControlPlaneSources, sendConsoleCommand, readConsoleInvocation } from "../../control-plane/aws.ts";
-import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
-import { checkConsoleCommand, encodeConsoleCommand, CONSOLE_RECORD_DAYS, type ConsoleEntry, consoleResult, consoleEntryFromItem } from "../../control-plane/console.ts";
+import { type CatalogGame } from "../../control-plane/catalog.ts";
+import { checkConsoleCommand, encodeConsoleCommand, type ConsoleEntry, consoleResult, type ConsoleGateway, type ConsoleRecords, type ConsoleTarget } from "../../control-plane/console.ts";
 import { type WorldPlacement } from "../../control-plane/world-session.ts";
-import { PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
-import { readWorldSession, locateWorldHost } from "./world-state.ts";
-import { document, tableName } from "./access-store.ts";
-import { isConditionFailure } from "./conditions.ts";
 
 // --- The console gateway (ADR-0063) -------------------------------------------
 // A command is sent and recorded at once; its answer is collected when the
@@ -19,76 +13,70 @@ const CONSOLE_HISTORY_LIMIT = 30;
 /** The MCP client a command came through (ADR-0061), named as it registered. */
 export type ConsoleAgent = Readonly<{ clientId: string; name: string }>;
 
-export async function runConsoleCommand(identity: Identity, gameId: string, worldId: string, body: string | undefined, agent: ConsoleAgent | null = null): Promise<Response> {
-  const parsed = parseJsonObject({ body });
-  const [presets, worldRecords, hosts] = await Promise.all([
-    awsControlPlaneSources.listPresets?.() ?? Promise.resolve([]),
-    awsControlPlaneSources.listWorldRecords?.() ?? Promise.resolve([]),
-    awsControlPlaneSources.listHosts(),
-  ]);
-  const world = catalogWithPresets(presets, gameCatalog, worldRecords)
-    .find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
-  if (world === undefined) return errorResponse(404, "unknown_world");
-  const check = checkConsoleCommand(gameId, parsed.command);
-  if (!check.ok) return errorResponse(check.reason === "lifecycle_command" ? 409 : 400, check.reason);
+/** A world's session as the console sees it: ready on a host, or why not. */
+export type ConsoleSession =
+  | Readonly<{ kind: "ready"; sessionId: string; target: ConsoleTarget }>
+  | Readonly<{ kind: "not_ready" }>
+  | Readonly<{ kind: "no_host" }>;
 
-  // The world's own session, ready: a console attaches to a game that answers.
-  const placement: WorldPlacement = world.placement === "fleet" ? "fleet" : "configured";
-  const located = await readWorldSession(gameId, worldId, placement);
-  const sessionId = located.record?.activeSessionId;
-  if (located.record?.observedState !== "ready" || !sessionId) return errorResponse(409, "session_not_ready");
+/** What the console needs, injected so that it depends on no cloud API. */
+export type ConsoleDependencies = Readonly<{
+  /** The catalog with preset worlds, as the panel sees it. */
+  catalog: () => Promise<readonly CatalogGame[]>;
+  session: (gameId: string, worldId: string, placement: WorldPlacement) => Promise<ConsoleSession>;
+  gateway: Pick<ConsoleGateway, "send" | "read">;
+  records: ConsoleRecords;
+  now: () => Date;
+}>;
 
-  const target = await locateWorldHost(placement, located.record, hosts);
-  if (target === null) return errorResponse(409, "console_unavailable");
+export type ConsoleFeature = Readonly<{
+  runConsoleCommand: (identity: Identity, gameId: string, worldId: string, body: string | undefined, agent?: ConsoleAgent | null) => Promise<Response>;
+  consoleHistory: (gameId: string, worldId: string) => Promise<Response>;
+  /** One command's answer, for an agent that sent it: it has to be among the world's recent commands. */
+  consoleCommandResult: (gameId: string, worldId: string, commandId: string) => Promise<Response>;
+}>;
 
-  const commandId = await sendConsoleCommand({ hostId: target.hostId, worldId, slot: target.slot, encodedCommand: encodeConsoleCommand(check.command) });
-  const at = new Date().toISOString();
-  await document.send(new PutCommand({ TableName: tableName, Item: {
-    pk: consolePartition(worldId), sk: `${at}#${commandId}`, command_id: commandId, created_at: at,
-    identity_id: identity.id, display_name: identity.displayName, game_id: gameId, world_id: worldId,
-    session_id: sessionId, host_id: target.hostId, command: check.command, status: "pending",
-    ...(agent === null ? {} : { agent_client_id: agent.clientId, agent_name: agent.name }),
-    ttl: Math.floor(Date.now() / 1000) + CONSOLE_RECORD_DAYS * 24 * 3600,
-  } }));
-  const entry: ConsoleEntry = { id: commandId, at, identityId: identity.id, displayName: identity.displayName, agent: agent?.name ?? null, worldId, command: check.command, status: "pending", output: null };
-  return response(202, { entry });
-}
+export function consoleFeature(dependencies: ConsoleDependencies): ConsoleFeature {
+  const { catalog, session, gateway, records, now } = dependencies;
 
-async function consoleEntries(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]> {
-  const page = await document.send(new QueryCommand({
-    TableName: tableName, KeyConditionExpression: "pk = :pk", ExpressionAttributeValues: { ":pk": consolePartition(worldId) },
-    ScanIndexForward: false, Limit: CONSOLE_HISTORY_LIMIT,
-  }));
-  const items = (page.Items ?? []).filter((item) => item.game_id === gameId);
-  const settled = await Promise.all(items.map(async (item) => {
-    if (item.status !== "pending" || typeof item.command_id !== "string" || typeof item.host_id !== "string") return item;
-    const result = consoleResult(await readConsoleInvocation(item.command_id, item.host_id));
-    if (result.status === "pending") return item;
-    try {
-      await document.send(new UpdateCommand({
-        TableName: tableName, Key: { pk: item.pk, sk: item.sk },
-        UpdateExpression: "SET #status = :status, #output = :output, completed_at = :now",
-        ConditionExpression: "#status = :pending",
-        ExpressionAttributeNames: { "#status": "status", "#output": "output" },
-        ExpressionAttributeValues: { ":status": result.status, ":output": result.output, ":now": new Date().toISOString(), ":pending": "pending" },
-      }));
-    } catch (error) {
-      // Another reader settled it first; its answer is the same.
-      if (!isConditionFailure(error)) throw error;
-    }
-    return { ...item, status: result.status, output: result.output };
-  }));
-  // A deleted person's records keep their id and lose their name (ADR-0071).
-  return settled.map((item) => consoleEntryFromItem(item));
-}
+  async function entries(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]> {
+    const recent = await records.recent(gameId, worldId, CONSOLE_HISTORY_LIMIT);
+    return Promise.all(recent.map(async ({ entry, hostId }) => {
+      if (entry.status !== "pending" || entry.id === "" || hostId === null) return entry;
+      const result = consoleResult(await gateway.read(entry.id, hostId));
+      if (result.status === "pending") return entry;
+      await records.settle(entry, result);
+      return { ...entry, status: result.status, output: result.output };
+    }));
+  }
 
-export async function consoleHistory(gameId: string, worldId: string): Promise<Response> {
-  return response(200, { entries: await consoleEntries(gameId, worldId) });
-}
+  return {
+    async runConsoleCommand(identity, gameId, worldId, body, agent = null) {
+      const parsed = parseJsonObject({ body });
+      const world = (await catalog()).find((game) => game.id === gameId)?.worlds.find((candidate) => candidate.id === worldId);
+      if (world === undefined) return errorResponse(404, "unknown_world");
+      const check = checkConsoleCommand(gameId, parsed.command);
+      if (!check.ok) return errorResponse(check.reason === "lifecycle_command" ? 409 : 400, check.reason);
 
-// One command's answer, for an agent that sent it: it has to be among the
-// world's recent commands, as the panel's history shows them.
-export async function consoleCommandResult(gameId: string, worldId: string, commandId: string): Promise<Response> {
-  const entry = (await consoleEntries(gameId, worldId)).find((candidate) => candidate.id === commandId);
-  return entry === undefined ? errorResponse(404, "unknown_command") : response(200, { entry });
+      // The world's own session, ready: a console attaches to a game that answers.
+      const found = await session(gameId, worldId, world.placement === "fleet" ? "fleet" : "configured");
+      if (found.kind === "not_ready") return errorResponse(409, "session_not_ready");
+      if (found.kind === "no_host") return errorResponse(409, "console_unavailable");
+
+      const commandId = await gateway.send(found.target, encodeConsoleCommand(check.command));
+      const entry: ConsoleEntry = {
+        id: commandId, at: now().toISOString(), identityId: identity.id, displayName: identity.displayName,
+        agent: agent?.name ?? null, worldId, command: check.command, status: "pending", output: null,
+      };
+      await records.append({ entry, gameId, sessionId: found.sessionId, hostId: found.target.hostId, agentClientId: agent?.clientId ?? null });
+      return response(202, { entry });
+    },
+    async consoleHistory(gameId, worldId) {
+      return response(200, { entries: await entries(gameId, worldId) });
+    },
+    async consoleCommandResult(gameId, worldId, commandId) {
+      const entry = (await entries(gameId, worldId)).find((candidate) => candidate.id === commandId);
+      return entry === undefined ? errorResponse(404, "unknown_command") : response(200, { entry });
+    },
+  };
 }

@@ -1,6 +1,7 @@
 import { type Identity } from "../../access/domain.ts";
 import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan, type FleetSessionPlan } from "../../control-plane/session-control.ts";
-import { awsControlPlaneSources, backupReleaseSources, readConsoleInvocation, sendConsoleCommand, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, sendWhitelistReload, worldLifecycleExecution } from "../../control-plane/aws.ts";
+import { awsControlPlaneSources, backupReleaseSources, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, worldLifecycleExecution } from "../../control-plane/aws.ts";
+import { awsConsoleGateway } from "../../control-plane/aws-ssm-console-gateway.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { usableByNewWipe } from "../../control-plane/preset-catalog.ts";
 import { checkReleaseUsable, noReleaseState, type ReleaseStateReader, type ReleaseUsability } from "../../control-plane/release-usable.ts";
@@ -269,10 +270,10 @@ export async function readServerWhitelist(gameId: string, worldId: string, pollM
   try {
     const host = await runningWorldHost(gameId, worldId);
     if (host === null) return [];
-    const commandId = await sendConsoleCommand({ hostId: host.hostId, worldId, slot: host.slot, encodedCommand: encodeConsoleCommand(command) });
+    const commandId = await awsConsoleGateway.send({ hostId: host.hostId, worldId, slot: host.slot }, encodeConsoleCommand(command));
     for (let waited = 0; waited < SERVER_READ_WINDOW_MS; waited += pollMs) {
       await new Promise((resolve) => setTimeout(resolve, pollMs)); // NOSONAR each poll waits on the host, in order
-      const result = consoleResult(await readConsoleInvocation(commandId, host.hostId)); // NOSONAR each poll waits on the host, in order
+      const result = consoleResult(await awsConsoleGateway.read(commandId, host.hostId)); // NOSONAR each poll waits on the host, in order
       if (result.status === "pending") continue;
       return result.status === "succeeded" ? parseServerWhitelist(result.output ?? "") : null;
     }
@@ -322,7 +323,7 @@ async function reloadRunningWhitelist(gameId: string, worldId: string): Promise<
   try {
     const host = await runningWorldHost(gameId, worldId);
     if (host === null) return "next_start";
-    await sendWhitelistReload({ hostId: host.hostId, worldId, slot: host.slot });
+    await awsConsoleGateway.reloadWhitelist({ hostId: host.hostId, worldId, slot: host.slot });
     return "reloading";
   } catch (error) {
     console.error(JSON.stringify({ event: "whitelist_reload_not_sent", worldId, error: error instanceof Error ? error.message : String(error) }));

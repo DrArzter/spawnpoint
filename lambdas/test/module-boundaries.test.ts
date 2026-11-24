@@ -27,7 +27,6 @@ const LEGACY_SDK_IMPORTERS: readonly string[] = [
   "handlers/api/avatars.ts",
   "handlers/api/backups.ts",
   "handlers/api/clients.ts",
-  "handlers/api/console.ts",
   "handlers/api/control-plane.ts",
   "handlers/api/credentials.ts",
   "handlers/api/email-actions.ts",

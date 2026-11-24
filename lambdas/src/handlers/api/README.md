@@ -38,6 +38,17 @@ throws `InvalidBodyError`, and the dispatcher answers 400 `invalid_json`.
 sessions are separate adapters. Domain decisions remain in `access/`,
 `domain/`, and `control-plane/`; do not move them into route declarations.
 
+## Ports and wiring
+
+A feature that needs a cloud API takes it as a port, the way the console does:
+`console.ts` builds the feature from `ConsoleDependencies` (the gateway and the
+record store are types in `control-plane/console.ts`), the adapters are
+`control-plane/aws-ssm-console-gateway.ts` and `console-store.ts`, and
+`console-wiring.ts` binds them once for the routes and MCP. Its tests use
+in-memory fakes; only an adapter's own test fakes the SDK. The other features
+move to this shape one at a time; `test/module-boundaries.test.ts` lists the
+files that still call the SDK directly.
+
 ## Changing a feature
 
 1. Add or change its handler and its route group. Do not add a local auth gate.

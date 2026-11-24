@@ -3,6 +3,8 @@
  * host's answer means. Pure, so the rules are tested without AWS.
  */
 
+import hostOutput from "../../../server/scripts/host-output.json" with { type: "json" };
+
 export const MAX_CONSOLE_COMMAND_LENGTH = 256;
 /** What one recorded reply keeps; a game can answer with pages. */
 export const CONSOLE_OUTPUT_LIMIT = 4000;
@@ -57,11 +59,11 @@ function clip(text: string): string {
   return trimmed.length > CONSOLE_OUTPUT_LIMIT ? `${trimmed.slice(0, CONSOLE_OUTPUT_LIMIT)}\n…` : trimmed;
 }
 
-/**
- * What an SSM invocation of the console document says, in the console's
- * words. The entry script's exit codes: 3 the game did not answer, 4 it has no
- * console; the document's own 9, this host has no console script yet.
- */
+// The exit codes that mean the console cannot be used here, as the host and
+// the console document define them (server/scripts/host-output.json).
+const UNAVAILABLE: ReadonlySet<number> = new Set(hostOutput.console.unavailable);
+
+/** What an SSM invocation of the console document says, in the console's words. */
 export function consoleResult(invocation: ConsoleInvocation): Readonly<{ status: ConsoleStatus; output: string | null }> {
   switch (invocation.status) {
     case "Pending":
@@ -74,7 +76,7 @@ export function consoleResult(invocation: ConsoleInvocation): Readonly<{ status:
     case "Cancelled":
       return { status: "timed_out", output: null };
     default:
-      if (invocation.responseCode === 9 || invocation.responseCode === 4) {
+      if (invocation.responseCode !== null && UNAVAILABLE.has(invocation.responseCode)) {
         return { status: "unavailable", output: clip(invocation.output || invocation.error) };
       }
       return { status: "failed", output: clip(invocation.output || invocation.error) };

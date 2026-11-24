@@ -3,6 +3,8 @@
 // this is an allow-list: a line passes only when it has a known safe shape, and
 // what passes is redacted again. Nothing here reads or writes AWS.
 
+import hostOutput from "../../../server/scripts/host-output.json" with { type: "json" };
+
 export type HostLogKind = "step" | "result" | "container" | "error" | "warning" | "game";
 
 export type HostLogLine = Readonly<{ at: string; kind: HostLogKind; text: string }>;
@@ -14,43 +16,15 @@ export type RawLogEvent = Readonly<{ timestamp: number; message: string }>;
 export const MAX_HOST_LOG_LINES = 40;
 const MAX_TEXT = 200;
 
-const STEP_LABELS: Readonly<Record<string, string>> = {
-  session_start: "Session started",
-  world_catalog: "World catalogue read",
-  world_prepared: "World prepared",
-  connectivity_prepared: "Network prepared",
-  release_pointer_read: "Release pointer read",
-  release_downloaded: "Release downloaded",
-  release_reconciled: "Release reconciled",
-  game_starting: "Game starting",
-  game_ready: "Game ready",
-  address_published: "Address published",
-};
+// The host's own words for its steps and results (server/scripts/host-output.json).
+const STEP_LABELS: Readonly<Record<string, string>> = hostOutput.steps;
 
-// Keys whose value is safe to show; a value is short and plain.
-const RESULT_LABELS: Readonly<Record<string, string>> = {
-  release: "Release",
-  downloaded: "Downloaded",
-  kept: "Kept",
-  reused: "Reused",
-  seconds: "Seconds",
-  layout: "Layout",
-  fetched: "Fetched",
-  fetch: "Copy",
-  fetch_reason: "Copy reason",
-  fetched_bytes: "Bytes copied",
-  discarded: "Discarded",
-  shards: "Shards",
-  mods: "Mods",
-  files: "Files",
-  roots: "Roots",
-  world_data: "World data",
-  observability: "Observability",
-  result: "Result",
-};
+// Keys whose value is safe to show; a value is short and plain. A key the host
+// prints for machines only is listed there as hidden and never shown here.
+const RESULT_LABELS: Readonly<Record<string, string>> = hostOutput.results.shown;
 
 const STEP = /^step=([a-z][a-z0-9_]{0,39}) at=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) elapsed_seconds=(\d{1,7})$/;
-const RESULT = /^([a-z_]{1,20})=([A-Za-z0-9._:+/-]{1,60})$/;
+const RESULT = new RegExp(`^(${hostOutput.resultKeyPattern.slice(1, -1)})=(${hostOutput.resultValuePattern.slice(1, -1)})$`);
 // Compose prefixes a tick and suffixes a duration; both words are dropped before the match.
 const CONTAINER = /^Container ([\w.-]{1,101}) (Creating|Created|Starting|Started|Stopping|Stopped)$/;
 const DURATION = /^\d{1,6}(?:\.\d{1,6})?s$/;

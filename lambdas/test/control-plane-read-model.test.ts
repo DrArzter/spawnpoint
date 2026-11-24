@@ -322,3 +322,10 @@ test("a player reading says until when it is current: one missed probe and the l
   const unread = await readControlPlaneSnapshot({ ...sources, readLifecycle: async () => ({ ...record, idle: { ...idle, lastObservedAtEpochSeconds: null } }) }, { includeInfrastructure: true, includeDesiredRelease: true });
   assert.equal(unread.games[0]?.lifecycle?.idle?.freshUntilEpochSeconds, null);
 });
+
+test("a player reading carries the contract's fields and not the watchdog's own ids", async () => {
+  const idle = { watchdogExecutionId: "arn:watchdog", consecutiveEmpty: 2, lastObservationId: "cmd-1", playersOnline: 0, lastObservedAtEpochSeconds: 1_000 };
+  const record = { ...initialLifecycleRecord("minecraft", 100), observedState: "ready" as const, idle };
+  const snapshot = await readControlPlaneSnapshot({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, { includeInfrastructure: true, includeDesiredRelease: true });
+  assert.deepEqual(Object.keys(snapshot.games[0]?.lifecycle?.idle ?? {}).sort(), ["consecutiveEmpty", "freshUntilEpochSeconds", "lastObservedAtEpochSeconds", "playersOnline"]);
+});

@@ -8,6 +8,8 @@
 // that fails those is reported as unverified rather than hidden, because a
 // silently shortened list is how corruption stays invisible.
 
+import type { BackupEntry } from "../../../contract/backups.ts";
+
 export type BackupObject = Readonly<{
   key: string;
   sizeBytes: number;
@@ -15,17 +17,11 @@ export type BackupObject = Readonly<{
   checksumAlgorithms: readonly string[];
 }>;
 
-export type BackupEntry = Readonly<{
-  key: string;
-  archiveName: string;
-  checksum: string;
-  generationId: string | null;
-  sizeBytes: number;
-  storedAt: string;
-}>;
+/** A verified archive as the listing knows it; the API adds the release a restore would use (contract/backups.ts). */
+export type ListedBackup = Omit<BackupEntry, "release" | "releaseSource">;
 
-export type BackupInventory = Readonly<{
-  entries: readonly BackupEntry[];
+export type BackupListing = Readonly<{
+  entries: readonly ListedBackup[];
   unverified: number;
   truncated: boolean;
 }>;
@@ -33,10 +29,10 @@ export type BackupInventory = Readonly<{
 const CHECKSUM_ADDRESSED = /^(?<name>[A-Za-z0-9._-]+)-(?<checksum>[0-9a-f]{64})\.tar\.zst$/;
 const GENERATION_IN_ARCHIVE = /-(gen-[0-9a-f]{32})-\d{8}T\d{6}Z\.tar\.zst$/;
 
-export function backupInventory(objects: readonly BackupObject[], limit = 20): BackupInventory {
+export function backupInventory(objects: readonly BackupObject[], limit = 20): BackupListing {
   const newestFirst = [...objects].sort((left, right) => right.storedAt.localeCompare(left.storedAt));
 
-  const entries: BackupEntry[] = [];
+  const entries: ListedBackup[] = [];
   let unverified = 0;
   for (const object of newestFirst) {
     const name = object.key.slice(object.key.lastIndexOf("/") + 1);

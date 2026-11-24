@@ -7,6 +7,7 @@ import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { type Response, response, parseJsonObject } from "./http.ts";
 import { knownWorld } from "./world-state.ts";
+import type { BackupInventory } from "../../../../contract/backups.ts";
 import { document, tableName } from "./access-store.ts";
 
 // What a restore would have to choose between. The inventory is a listing,
@@ -15,7 +16,8 @@ import { document, tableName } from "./access-store.ts";
 export async function backups(gameId: string, worldId: string): Promise<Response> {
   if (!await knownWorld(gameId, worldId)) return response(404, { error: "unknown_world" });
   const [inventory, record] = await Promise.all([listWorldBackups(worldId).then((objects) => backupInventory(objects)), readWorldRecord(worldId)]);
-  return response(200, { ...inventory, entries: await withBackupReleases(record, inventory.entries, backupReleaseSources()) });
+  const body: BackupInventory = { ...inventory, entries: await withBackupReleases(record, inventory.entries, backupReleaseSources()) };
+  return response(200, body);
 }
 
 const BACKUP_LINK_SECONDS = 300;

@@ -2,9 +2,14 @@ import { awsControlPlaneSources } from "../../control-plane/aws.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { type WorldPlacement } from "../../control-plane/world-session.ts";
 import { type Response, response } from "./http.ts";
-import { METRIC_RANGES } from "../../control-plane/metric-ranges.ts";
 import { hostIdsOf, mergeWorldMetrics, worldHostRuns } from "../../control-plane/world-metrics.ts";
 import { readWorldSession, locateWorldHost } from "./world-state.ts";
+import type { HostMetrics, MetricRange } from "../../../../contract/metrics.ts";
+import { METRIC_RANGES as RANGES } from "../../../../contract/metrics.ts";
+
+function metricRange(range: string): MetricRange | null {
+  return Object.hasOwn(RANGES, range) ? range as MetricRange : null;
+}
 
 
 // Host metrics come from CloudWatch rather than from the host, so they answer
@@ -12,10 +17,11 @@ import { readWorldSession, locateWorldHost } from "./world-state.ts";
 // has no datapoints, and that gap is the answer to "was it running".
 export async function hostMetrics(instanceId: string, range: string): Promise<Response> {
   if (!/^i-[0-9a-f]{8,32}$/.test(instanceId)) return response(400, { error: "invalid_instance_id" });
-  const hours = METRIC_RANGES[range];
-  if (hours === undefined) return response(400, { error: "invalid_range" });
+  const named = metricRange(range);
+  if (named === null) return response(400, { error: "invalid_range" });
   if (awsControlPlaneSources.readHostMetrics === undefined) return response(501, { error: "metrics_unavailable" });
-  return response(200, { range, ...await awsControlPlaneSources.readHostMetrics(instanceId, hours) });
+  const body: HostMetrics = { range: named, ...await awsControlPlaneSources.readHostMetrics(instanceId, RANGES[named]) };
+  return response(200, body);
 }
 
 // A world's metrics are those of the hosts it ran on in the window (ADR-0062,
@@ -23,8 +29,9 @@ export async function hostMetrics(instanceId: string, range: string): Promise<Re
 // history says which host to read for which stretch. A stopped world shows what
 // it did; it answers 409 only when no session touched the window.
 export async function worldMetrics(gameId: string, worldId: string, range: string): Promise<Response> {
-  const hours = METRIC_RANGES[range];
-  if (hours === undefined) return response(400, { error: "invalid_range" });
+  const named = metricRange(range);
+  if (named === null) return response(400, { error: "invalid_range" });
+  const hours = RANGES[named];
   const { readHostsMetrics, readWorldSessionHosts } = awsControlPlaneSources;
   if (readHostsMetrics === undefined || readWorldSessionHosts === undefined) return response(501, { error: "metrics_unavailable" });
   const [presets, worldRecords, hosts] = await Promise.all([
@@ -56,5 +63,7 @@ export async function worldMetrics(gameId: string, worldId: string, range: strin
   });
   if (runs.length === 0) return response(409, { error: "world_not_running" });
   const merged = mergeWorldMetrics(await readHostsMetrics(hostIdsOf(runs), hours), runs);
-  return merged === null ? response(409, { error: "world_not_running" }) : response(200, { range, ...merged });
+  if (merged === null) return response(409, { error: "world_not_running" });
+  const body: HostMetrics = { range: named, ...merged };
+  return response(200, body);
 }

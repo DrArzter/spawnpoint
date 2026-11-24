@@ -55,7 +55,7 @@ function snapshot(operations: ControlPlaneSnapshot["operations"] = []): ControlP
 }
 
 test("each fleet world reads its own session; a world that has none is stopped", () => {
-  assert.equal(fleetSessionOf(game, rostik)?.serverId, "world#rostik");
+  assert.equal(fleetSessionOf(rostik)?.serverId, "world#rostik");
   assert.equal(fleetWorldState(game, rostik), "running");
   assert.equal(fleetWorldState(game, spare), "stopped");
   assert.equal(deriveServerState(game, snapshot()), "running", "the game is online while any of its worlds is");
@@ -102,16 +102,6 @@ test("a world's hosting waits only for its own session", () => {
   assert.equal(worldSessionActive(game, rostik), true);
 });
 
-test("an older response with no per-world sessions still finds a fleet session on the game's record", () => {
-  const legacyWorld: World = { ...spare, session: undefined };
-  const legacy: Game = {
-    ...game,
-    worlds: [legacyWorld],
-    lifecycle: { serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "s1", activeWorldId: "spare", updatedAtEpochSeconds: 1, idle: null },
-  };
-  assert.equal(fleetWorldState(legacy, legacyWorld), "running");
-});
-
 test("a row and its data-only sibling carry the world's own players; no fleet host's launch is guessed", () => {
   const shared = deriveSharedHostSession(snapshot());
   const options = { fleet: true, sharedSession: shared, granted: new Set<string>(), pending: NO_PENDING, callbacks: { onWorldAction: () => undefined, onInvite: () => undefined, onDownloadPack: () => undefined }, snapshot: snapshot() };
@@ -134,7 +124,7 @@ test("uptime starts at the session's ready time: a fleet world's own, a configur
   const starting = fleetWorld("rostik", "Rostik", { ...session("rostik", "starting"), readyAtEpochSeconds: readyAt });
   assert.equal(worldLaunchedAt({ ...game, worlds: [starting] }, starting, shared, snapshot()), null, "a session that is not ready has no uptime");
 
-  const configured: World = { ...spare, id: "vanilla", placement: "configured", session: undefined };
+  const configured: World = { ...spare, id: "vanilla", placement: "configured", session: null };
   const host = { id: "i-shared", name: "Shared host", state: "running" as const, provenance: "configured" as const, launchedAt: "2026-10-01T00:00:00.000Z" };
   const lifecycle = (extra: Partial<WorldSession>): WorldSession => ({ ...session("vanilla", "ready"), serverId: "minecraft", ...extra });
   const sharedSnapshot = { ...snapshot(), hosts: [host] };

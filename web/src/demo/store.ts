@@ -256,6 +256,12 @@ function archive(gameId: string, target: Mutable<World>): void {
 
 export function snapshot(): ControlPlaneSnapshot {
   settle();
+  // As the API locates it (lambdas world-session.ts): a configured world's session is its game's while that names it.
+  for (const owner of state.snapshot.games) {
+    for (const item of owner.worlds) {
+      if (item.placement === "configured") item.session = owner.lifecycle?.activeWorldId === item.id ? { ...owner.lifecycle } : null;
+    }
+  }
   return state.snapshot;
 }
 
@@ -304,7 +310,7 @@ export function startSession(gameId: string, worldId: string): { result: "reques
   if (fleet) {
     target.session = session;
     // A fleet start launches a host for this world alone.
-    state.snapshot.hosts.push({ id: launchedHostId(worldId), name: `${target.displayName} host`, state: "pending", provenance: "launched", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1b", launchedAt: null, publicIp: null });
+    state.snapshot.hosts.push({ id: launchedHostId(worldId), name: `${target.displayName} host`, state: "pending", provenance: "launched", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1b", launchedAt: null });
   } else {
     configuredHost().state = "pending";
   }
@@ -320,8 +326,7 @@ export function startSession(gameId: string, worldId: string): { result: "reques
       box.launchedAt = iso();
       if (fleet) {
         current.counter += 1;
-        box.publicIp = `203.0.113.${60 + (current.counter % 180)}`;
-        if (target.connectivity === "raw") target.connectionAddress = `${box.publicIp}:${gamePort(gameId)}`;
+        if (target.connectivity === "raw") target.connectionAddress = `203.0.113.${60 + (current.counter % 180)}:${gamePort(gameId)}`;
       }
     }
   });
@@ -502,7 +507,7 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
     worldLifecycleAvailable: true,
     connectivity,
     placement,
-    ...(placement === "fleet" ? { session: null } : {}),
+    session: null,
     auth: auth ?? null,
     materialization: "existing",
     preset: { id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest, releases: [...preset.releases], buildStatus: preset.buildStatus, latestRelease: preset.latestRelease, ...(preset.olderReleases ? { olderReleases: [...preset.olderReleases] } : {}) },
@@ -510,6 +515,7 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
     connectionAddress: connectivity === "zerotier" ? owner.worlds[0]?.connectionAddress ?? null : null,
     // Nothing has run yet: the first start commits the release as active.
     release: { state: "available", generationId, activeRelease: null, desiredRelease: release, runCount: 0 },
+    gameSettings: { values: {}, updatedAt: null },
   });
   state.snapshot.observedAt = iso();
   return { id, displayName: displayName.trim() };
@@ -521,9 +527,8 @@ export function updateWorldSettings(gameId: string, worldId: string, placement: 
   const owner = game(gameId);
   const target = world(gameId, worldId);
   if (heldSession(gameId, target)?.activeSessionId) throw new Error("Stop the world before changing its settings.");
-  // A fleet world keeps its own session record; a configured one reads its game's.
-  if (placement === "fleet") target.session = target.session ?? null;
-  else delete target.session;
+  // A fleet world keeps its own session record; a configured one's is its game's, located on read.
+  if (placement !== target.placement) target.session = null;
   target.placement = placement;
   target.connectivity = connectivity;
   target.auth = auth ?? null;

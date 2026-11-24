@@ -8,7 +8,7 @@ import { oauthClient, oauthProtectedResourceMetadata, oauthIssuer, oauthResource
 import { controlPlane } from "./control-plane.ts";
 import { hostMetrics } from "./metrics.ts";
 import { METRIC_RANGE_NAMES } from "../../control-plane/metric-ranges.ts";
-import { backups, backupDownload } from "./backups.ts";
+import { deployedBackups } from "./backups-wiring.ts";
 import { packDownload, releaseManifest, releaseModDownload } from "./releases.ts";
 import { controlSession } from "./worlds.ts";
 import { sessionSigningSecret } from "./secrets.ts";
@@ -86,7 +86,7 @@ const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
   },
   list_world_backups: (_identity, args) => {
     const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : backups(...worldArgs);
+    return worldArgs === null ? null : deployedBackups.backups(...worldArgs);
   },
   get_world_pack: (_identity, args) => {
     const worldArgs = worldToolArguments(args);
@@ -102,7 +102,7 @@ const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
   },
   get_backup_download_link: (identity, args) => {
     const worldArgs = worldToolArguments(args);
-    return worldArgs === null || typeof args.key !== "string" ? null : backupDownload(identity, ...worldArgs, JSON.stringify({ key: args.key }));
+    return worldArgs === null || typeof args.key !== "string" ? null : deployedBackups.backupDownload(identity, ...worldArgs, JSON.stringify({ key: args.key }));
   },
   send_console_command: (identity, args, caller) => {
     const worldArgs = worldToolArguments(args);

@@ -86,6 +86,8 @@ export const consoleSortKey = (at: string, commandId: string): string => `${at}#
 
 export const downloadPrefix = "DOWNLOAD#";
 export const downloadPartition = (worldId: string): string => `${downloadPrefix}${worldId}`;
+/** One recorded download in its world's partition, ordered by when it was handed over. */
+export const downloadSortKey = (at: string, downloadId: string): string => `${at}#${downloadId}`;
 
 // Panel roles (ADR-0083).
 export const roleKey = (roleId: string): TableKey => ({ pk: `ROLE#${roleId}`, sk: "DEFINITION" });

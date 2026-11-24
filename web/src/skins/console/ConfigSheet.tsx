@@ -14,7 +14,6 @@ export function ConfigFileSheet({ editor }: Readonly<{ editor: ConfigEditorModel
       actions={<ActionButton action={editor.save} variant="primary" />}
       cancel={editor.close}
       start={editor.reset ? <ActionButton action={editor.reset} variant="ghost" /> : undefined}
-      resize="config"
       title={editor.path}
       wide
     >

@@ -164,18 +164,19 @@ test("Dialog and SidePanel: labelled modal surfaces whose Cancel runs the model'
   assert.match(html(createElement(SidePanel, { title: "config/a.toml", cancel: action("sheet.close", "Cancel", noop), wide: true })), /class="c-panel c-panel-wide"/);
 });
 
-test("SidePanel: a resizable panel carries a labelled, focusable separator; one without a footer closes from its head", () => {
-  const panel = html(createElement(SidePanel, { title: "Assistant", cancel: action("assistant.close", "Close", noop), footer: false, resize: "assistant", wide: true }, "body"));
-  assert.match(panel, /class="c-panel-grip"/);
-  assert.match(panel, /role="separator"/);
-  assert.match(panel, /aria-orientation="vertical"/);
-  assert.match(panel, /aria-label="Panel width"/);
-  assert.match(panel, /tabindex="0"/i);
-  assert.doesNotMatch(panel, /c-panel-foot/);
-  assert.match(panel, /data-action="assistant\.close"/, "the head's close button is the Action's control");
-  const plain = html(createElement(SidePanel, { title: "Game settings", cancel: action("sheet.close", "Cancel", noop) }));
-  assert.doesNotMatch(plain, /c-panel-grip/);
-  assert.match(plain, /c-panel-foot/);
+test("SidePanel: every drawer carries a labelled, focusable separator; one without a footer closes from its head", () => {
+  const drawer = html(createElement(SidePanel, { title: "Assistant", cancel: action("assistant.close", "Close", noop), footer: false, wide: true }, "body"));
+  assert.match(drawer, /class="c-panel-grip"/);
+  assert.match(drawer, /role="separator"/);
+  assert.match(drawer, /aria-orientation="vertical"/);
+  assert.match(drawer, /aria-label="Panel width"/);
+  assert.match(drawer, /tabindex="0"/i);
+  assert.doesNotMatch(drawer, /c-panel-foot/);
+  assert.match(drawer, /data-action="assistant\.close"/, "the head's close button is the Action's control");
+  const form = html(createElement(SidePanel, { title: "Game settings", cancel: action("sheet.close", "Cancel", noop) }));
+  assert.match(form, /class="c-panel-grip"/, "a form drawer is resized the same way");
+  assert.match(form, /c-panel-foot/);
+  assert.doesNotMatch(html(createElement(Dialog, { title: "Delete?", cancel: action("cancel", "Cancel", noop) })), /c-panel-grip/, "a centred dialog is not a drawer");
 });
 
 test("a dragged panel width stays between the narrowest panel and the screen less its strip", () => {

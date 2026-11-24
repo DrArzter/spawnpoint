@@ -36,7 +36,7 @@ export function AssistantPanel({ model }: Readonly<{ model: AssistantChatModel }
   };
   const list = model.conversations;
   return (
-    <SidePanel cancel={model.close} footer={false} resize="assistant" title="Assistant" wide>
+    <SidePanel cancel={model.close} footer={false} title="Assistant" wide>
       <div className="c-assistant">
         <div className="c-assistant-layout">
           <section aria-label="Conversations" className="c-assistant-list">

@@ -59,13 +59,18 @@ export function usePanelWidth(key: string | undefined) {
     const grip = event.currentTarget;
     grip.setPointerCapture(event.pointerId);
     setDragging(true);
-    const move = (moved: globalThis.PointerEvent) => setWidth(clampPanelWidth(globalThis.innerWidth - moved.clientX, globalThis.innerWidth));
+    // The drag keeps its own last width, so a release before the next render still stores it.
+    let last: number | null = null;
+    const move = (moved: globalThis.PointerEvent) => {
+      last = clampPanelWidth(globalThis.innerWidth - moved.clientX, globalThis.innerWidth);
+      setWidth(last);
+    };
     const end = () => {
       grip.removeEventListener("pointermove", move);
       grip.removeEventListener("pointerup", end);
       grip.removeEventListener("pointercancel", end);
       setDragging(false);
-      if (key !== undefined && latest.current !== null) store(key, latest.current);
+      if (key !== undefined && last !== null) store(key, last);
     };
     grip.addEventListener("pointermove", move);
     grip.addEventListener("pointerup", end);

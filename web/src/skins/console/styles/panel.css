@@ -35,7 +35,7 @@ html[data-skin="console"] .c-panel-foot {
   }
 }
 
-/* The start edge of a resizable panel: a strip to drag, or to move with the arrow keys. It lights while in use. */
+/* A panel's start edge: a strip to drag, or to move with the arrow keys. It lights while in use. */
 html[data-skin="console"] .c-panel-grip {
   position: absolute;
   top: 0;

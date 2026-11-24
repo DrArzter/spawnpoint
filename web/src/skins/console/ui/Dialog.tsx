@@ -57,7 +57,7 @@ export function DialogFrame({ kind, title, cancel, actions, start, children, cla
   className?: string;
   /** Draw the sticky footer with Cancel; a panel without one closes from its head, or with Escape. */
   footer?: boolean;
-  /** A panel the person can widen or narrow from its start edge; the width is kept under this name. */
+  /** The name a panel's dragged width is kept under; a panel always has one, a dialog never. */
   resize?: string;
 }>) {
   const ref = useRef<HTMLDialogElement>(null);

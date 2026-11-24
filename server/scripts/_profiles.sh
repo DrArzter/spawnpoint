@@ -7,9 +7,9 @@
 # in a `game` field, and absence means minecraft, so every existing profile and
 # every release cut from one keeps its exact pre-axis behaviour.
 #
-# Deliberately a table rather than a `source` of the game modules: these
-# scripts also run inside the CodeBuild release bundle, which carries only the
-# files Terraform packages, so the release path stays self-contained.
+# The facts come from the game's manifest (server/games/<id>/game.json,
+# ADR-0088), never from sourcing its module: these scripts also run inside the
+# CodeBuild release bundle, which carries the manifests but not the modules.
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the PROFILE_* variables are this library's interface, read by its sourcers
@@ -19,41 +19,22 @@ profile_game() {
 }
 
 profile_game_facts() {
-  local game="$1"
-  case "${game}" in
-    minecraft)
-      PROFILE_VERSION_FIELD="minecraft_version"
-      PROFILE_LOADER_TYPE="minecraft"
-      PROFILE_LOADER_VERSIONED=true
-      PROFILE_MOD_EXTENSION="jar"
-      PROFILE_RESOLVER="curseforge-files"
-      PROFILE_RUNTIME_IMAGE_REQUIRED=false
-      ;;
-    factorio)
-      PROFILE_VERSION_FIELD="factorio_version"
-      PROFILE_LOADER_TYPE="factorio"
-      # The engine is its own loader, so the profile carries no loader version
-      # and the manifest reuses the engine version for it.
-      PROFILE_LOADER_VERSIONED=false
-      PROFILE_MOD_EXTENSION="zip"
-      PROFILE_RESOLVER="factorio-portal"
-      PROFILE_RUNTIME_IMAGE_REQUIRED=true
-      ;;
-    zomboid)
-      PROFILE_VERSION_FIELD="zomboid_build"
-      PROFILE_LOADER_TYPE="workshop"
-      PROFILE_LOADER_VERSIONED=false
-      # Vanilla profiles resolve no files. Workshop resolution remains a
-      # separate future adapter, but the release shape already has a safe axis.
-      PROFILE_MOD_EXTENSION="zip"
-      PROFILE_RESOLVER="zomboid-workshop"
-      PROFILE_RUNTIME_IMAGE_REQUIRED=false
-      ;;
-    *)
-      printf 'error: unsupported profile game: %s\n' "${game}" >&2
-      exit 1
-      ;;
-  esac
+  local game="$1" manifest
+  [[ "${game}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {
+    printf 'error: invalid profile game: %s\n' "${game}" >&2
+    exit 1
+  }
+  manifest="$(dirname -- "${BASH_SOURCE[0]}")/../games/${game}/game.json"
+  jq -e '.release | type == "object"' "${manifest}" >/dev/null 2>&1 || {
+    printf 'error: unsupported profile game: %s\n' "${game}" >&2
+    exit 1
+  }
+  PROFILE_VERSION_FIELD="$(jq -r '.release.version_field' "${manifest}")"
+  PROFILE_LOADER_TYPE="$(jq -r '.release.loader_type' "${manifest}")"
+  PROFILE_LOADER_VERSIONED="$(jq -r '.release.loader_versioned' "${manifest}")"
+  PROFILE_MOD_EXTENSION="$(jq -r '.release.mod_extension' "${manifest}")"
+  PROFILE_RESOLVER="$(jq -r '.release.resolver' "${manifest}")"
+  PROFILE_RUNTIME_IMAGE_REQUIRED="$(jq -r '.release.runtime_image_required' "${manifest}")"
 }
 
 # The shape every game's profile must have, in that game's own vocabulary.

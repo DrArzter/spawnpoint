@@ -11,7 +11,7 @@ usage() {
 }
 
 connect_port_for_game() {
-  awk -F'"' '/^GAME_CONNECT_PORT=/ { print $2 }' "${repository_root}/server/games/$1/game.sh"
+  jq -r '.connect.port' "${repository_root}/server/games/$1/game.json"
 }
 
 follow=true

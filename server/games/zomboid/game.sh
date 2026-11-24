@@ -20,26 +20,20 @@
 GAME_COMPOSE_FILES="games/zomboid/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/zomboid/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="zomboid"
+# Why the facts in game.json are what they are (ADR-0088):
+# - slottable false: the server tells a client to continue on its second port
+#   (UDPPort, 16262 by default), which a slot's host mapping would not carry.
+#   Rendering DefaultPort and UDPPort into the server's ini from the slot is
+#   what lifts this; until then a Zomboid world runs on slot zero only.
+# - default_auth none: fail closed. The server verifies Steam identities only
+#   in Steam mode with that verification on, and this project has not
+#   exercised that configuration. A world whose server does verify declares
+#   `auth: game` (ADR-0033, and server/games/README.md).
+# - footprint: the image gives the JVM a 6 GiB heap by default (MEMORY_XMX_GB),
+#   and the process is larger than its heap.
+
 # The port a player types after the address the connectivity strategy publishes.
   # 16262/udp is opened beside it, but players type only this one.
-GAME_CONNECT_PORT="16261"
-GAME_PROBE_PORT="27015"
-# Not yet: the server tells a client to continue on its second port
-# (UDPPort, 16262 by default), which a slot's host mapping would not carry.
-# Rendering DefaultPort and UDPPort into the server's ini from the slot is
-# what lifts this; until then a Zomboid world runs on slot zero only.
-GAME_SLOTTABLE="false"
-GAME_CONNECT_PROTOCOL="udp"
-# Fail closed: the server verifies Steam identities only when it runs in Steam
-# mode with that verification on, and this project has not exercised that
-# configuration. A world whose server does verify declares `auth: game`
-# (ADR-0033, and server/games/README.md).
-GAME_DEFAULT_AUTH="none"
-# What a session is placed with and limited to (ADR-0054): the image gives
-# the JVM a 6 GiB heap by default (MEMORY_XMX_GB), and the process is larger
-# than its heap.
-GAME_FOOTPRINT_MEMORY_MIB="8192"
-GAME_FOOTPRINT_CORES="1"
 
 ZOMBOID_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ZOMBOID_DATA_DIR="${ZOMBOID_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${ZOMBOID_GAME_DIR}/data}}"

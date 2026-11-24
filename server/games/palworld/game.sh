@@ -12,25 +12,18 @@
 GAME_COMPOSE_FILES="games/palworld/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/palworld/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="palworld"
-# The port a player types after the address the connectivity strategy publishes.
-GAME_CONNECT_PORT="8211"
-GAME_CONNECT_PROTOCOL="udp"
-# Palworld's RCON is off. Its REST API port is the probe port; it is bound to
-# localhost (ADR-0076).
-GAME_PROBE_PORT="8212"
-# The client connects to the port the address names. The server names another
-# port only to the community list, which this server is not on; compose still
-# sets PublicPort from the slot. Not yet proven on a slot other than zero.
-GAME_SLOTTABLE="true"
-# Fail closed: a server password is one shared secret, not an identity, and
-# this configuration verifies no player. A world declares anything stronger
-# (ADR-0033, and server/games/README.md).
-GAME_DEFAULT_AUTH="none"
-# What a session is placed with and limited to (ADR-0054). Documented by
-# Pocketpair (16 GB memory, 4 cores recommended; 8 GB boots but crashes more
-# often), not yet measured here. Memory growth over a long session is reported.
-GAME_FOOTPRINT_MEMORY_MIB="16384"
-GAME_FOOTPRINT_CORES="4"
+# Why the facts in game.json are what they are (ADR-0088):
+# - probe_port: Palworld's RCON is off. Its REST API port is the probe port;
+#   it is bound to localhost (ADR-0076).
+# - slottable: the client connects to the port the address names. The server
+#   names another port only to the community list, which this server is not
+#   on; compose still sets PublicPort from the slot. Not yet proven on a slot
+#   other than zero.
+# - default_auth none: fail closed. A server password is one shared secret,
+#   not an identity (ADR-0033, and server/games/README.md).
+# - footprint: documented by Pocketpair (16 GB memory, 4 cores recommended;
+#   8 GB boots but crashes more often), not yet measured here. Memory growth
+#   over a long session is reported.
 
 PALWORLD_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # The REST API's user is fixed by the server; its password is AdminPassword,

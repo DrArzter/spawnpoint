@@ -12,23 +12,18 @@ GAME_OBSERVABILITY_COMPOSE_FILES="compose.minecraft-observability.yaml"
 GAME_HOST_OBSERVABILITY_COMPOSE_FILE="compose.minecraft-host-observability.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/minecraft/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="mc"
-# The port a player types after the address the connectivity strategy publishes.
-GAME_CONNECT_PORT="25565"
-GAME_CONNECT_PROTOCOL="tcp"
-# The probe speaks RCON inside the container (rcon-cli), so no host port is
-# published; the constant names the window layout all the same.
-GAME_PROBE_PORT="25575"
-# The client connects to whatever port the address names and the server
-# announces none, so a slot's host port forwards cleanly.
-GAME_SLOTTABLE="true"
-# online-mode=false (ADR-0022) authenticates nobody, so minecraft worlds need
-# a gating connectivity unless the catalog declares auth handled (ADR-0033).
-GAME_DEFAULT_AUTH="none"
-# What a session is placed with and limited to (ADR-0054): a 4 GiB heap was
-# measured near 6 GiB of container memory, and the limit sits above the peak,
-# not on it. The container, not the JVM, is what the host counts.
-GAME_FOOTPRINT_MEMORY_MIB="7168"
-GAME_FOOTPRINT_CORES="1"
+# Why the facts in game.json are what they are (ADR-0088):
+# - probe_port: the probe speaks RCON inside the container (rcon-cli), so no
+#   host port is published; the port names the window layout all the same.
+# - slottable: the client connects to whatever port the address names and the
+#   server announces none, so a slot's host port forwards cleanly.
+# - default_auth none: online-mode=false (ADR-0022) authenticates nobody, so
+#   minecraft worlds need a gating connectivity unless the catalog declares
+#   auth handled (ADR-0033).
+# - footprint: a 4 GiB heap was measured near 6 GiB of container memory, and
+#   the limit sits above the peak, not on it. The container, not the JVM, is
+#   what the host counts (ADR-0054).
+
 # The server's level-name, which compose.yaml pins as LEVEL. The save lives in
 # this folder of the world's data directory. The world's name names its
 # backups, not this folder: each world has a data directory of its own, and a

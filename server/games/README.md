@@ -1,7 +1,11 @@
 # Adding a game
 
-A game is a directory holding `game.sh` — constants plus functions — and its Compose file
-([ADR-0034](../../docs/adr/0034-per-game-adapter.md)). The contract is in
+A game is a directory holding `game.json`, `game.sh` and its Compose file
+([ADR-0034](../../docs/adr/0034-per-game-adapter.md), [ADR-0088](../../docs/adr/0088-a-game-declares-its-facts-once.md)).
+`game.json` is the manifest: the facts the host, the Lambdas, Terraform and the release builder all read (ports,
+slots, default auth, footprint, capabilities, release facts). `game.sh` holds what only the host needs — its Compose
+files and service — and the hooks, with a comment that gives the reason for each fact in the manifest. A new game is
+listed once more, in `lambdas/src/control-plane/game-modules.ts`; a test fails until it is. The contract is in
 [`_dispatch.sh`](_dispatch.sh); a world names its game in [the catalog](../worlds/catalog.json), and absence means
 minecraft, byte-identically.
 

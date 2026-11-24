@@ -63,10 +63,9 @@ locals {
       id   = world.id
       game = try(world.game, "minecraft")
       auth = try(world.auth, "")
-      # The port lives in the game module and is read from it, so this is not a
-      # fourth copy of a number that has to be kept in step by hand.
-      port     = tonumber(regex("GAME_CONNECT_PORT=\"([0-9]+)\"", file("${path.module}/../../server/games/${try(world.game, "minecraft")}/game.sh"))[0])
-      protocol = regex("GAME_CONNECT_PROTOCOL=\"([a-z]+)\"", file("${path.module}/../../server/games/${try(world.game, "minecraft")}/game.sh"))[0]
+      # The port is the game's manifest's (ADR-0088), not a copy kept in step by hand.
+      port     = jsondecode(file("${path.module}/../../server/games/${try(world.game, "minecraft")}/game.json")).connect.port
+      protocol = jsondecode(file("${path.module}/../../server/games/${try(world.game, "minecraft")}/game.json")).connect.protocol
     }
     if try(world.connectivity, "zerotier") != "zerotier"
   ]
@@ -128,11 +127,13 @@ locals {
 
   # A public fleet world takes slot zero, so only the game module's own port
   # is reachable. The host refuses a non-gating adapter without declared auth.
+  # Read from each game's manifest (ADR-0088). The key stays "<game>/game.sh"
+  # because it is the ingress rule's description, which AWS holds.
   fleet_game_ports = {
-    for module in fileset("${path.module}/../../server/games", "*/game.sh") :
-    module => {
-      port     = tonumber(regex("GAME_CONNECT_PORT=\"([0-9]+)\"", file("${path.module}/../../server/games/${module}"))[0])
-      protocol = regex("GAME_CONNECT_PROTOCOL=\"([a-z]+)\"", file("${path.module}/../../server/games/${module}"))[0]
+    for manifest in fileset("${path.module}/../../server/games", "*/game.json") :
+    "${dirname(manifest)}/game.sh" => {
+      port     = jsondecode(file("${path.module}/../../server/games/${manifest}")).connect.port
+      protocol = jsondecode(file("${path.module}/../../server/games/${manifest}")).connect.protocol
     }
   }
 }

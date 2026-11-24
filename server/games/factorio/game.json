@@ -1,0 +1,27 @@
+{
+  "id": "factorio",
+  "code": "FA",
+  "display_name": "Factorio",
+  "connect": {
+    "port": 34197,
+    "protocol": "udp"
+  },
+  "probe_port": 27015,
+  "slottable": true,
+  "default_auth": "none",
+  "footprint": {
+    "memory_mib": 2048,
+    "cores": 0.5
+  },
+  "capabilities": {
+    "whitelist": false
+  },
+  "release": {
+    "version_field": "factorio_version",
+    "loader_type": "factorio",
+    "loader_versioned": false,
+    "mod_extension": "zip",
+    "resolver": "factorio-portal",
+    "runtime_image_required": true
+  }
+}

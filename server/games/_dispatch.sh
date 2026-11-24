@@ -17,6 +17,9 @@
 #                              the overlay that turns the footprint into the
 #                              game container's memory limit (ADR-0054)
 #   GAME_COMPOSE_SERVICE       the compose service holding the game process
+#   game.json                  the facts the rest of the platform reads too
+#                              (ADR-0088): the Lambdas, Terraform and the release
+#                              builder read the file; load_game exports them as
 #   GAME_CONNECT_PORT          the port a player types; the host part of the
 #   GAME_CONNECT_PROTOCOL      address comes from the connectivity strategy
 #   GAME_DEFAULT_AUTH          this server's auth model: none | game (ADR-0033).
@@ -131,6 +134,21 @@ load_game() {
   source "${module}"
   GAME_ID="${game_id}"
   game_check_contract
+  load_game_facts "${GAMES_DIR}/${game_id}/game.json"
+}
+
+# The manifest's facts under the names every host script reads. One jq call:
+# a lifecycle command loads its game once per process.
+load_game_facts() {
+  local manifest="$1" facts
+  facts="$(jq -er '
+    [.connect.port, .connect.protocol, .probe_port, .slottable, .default_auth, .footprint.memory_mib, .footprint.cores]
+    | map(tostring) | join("\t")' "${manifest}")" || {
+    printf 'error: game %s has no readable manifest: %s\n' "${GAME_ID}" "${manifest}" >&2
+    exit 1
+  }
+  IFS=$'\t' read -r GAME_CONNECT_PORT GAME_CONNECT_PROTOCOL GAME_PROBE_PORT GAME_SLOTTABLE GAME_DEFAULT_AUTH \
+    GAME_FOOTPRINT_MEMORY_MIB GAME_FOOTPRINT_CORES <<<"${facts}"
 }
 
 # Resolve which game this invocation is about: an explicit WORLD_ID consults

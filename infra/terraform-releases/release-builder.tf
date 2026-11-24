@@ -61,6 +61,15 @@ data "archive_file" "release_builder_source" {
     filename = "server/scripts/_profiles.sh"
   }
 
+  # _profiles.sh reads a game's release facts from its manifest (ADR-0088).
+  dynamic "source" {
+    for_each = fileset("${path.module}/../../server/games", "*/game.json")
+    content {
+      content  = file("${path.module}/../../server/games/${source.value}")
+      filename = "server/games/${source.value}"
+    }
+  }
+
   source {
     content  = file("${path.module}/../../server/scripts/resolve-profile-mods.sh")
     filename = "server/scripts/resolve-profile-mods.sh"

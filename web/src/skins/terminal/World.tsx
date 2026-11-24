@@ -16,6 +16,7 @@ import { useMediaQuery } from "../../shell/hooks";
 import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Field, FilterRow, Ghost, Indicator, LoadError, Log, NoMatches, Notice, Overflow, Page, Pager, Panel, SelectInput, Skeleton, State, Table, Tabs, Verb, Verbs } from "./ui";
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
+import { ConfigPanel } from "./Config";
 import { WhitelistPanel } from "./Whitelist";
 import { Notices } from "./Worlds";
 
@@ -59,6 +60,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
       {model.tab === "backups" && <BackupsTab model={model.backups} worldName={world.displayName} />}
       {model.tab === "releases" && <ReleasesTab releases={model.releases} worldName={world.displayName} />}
       {model.tab === "whitelist" && model.whitelist && <WhitelistPanel model={model.whitelist} />}
+      {model.tab === "config" && model.config && <ConfigPanel model={model.config} />}
       {model.tab === "console" && model.console && <ConsolePanel model={model.console} />}
       {model.tab === "metrics" && model.metrics && <MetricsPanel model={model.metrics} />}
       <span className="visually-hidden">{game.displayName}</span>

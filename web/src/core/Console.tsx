@@ -16,7 +16,7 @@ import { presetBuildStates, sessionStatus, worldStatus, type StatusDescriptor } 
 import { AVATAR_ACCEPT } from "./avatar-image";
 import { chooseFile } from "./choose-file";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
+import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useConfigFiles, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
@@ -188,6 +188,13 @@ function whitelistOffered(console: ConsoleController, game: Game, world: World):
     world.worldLifecycleAvailable && world.materialization !== "archived";
 }
 
+// A world's own config files (ADR-0093): a role that edits them, a deployment
+// that serves them and a world with a record. A game with no config rules
+// lists no files.
+function configOffered(console: ConsoleController, world: World): boolean {
+  return console.granted.has("config.edit") && console.capabilities.has("configFiles") && world.worldLifecycleAvailable && world.materialization !== "archived";
+}
+
 // The world page's tabs, and what each reads, only while it is open: a closed
 // tab costs no host a request.
 function useWorldTabs(console: ConsoleController, game: Game, world: World, notify: ReturnType<typeof useSnackbar>) {
@@ -195,6 +202,7 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
   const tabs = worldTabs(world, {
     releases: granted.has("release.read"),
     whitelist: whitelistOffered(console, game, world),
+    config: configOffered(console, world),
     console: granted.has("console.use") && capabilities.has("consoleGateway"),
     metrics: granted.has("metrics.read") && capabilities.has("worldMetrics"),
   });
@@ -204,6 +212,7 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
   const consoleModel = useWorldConsole(game, world, open("console"), running, notify);
   const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id, worldSessionId(game, world));
   const whitelist = useWhitelist(game.id, world, open("whitelist"), notify, game.playerName);
+  const config = useConfigFiles(game.id, world, open("config"), notify);
   const mods = useReleaseMods(game.id, modsSource(world, open("releases") && capabilities.has("releaseFiles")), (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
   const changes = useReleaseChanges(game.id, changesSource(world, open("releases") && capabilities.has("releaseDiff")));
   return {
@@ -211,6 +220,7 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
     mods,
     changes,
     whitelist: offered("whitelist") ? whitelist : null,
+    config: offered("config") ? config : null,
     console: offered("console") ? consoleModel : null,
     metrics: offered("metrics") ? metrics : null,
   };
@@ -268,6 +278,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
       changes: shown.changes,
     },
     whitelist: shown.whitelist,
+    config: shown.config,
     console: shown.console,
     metrics: shown.metrics,
     siblings: worldRows(console).map(siblingRow),

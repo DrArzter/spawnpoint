@@ -1,11 +1,11 @@
-import type { AccessCandidate, AccessIdentity, AccessRole, AccessRoleDirectory, AccessRoleDraft, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../api/contract";
+import type { ConfigFileContent, ConfigFileList, SavedConfigFile, AccessCandidate, AccessIdentity, AccessRole, AccessRoleDirectory, AccessRoleDraft, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../api/contract";
 import { ApiError, identityDeletionRefusal, type ApiErrorCode, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { API_ERROR_TEXT } from "../api/error-text";
 import { startableReleases } from "../core/presets";
 import { settingValueValid } from "../core/settings";
 import { whitelistNameError } from "../core/whitelist";
 import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettings, WorldSession } from "../model";
-import { DemoState, demoSession, initialState, Mutable, PERMISSION_CATALOGUE, type OperationPlan } from "./data";
+import { DEMO_CONFIG_RELEASE, DemoState, demoSession, initialState, Mutable, PERMISSION_CATALOGUE, type OperationPlan } from "./data";
 import { demoFixture, demoOperation } from "./flag";
 import { stressState } from "./stress";
 
@@ -819,6 +819,95 @@ export function updateWhitelist(gameId: string, worldId: string, names: readonly
   state.whitelists[worldKey(gameId, worldId)] = kept;
   const running = heldSession(gameId, target)?.observedState === "ready";
   return { managed: true, ...kept, applied: running ? "reloading" : "next_start" };
+}
+
+// A world's config files (ADR-0093): the release's files, and what the world
+// edited or added; the next start writes the world's version over the release's.
+function digest(text: string): string {
+  let out = "";
+  for (let seed = 1; seed <= 8; seed += 1) {
+    let value = (0x811c9dc5 * seed) >>> 0;
+    for (let index = 0; index < text.length; index += 1) value = Math.imul(value ^ text.charCodeAt(index), 0x01000193) >>> 0;
+    out += value.toString(16).padStart(8, "0");
+  }
+  return out;
+}
+
+const configRules = (gameId: string) => DEMO_CONFIG_RELEASE[gameId] ?? null;
+const configEdits = (gameId: string, worldId: string) => (state.configEdits[worldKey(gameId, worldId)] ??= {});
+
+function configTarget(gameId: string, worldId: string) {
+  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep config files in.");
+  const rules = configRules(gameId);
+  if (rules === null) refuse(409, "game_has_no_config_files");
+  return rules;
+}
+
+export function configFiles(gameId: string, worldId: string): ConfigFileList {
+  settle();
+  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep config files in.");
+  const rules = configRules(gameId);
+  if (rules === null) return { release: null, roots: [], maxBytes: 0, files: [] };
+  const edits = configEdits(gameId, worldId);
+  const released = rules.files.map((file) => {
+    const edit = edits[file.path];
+    const releaseSha256 = digest(file.text + file.path);
+    const bytes = edit ? edit.text.length : file.bytes ?? file.text.length;
+    return {
+      path: file.path,
+      source: edit ? "world" as const : "release" as const,
+      bytes,
+      editable: file.editable ?? true,
+      releaseSha256,
+      worldSha256: edit ? digest(edit.text) : null,
+      updatedAt: edit?.updatedAt ?? null,
+      updatedBy: edit?.updatedBy ?? null,
+      releaseChanged: edit !== undefined && edit.base !== releaseSha256,
+    };
+  });
+  const added = Object.entries(edits)
+    .filter(([path]) => !rules.files.some((file) => file.path === path))
+    .map(([path, edit]) => ({ path, source: "world_only" as const, bytes: edit.text.length, editable: true, releaseSha256: null, worldSha256: digest(edit.text), updatedAt: edit.updatedAt, updatedBy: edit.updatedBy, releaseChanged: false }));
+  return { release: rules.release, roots: rules.roots, maxBytes: rules.maxBytes, files: [...released, ...added] };
+}
+
+export function configFile(gameId: string, worldId: string, path: string): ConfigFileContent {
+  settle();
+  const rules = configTarget(gameId, worldId);
+  const edit = configEdits(gameId, worldId)[path];
+  const released = rules.files.find((file) => file.path === path);
+  if (!released && !edit) refuse(404, "unknown_config_file");
+  if (released && released.editable === false) refuse(409, "config_file_not_editable");
+  const releaseSha256 = released ? digest(released.text + released.path) : null;
+  const text = edit?.text ?? released!.text;
+  return { path, source: edit ? (released ? "world" : "world_only") : "release", text, sha256: digest(text), releaseSha256 };
+}
+
+export function saveConfigFile(gameId: string, worldId: string, path: string, text: string, expectedSha256: string | null): SavedConfigFile {
+  settle();
+  const rules = configTarget(gameId, worldId);
+  const released = rules.files.find((file) => file.path === path);
+  if (released && released.editable === false) refuse(409, "config_file_not_editable");
+  if (!released && !rules.roots.some((root) => path.startsWith(`${root}/`))) refuse(400, "invalid_config_path");
+  if (text.length > rules.maxBytes) refuse(413, "config_file_too_large");
+  const edits = configEdits(gameId, worldId);
+  const current = edits[path]?.text ?? released?.text ?? null;
+  if ((current === null ? null : digest(current)) !== expectedSha256) refuse(409, "config_file_changed");
+  const releaseSha256 = released ? digest(released.text + released.path) : null;
+  // The release's own text removes the edit.
+  if (released && text === released.text) delete edits[path];
+  else edits[path] = { text, base: releaseSha256, updatedAt: iso(), updatedBy: "DrArzter" };
+  return { path, sha256: digest(text), updatedAt: iso() };
+}
+
+export function resetConfigFile(gameId: string, worldId: string, path: string, expected: string | null): void {
+  settle();
+  const edits = configEdits(gameId, worldId);
+  configTarget(gameId, worldId);
+  const edit = edits[path];
+  if (!edit) refuse(404, "unknown_config_file");
+  if (expected !== null && digest(edit.text) !== expected) refuse(409, "config_file_changed");
+  delete edits[path];
 }
 
 // A world's game settings (ADR-0064): kept on its record, checked against its

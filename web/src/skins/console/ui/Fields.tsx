@@ -1,4 +1,4 @@
-import { createContext, useContext, useId, useMemo, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { createContext, useContext, useId, useMemo, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 import type { Action } from "../../../core/actions";
 import { Icon, type IconName } from "../../../icons";
@@ -58,6 +58,11 @@ function controlProps(wiring: Partial<Wiring>) {
 
 export function TextInput({ mono = false, className, ...rest }: Readonly<{ mono?: boolean } & Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { type?: "text" | "email" | "password" | "search" | "url" }>) {
   return <input className={cx("c-input", mono && "c-mono", className)} type="text" {...controlProps(useWiring())} {...rest} />;
+}
+
+/** Text of many lines at a fixed, monospaced layout: no wrapping, so a line of a config file keeps its columns. */
+export function TextArea({ className, ...rest }: Readonly<TextareaHTMLAttributes<HTMLTextAreaElement>>) {
+  return <textarea className={cx("c-textarea", "c-mono", className)} spellCheck={false} {...controlProps(useWiring())} {...rest} />;
 }
 
 export function NumberInput({ className, ...rest }: Readonly<Omit<InputHTMLAttributes<HTMLInputElement>, "type">>) {

@@ -4,7 +4,7 @@ import test from "node:test";
 import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import {
   archiveWorldRecord, newWorldRecord, parseWorldRecord, regenerateWorldRecord,
-  purgeGenerationIds, restoreWorldRecord, withGameSettings, withWhitelist, withWorldAccess, worldIdForName, worldRecordDocument,
+  purgeGenerationIds, restoreWorldRecord, withGameSettings, withConfigFiles, withWhitelist, withWorldAccess, worldIdForName, worldRecordDocument,
 } from "../src/control-plane/world-registry.ts";
 
 const preset: PresetObservation = {
@@ -201,4 +201,18 @@ test("a world's whitelist round-trips, outlives its wipes and restores, and hold
   assert.equal(parseWorldRecord({ ...document, whitelist: { ...whitelistDocument, names: ["has space"] } }), null);
   assert.equal(parseWorldRecord({ ...document, whitelist: { ...whitelistDocument, names: ["DrArzter", "drarzter"] } }), null);
   assert.equal(parseWorldRecord({ ...document, whitelist: { ...whitelistDocument, updated_by: null } }), null);
+});
+
+test("a world's config files round-trip, outlive its wipes and hold only paths inside the roots (ADR-0093)", () => {
+  const original = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  assert.equal(original.configFiles, undefined);
+  const edit = { sha256: "a".repeat(64), bytes: 16, baseSha256: "b".repeat(64), updatedAt: "2026-11-24T12:00:00.000Z", updatedBy: { identityId: "identity-owner", displayName: "DrArzter" } };
+  const kept = withConfigFiles(original, { "config/claims.toml": edit, "kubejs/server_scripts/new.js": { ...edit, baseSha256: null } });
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(kept)), kept);
+  assert.equal(withConfigFiles(kept, {}).configFiles, undefined, "no edits leave no field");
+  const wiped = regenerateWorldRecord(kept, preset, "42.7", "22345678-1234-1234-1234-1234567890ab", "2026-11-24T13:00:00.000Z");
+  assert.deepEqual(wiped.configFiles, kept.configFiles, "a new wipe keeps the world's edits");
+  const document = worldRecordDocument(kept) as Record<string, Record<string, unknown>>;
+  assert.equal(parseWorldRecord({ ...document, config_files: { "ops.json": document.config_files!["config/claims.toml"] } }), null);
+  assert.equal(parseWorldRecord({ ...document, config_files: { "config/a.toml": { ...(document.config_files!["config/claims.toml"] as object), sha256: "x" } } }), null);
 });

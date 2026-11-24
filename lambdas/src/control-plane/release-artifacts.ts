@@ -29,6 +29,12 @@ export function releaseModKey(gameId: string, presetId: string, release: string,
   return `${releaseArtifactPrefix(gameId, presetId, release)}/${store}/${file}`;
 }
 
+/** One server override of a release in the layout before objects-v1, by its path below the release's overrides. */
+export function releaseOverrideKey(gameId: string, presetId: string, release: string, path: string): string {
+  if (path.split("/").some((segment) => segment === "" || segment === "." || segment === "..")) throw new Error("invalid_override_path");
+  return `${releaseArtifactPrefix(gameId, presetId, release)}/overrides/${path}`;
+}
+
 /** Where the build fetched a mod (descriptive; releases built before it record none). */
 export const MOD_SOURCES = ["curseforge", "modrinth", "github"] as const;
 export type ModSource = (typeof MOD_SOURCES)[number];

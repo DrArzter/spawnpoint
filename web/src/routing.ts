@@ -67,7 +67,7 @@ const pathByPage: Record<Page, string> = {
 
 const accessTabs = new Set<AccessTab>(["users", "roles", "notifications"]);
 /** The world page tabs, in the order the tab bar shows them. */
-const WORLD_TAB_ORDER: readonly WorldTab[] = ["details", "wipes", "backups", "releases", "whitelist", "console", "metrics"];
+const WORLD_TAB_ORDER: readonly WorldTab[] = ["details", "wipes", "backups", "releases", "whitelist", "config", "console", "metrics"];
 const worldTabs = new Set<WorldTab>(WORLD_TAB_ORDER);
 
 function segment(value: string | undefined): string | null {

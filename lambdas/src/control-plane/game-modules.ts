@@ -8,6 +8,7 @@ import valheimSettings from "../../../server/games/valheim/settings.json" with {
 import zomboid from "../../../server/games/zomboid/game.json" with { type: "json" };
 import type { Footprint } from "../domain/placement.ts";
 import type { WhitelistRules } from "./whitelist.ts";
+import type { ConfigFileRules } from "./world-config.ts";
 
 /*
  * The one place the Lambdas list the game modules (ADR-0088). Each module's
@@ -33,6 +34,8 @@ export type GameModule = Readonly<{
   legacyDefault: boolean;
   /** What its console refuses (commands that end the game outside its lifecycle) and offers (ADR-0063). */
   console: Readonly<{ lifecycleCommands: readonly string[]; suggestions: readonly string[] }>;
+  /** The config files a world may keep its own version of (ADR-0093); null when it may keep none. */
+  configFileRules: ConfigFileRules | null;
   /** The rules of its whitelist, when it keeps one (ADR-0066, ADR-0090). */
   whitelistRules: WhitelistRules | null;
   /** Presets of this game build releases: its manifest has release facts (ADR-0034). */
@@ -81,6 +84,16 @@ function whitelistRules(manifest: Manifest, id: string): WhitelistRules | null {
   };
 }
 
+function configFileRules(manifest: Manifest, id: string): ConfigFileRules | null {
+  if (manifest.config_files === undefined) return null;
+  const rules = object(manifest.config_files, `${id} config_files`);
+  return {
+    roots: field(rules.roots, isStringList, `${id}.config_files.roots`),
+    maxBytes: field(rules.max_bytes, isNumber, `${id}.config_files.max_bytes`),
+    textExtensions: field(rules.text_extensions, isStringList, `${id}.config_files.text_extensions`),
+  };
+}
+
 // A malformed manifest stops the bundle loading rather than placing a game wrongly.
 function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
   const manifest = object(raw, "game manifest");
@@ -103,6 +116,7 @@ function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
     legacyDefault: manifest.legacy_default === true,
     console: consoleRules(manifest, id),
     whitelistRules: whitelistRules(manifest, id),
+    configFileRules: configFileRules(manifest, id),
     buildsReleases: typeof manifest.release === "object" && manifest.release !== null,
     settings: settings?.settings ?? [],
   };

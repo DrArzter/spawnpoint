@@ -264,6 +264,26 @@ export const demoApi: SpawnpointApi = {
     return store.updateWhitelist(gameId, worldId, names);
   },
 
+  async loadConfigFiles(gameId: string, worldId: string) {
+    await demoLatency();
+    return store.configFiles(gameId, worldId);
+  },
+
+  async loadConfigFile(gameId: string, worldId: string, path: string) {
+    await demoLatency();
+    return store.configFile(gameId, worldId, path);
+  },
+
+  async saveConfigFile(gameId: string, worldId: string, path: string, text: string, expectedSha256: string | null) {
+    await demoLatency();
+    return store.saveConfigFile(gameId, worldId, path, text, expectedSha256);
+  },
+
+  async resetConfigFile(gameId: string, worldId: string, path: string, expected: string | null) {
+    await demoLatency();
+    store.resetConfigFile(gameId, worldId, path, expected);
+  },
+
   async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery) {
     await demoLatency();
     return store.releaseModPage(gameId, presetId, release, query);

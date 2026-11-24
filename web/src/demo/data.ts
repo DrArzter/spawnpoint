@@ -50,6 +50,8 @@ export type DemoState = {
   whitelists: Record<string, { names: string[]; updatedAt: string; updatedBy: string }>;
   /** What a running server's own whitelist holds for a world whose record keeps none (ADR-0066 amendment). */
   serverWhitelists: Record<string, string[]>;
+  /** What each world edited or added in its config files (ADR-0093), by world then path; `base` is the release digest the edit started from. */
+  configEdits: Record<string, Record<string, { text: string; base: string | null; updatedAt: string; updatedBy: string }>>;
   /** Effects that land when their time passes; read calls settle them. */
   scheduled: { operationId: string; at: number; apply: (state: DemoState) => void }[];
   /** How far each operation has come, by id; read by the operation progress call. */
@@ -63,8 +65,8 @@ export const demoSession: ActiveSession = {
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
-  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "releasePromotion", "operationProgress"],
-  role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
+  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "configFiles", "releasePromotion", "operationProgress"],
+  role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "config.edit", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
@@ -80,6 +82,7 @@ export const PERMISSION_CATALOGUE: readonly AccessPermission[] = [
   { id: "metrics.read", group: "Worlds", label: "Read metrics", description: "Read session metrics.", reserved: false },
   { id: "console.use", group: "Worlds", label: "Use the console", description: "Run RCON commands, recorded against your identity.", reserved: false },
   { id: "whitelist.manage", group: "Worlds", label: "Manage the whitelist", description: "Choose which players may join a world.", reserved: false },
+  { id: "config.edit", group: "Worlds", label: "Edit config files", description: "Change a world's config files; they apply at its next start.", reserved: false },
   { id: "release.read", group: "Releases", label: "See releases", description: "See presets and the releases built from them.", reserved: false },
   { id: "release.build", group: "Releases", label: "Build", description: "Build releases and retry failed build attempts.", reserved: false },
   { id: "release.promote", group: "Releases", label: "Promote", description: "Move a world onto another release.", reserved: false },
@@ -107,6 +110,21 @@ export const MINECRAFT_SETTINGS: readonly Mutable<SettingDefinition>[] = [
   { id: "view_distance", label: "View distance", type: "integer", default: 10, min: 3, max: 32, hint: "In chunks. A larger distance uses more of the host's memory and CPU." },
   { id: "simulation_distance", label: "Simulation distance", type: "integer", default: 10, min: 3, max: 32, hint: "In chunks. A larger distance uses more of the host's memory and CPU." },
 ];
+
+/** The config files a game's release carries; the demo has rules for Minecraft only (ADR-0093). `bytes` is stated for a file the panel cannot open. */
+export const DEMO_CONFIG_RELEASE: Readonly<Record<string, Readonly<{ release: string; roots: readonly string[]; maxBytes: number; files: readonly Readonly<{ path: string; text: string; bytes?: number; editable?: boolean }>[] }>>> = {
+  minecraft: {
+    release: "1.3",
+    roots: ["config", "defaultconfigs"],
+    maxBytes: 262_144,
+    files: [
+      { path: "config/claims.toml", text: "[claims]\nmax_chunks = 100\nallow_pvp = true\n" },
+      { path: "config/mod/server.toml", text: "# Server rules\n[general]\nspawn_protection = 16\nview_distance = 10\n\n[mobs]\nspawn_limit = 70\n" },
+      { path: "defaultconfigs/ftbchunks-world.snbt", text: "{\n\tclaim_limit: 50\n\tforce_load_limit: 10\n}\n" },
+      { path: "config/large.bin", text: "", bytes: 6_291_456, editable: false },
+    ],
+  },
+};
 
 export function initialState(): DemoState {
   return {
@@ -275,6 +293,12 @@ export function initialState(): DemoState {
     },
     serverWhitelists: {
       "minecraft/minecraft-creative-5e1c9a07": ["DrArzter", "Mira"],
+    },
+    configEdits: {
+      // The release's claims.toml has changed since this edit started from it.
+      "minecraft/minecraft-rostik-12345678": {
+        "config/claims.toml": { text: "[claims]\nmax_chunks = 200\nallow_pvp = false\n", base: "a-release-digest-the-release-has-since-replaced", updatedAt: "2026-11-20T19:05:00.000Z", updatedBy: "DrArzter" },
+      },
     },
     scheduled: [],
     progress: {},

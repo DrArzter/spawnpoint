@@ -5,7 +5,7 @@ import { authorizedFetch, sessionFetch } from "./transport";
 type Refusal = string | ((detail: ApiErrorBody) => string);
 
 export type RequestOptions<T> = Readonly<{
-  method?: "GET" | "POST" | "PUT";
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   /** Sent as JSON. */
   body?: unknown;
   /** False for a call that must not renew the browser session first: sign-in, the session probe, logout. */

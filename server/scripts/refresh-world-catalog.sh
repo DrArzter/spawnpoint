@@ -60,6 +60,11 @@ if ${registry_record}; then
     ((has("whitelist") | not) or (
       (.whitelist.names | type == "array") and
       all(.whitelist.names[]; type == "string" and test("^[A-Za-z0-9_]{3,16}$")))) and
+    ((has("config_files") | not) or (
+      (.config_files | type == "object") and
+      all(.config_files | to_entries[];
+        (.key | test("^[A-Za-z0-9._+-]+(/[A-Za-z0-9 ._+-]+)+$")) and (.key | split("/") | all(. != "." and . != ".." and (startswith(".") | not))) and
+        (.value.sha256 | type == "string" and test("^[0-9a-f]{64}$"))))) and
     ((has("game_settings") | not) or (
       (.game_settings.values | type == "object") and
       all(.game_settings.values[]; type | IN("string", "number", "boolean")))) and
@@ -94,6 +99,7 @@ if ${registry_record}; then
     } else {} end) + (if $record[0].footprint then {footprint: $record[0].footprint} else {} end)
       + (if $record[0].game_settings then {game_settings: $record[0].game_settings.values} else {} end)
       + (if $record[0].whitelist then {whitelist: $record[0].whitelist.names} else {} end)
+      + (if $record[0].config_files then {config_files: ($record[0].config_files | map_values(.sha256))} else {} end)
     ])
   ' "${BASE_CATALOG}" >"${stage}"
 elif jq -e --arg id "${world_id}" 'any(.worlds[]; .id == $id)' "${BASE_CATALOG}" >/dev/null; then

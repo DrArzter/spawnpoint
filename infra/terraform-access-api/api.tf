@@ -136,6 +136,14 @@ data "aws_iam_policy_document" "access_api" {
     resources = ["${data.aws_s3_bucket.backups.arn}/worlds/*/archives/*.tar.zst"]
   }
 
+  # A world's own config files (ADR-0093): one object per version, named by
+  # its digest, beside the world's record. Nothing else under the world.
+  statement {
+    sid       = "StoreWorldConfigFiles"
+    actions   = ["s3:PutObject"]
+    resources = ["${data.aws_s3_bucket.releases.arn}/worlds/*/config/*"]
+  }
+
   statement {
     sid       = "CreateWorldAndInitialReleasePointer"
     actions   = ["s3:PutObject"]
@@ -457,6 +465,10 @@ locals {
     "PUT /games/{gameId}/worlds/{worldId}/game-settings",
     "GET /games/{gameId}/worlds/{worldId}/whitelist",
     "PUT /games/{gameId}/worlds/{worldId}/whitelist",
+    "GET /games/{gameId}/worlds/{worldId}/config-files",
+    "GET /games/{gameId}/worlds/{worldId}/config-files/content",
+    "PUT /games/{gameId}/worlds/{worldId}/config-files",
+    "DELETE /games/{gameId}/worlds/{worldId}/config-files",
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",

@@ -243,6 +243,11 @@ export function TextInput({ className, mono = false, ...props }: Omit<ComponentP
   return <input className={cx("t-input", mono && "t-input-mono", className)} {...props} />;
 }
 
+/** Text of many lines, monospaced and never wrapped, for a file's contents. */
+export function TextArea({ className, ...props }: Omit<ComponentPropsWithRef<"textarea">, "className"> & Readonly<{ className?: string }>) {
+  return <textarea className={cx("t-textarea", className)} spellCheck={false} {...props} />;
+}
+
 export function SelectInput({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <span className={cx("t-select-well", className)}>

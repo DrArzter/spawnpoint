@@ -9,6 +9,7 @@ import { SplitPage } from "./ui/SplitPage";
 import { Status } from "./ui/Status";
 import { TabPanel, Tabs } from "./ui/Tabs";
 import { BackupsTab } from "./tabs/Backups";
+import { ConfigTab } from "./tabs/Config";
 import { ConsoleTab } from "./tabs/Console";
 import { CARD_ACTIONS, DetailsTab } from "./tabs/Details";
 import { Hero } from "./tabs/Hero";
@@ -24,6 +25,7 @@ const tabIcons: Readonly<Record<WorldTab, IconName>> = {
   backups: "cloud_done",
   releases: "deployed_code",
   whitelist: "verified_user",
+  config: "tune",
   console: "terminal",
   metrics: "monitoring",
 };
@@ -68,6 +70,7 @@ function Panel({ model }: Readonly<{ model: WorldModel }>) {
     case "backups": return <BackupsTab model={model.backups} />;
     case "releases": return <ReleasesTab model={model} />;
     case "whitelist": return model.whitelist ? <WhitelistTab model={model.whitelist} /> : <DetailsTab model={model} />;
+    case "config": return model.config ? <ConfigTab model={model.config} /> : <DetailsTab model={model} />;
     case "console": return model.console ? <ConsoleTab model={model.console} world={model.world.displayName} /> : <DetailsTab model={model} />;
     case "metrics": return model.metrics ? <MetricsTab model={model.metrics} worldId={model.world.id} /> : <DetailsTab model={model} />;
     default: return <DetailsTab model={model} />;

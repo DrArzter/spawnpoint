@@ -97,3 +97,16 @@ variable "email_reply_to" {
     error_message = "email_reply_to must be empty or one email address."
   }
 }
+
+# The world /server_start asks the API to start. The bot has no world picker.
+variable "bot_world" {
+  description = "Game and world the bot's start command names."
+  type = object({
+    game_id  = string
+    world_id = string
+  })
+  default = {
+    game_id  = "minecraft"
+    world_id = "world"
+  }
+}

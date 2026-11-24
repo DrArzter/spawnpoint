@@ -36,6 +36,8 @@ test("API imports form an acyclic graph; functional handlers never import their 
 
 test("the Lambda entry only composes modules, without routes or feature logic", async () => {
   const entry = await readFile(new URL("../src/handlers/access-api.ts", import.meta.url), "utf8");
-  assert.match(entry, /export const handler = createDispatcher\(routes,/);
+  assert.match(entry, /const http = createDispatcher\(routes,/);
+  // A chat request runs a subset of the same routes through the same dispatcher (ADR-0087).
+  assert.match(entry, /createDispatcher\(chat,/);
   assert.doesNotMatch(entry, /process\.env|new \w+Command|(?:public|session|identity|permission)Route\(/);
 });

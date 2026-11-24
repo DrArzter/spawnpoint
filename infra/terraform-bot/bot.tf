@@ -21,16 +21,11 @@ resource "aws_iam_role_policy_attachment" "bot_logs" {
 }
 
 data "aws_iam_policy_document" "bot" {
+  # The bot runs the API's own routes (ADR-0087); it starts no machine itself.
   statement {
-    sid       = "StartSessionMachines"
-    actions   = ["states:StartExecution"]
-    resources = [local.start_state_machine_arn]
-  }
-
-  statement {
-    sid       = "SingleFlightCheck"
-    actions   = ["states:ListExecutions"]
-    resources = [local.start_state_machine_arn]
+    sid       = "RunApiRoutesForAChat"
+    actions   = ["lambda:InvokeFunction"]
+    resources = ["arn:aws:lambda:${var.aws_region}:${local.account_id}:function:spawnpoint-access-api"]
   }
 
   statement {
@@ -81,12 +76,11 @@ resource "aws_lambda_function" "bot" {
 
   environment {
     variables = {
-      START_STATE_MACHINE_ARN  = local.start_state_machine_arn
-      SERVER_ID                = "minecraft"
+      ACCESS_API_FUNCTION      = "spawnpoint-access-api"
       INSTANCE_ID              = data.aws_instance.game_host.id
       RELEASE_BUCKET           = data.aws_s3_bucket.releases.id
-      WORLD_NAME               = "world"
-      WORLD_ID                 = "world"
+      GAME_ID                  = var.bot_world.game_id
+      WORLD_ID                 = var.bot_world.world_id
       CONNECTION_HOST          = var.connection_host
       PANEL_ADDRESS            = var.panel_address
       ZEROTIER_NETWORK_ID      = var.zerotier_network_id

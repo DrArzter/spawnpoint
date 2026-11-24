@@ -9,6 +9,7 @@
 // silently shortened list is how corruption stays invisible.
 
 import type { BackupEntry } from "../../../contract/backups.ts";
+import type { BackupReleaseSources } from "./backup-release.ts";
 
 export type BackupObject = Readonly<{
   key: string;
@@ -74,3 +75,24 @@ export function resumeArchiveKey(worldId: string, generationId: string, keys: re
   const prefix = `worlds/${worldId}/archives/${worldId}-${generationId}-`;
   return keys.filter((key) => key.startsWith(prefix) && RESUMABLE.test(key)).sort(byCodeUnit).at(-1);
 }
+
+/** Where a world's archives are kept (ADR-0065): a listing, a short-lived link, and what each was made from. */
+export type BackupArchives = Readonly<{
+  list: (worldId: string) => Promise<readonly BackupObject[]>;
+  /** A link to one archive, or null when the key holds none. */
+  link: (key: string, expiresIn: number) => Promise<Readonly<{ url: string; sizeBytes: number }> | null>;
+  releaseSources: () => BackupReleaseSources;
+}>;
+
+/** One archive handed over, recorded before the link is (ADR-0065). */
+export type BackupDownload = Readonly<{
+  at: string;
+  identityId: string;
+  displayName: string;
+  gameId: string;
+  worldId: string;
+  key: string;
+  sizeBytes: number;
+}>;
+
+export type BackupDownloads = Readonly<{ record: (download: BackupDownload) => Promise<void> }>;

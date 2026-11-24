@@ -15,9 +15,6 @@ import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { randomUUID } from "node:crypto";
 
-import type { BackupObject } from "./backups.ts";
-import type { BackupReleaseSources } from "./backup-release.ts";
-import { s3BackupReleaseSources } from "./s3-backup-release.ts";
 import { attachmentDisposition, packAttachmentName, releaseModKey, type ModStore, type ReleasePack } from "./release-artifacts.ts";
 import { objectKey, releasePackStorageKey } from "./release-objects.ts";
 import { dynamoReleaseStateReader } from "./dynamo-release-state.ts";
@@ -703,50 +700,6 @@ export function releaseModUrl(
     Key: objectDigest === undefined ? releaseModKey(gameId, presetId, release, location.file, location.store) : objectKey(objectDigest),
     ResponseContentDisposition: attachment(location.file),
   }), { expiresIn });
-}
-
-/**
- * One world archive, presigned (ADR-0065). The caller has checked that the key
- * is this world's; a key with no object is a normal answer, not an error.
- */
-export async function backupArchiveUrl(key: string, expiresIn: number): Promise<Readonly<{ url: string; sizeBytes: number }> | null> {
-  const bucket = requiredEnv("BACKUP_BUCKET");
-  let sizeBytes: number;
-  try {
-    sizeBytes = (await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }))).ContentLength ?? 0;
-  } catch (error) {
-    if ((error as { name?: string }).name === "NotFound") return null;
-    throw error;
-  }
-  const url = await getSignedUrl(s3, new GetObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    ResponseContentDisposition: attachment(key.slice(key.lastIndexOf("/") + 1)),
-  }), { expiresIn });
-  return { url, sizeBytes };
-}
-
-// The inventory is a listing: the digest lives in the key and the listing
-// reports each object's checksum algorithm, so listing never reads an archive.
-// Reading one is a download, which only backup.download may ask for.
-export async function listWorldBackups(worldId: string): Promise<readonly BackupObject[]> {
-  const response = await s3.send(new ListObjectsV2Command({
-    Bucket: requiredEnv("BACKUP_BUCKET"),
-    Prefix: `worlds/${worldId}/archives/`,
-    MaxKeys: 200,
-    OptionalObjectAttributes: undefined,
-  }));
-  return (response.Contents ?? []).flatMap((object) => object.Key && object.LastModified ? [{
-    key: object.Key,
-    sizeBytes: object.Size ?? 0,
-    storedAt: object.LastModified.toISOString(),
-    checksumAlgorithms: object.ChecksumAlgorithm ?? [],
-  }] : []);
-}
-
-/** Each archive's recorded release and its wipe's pointer: one HEAD per archive, never a download. */
-export function backupReleaseSources(): BackupReleaseSources {
-  return s3BackupReleaseSources(s3, requiredEnv("BACKUP_BUCKET"), requiredEnv("RELEASE_BUCKET"));
 }
 
 export async function readWorldRecord(worldId: string): Promise<WorldRecord | null> {

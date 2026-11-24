@@ -1,7 +1,8 @@
 import { type Identity } from "../../access/domain.ts";
 import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan, type FleetSessionPlan } from "../../control-plane/session-control.ts";
-import { awsControlPlaneSources, backupReleaseSources, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, worldLifecycleExecution } from "../../control-plane/aws.ts";
+import { awsControlPlaneSources, startSessionExecution, stopSessionExecution, materializePresetWorld, replaceWorldAccess, replaceWorldGameSettings, readWorldRecord, replaceWorldWhitelist, worldLifecycleExecution } from "../../control-plane/aws.ts";
 import { awsConsoleGateway } from "../../control-plane/aws-ssm-console-gateway.ts";
+import { awsBackupArchives } from "../../control-plane/s3-backup-archives.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { usableByNewWipe } from "../../control-plane/preset-catalog.ts";
 import { checkReleaseUsable, noReleaseState, type ReleaseStateReader, type ReleaseUsability } from "../../control-plane/release-usable.ts";
@@ -417,7 +418,7 @@ export async function controlWorldLifecycle(
   const operations = blockingOperations(allOperations, worldId, worldPlacements(catalogWithPresets(presets, gameCatalog, worldRecords)));
   if (action === "purge" && record.status !== "archived") return errorResponse(409, "world_not_archived");
   if (action === "restore" && backupKey !== undefined) {
-    const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest, backupReleaseSources(), awsControlPlaneSources.readReleaseState);
+    const restorable = await restorableRelease(record, backupKey, awsControlPlaneSources.readReleaseManifest, awsBackupArchives.releaseSources(), awsControlPlaneSources.readReleaseState);
     if (restorable !== "ok") return errorResponse(409, restorable);
   }
   if (operations.length > 0) return errorResponse(409, "operation_in_progress");

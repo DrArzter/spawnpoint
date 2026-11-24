@@ -1,12 +1,12 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
-import { ChangeResourceRecordSetsCommand, ListResourceRecordSetsCommand, Route53Client } from "@aws-sdk/client-route-53";
+import { Route53Client } from "@aws-sdk/client-route-53";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 
 import { awsControlPlaneSources, stopSessionExecution } from "../control-plane/aws.ts";
 import { eventJournalItem, hostOwnsSession, recoveryTarget, type ControlPlaneEvent } from "../control-plane/dynamic-projection.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
-import { dnsLedgerRecords, terminalHostInstanceId, type DnsLedgerRecord } from "../control-plane/dns-ledger.ts";
+import { dnsLedgerRecords, parkDnsRecord, terminalHostInstanceId } from "../control-plane/dns-ledger.ts";
 
 const viewTable = process.env.CONTROL_PLANE_VIEW_TABLE;
 if (!viewTable) throw new Error("CONTROL_PLANE_VIEW_TABLE is required");
@@ -117,44 +117,13 @@ async function reconcileStoppedHost(
   }
 }
 
-async function currentDnsRecord(record: DnsLedgerRecord): Promise<boolean> {
-  const result = await route53.send(new ListResourceRecordSetsCommand({
-    HostedZoneId: record.zoneId,
-    StartRecordName: record.name,
-    StartRecordType: "A",
-    MaxItems: 1,
-  }));
-  const current = result.ResourceRecordSets?.[0];
-  return current?.Name?.toLowerCase() === record.name && current.Type === "A" &&
-    current.TTL === 30 && current.ResourceRecords?.length === 1 &&
-    current.ResourceRecords[0]?.Value === record.address;
-}
-
-async function deleteDnsRecord(record: DnsLedgerRecord): Promise<void> {
-  if (!(await currentDnsRecord(record))) return;
-  try {
-    await route53.send(new ChangeResourceRecordSetsCommand({
-      HostedZoneId: record.zoneId,
-      ChangeBatch: { Changes: [{
-        Action: "DELETE",
-        ResourceRecordSet: {
-          Name: record.name, Type: "A", TTL: 30,
-          ResourceRecords: [{ Value: record.address }],
-        },
-      }] },
-    }));
-  } catch (error) {
-    if (!(error instanceof Error && error.name === "InvalidChangeBatch" && !(await currentDnsRecord(record)))) throw error;
-  }
-}
-
 async function cleanTerminalHostDns(event: ControlPlaneEvent): Promise<void> {
   const instanceId = terminalHostInstanceId(event);
   if (instanceId === null || !dnsZoneId || !dnsSuffix || !lifecycleTable) return;
   const key = { server_id: `dns-host#${instanceId}` };
   const result = await document.send(new GetCommand({ TableName: lifecycleTable, Key: key }));
   if (!result.Item) return;
-  for (const record of dnsLedgerRecords(result.Item, dnsZoneId, dnsSuffix)) await deleteDnsRecord(record); // NOSONAR sequential to stay inside the Route 53 change rate
+  for (const record of dnsLedgerRecords(result.Item, dnsZoneId, dnsSuffix)) await parkDnsRecord(route53, record); // NOSONAR sequential to stay inside the Route 53 change rate
   await document.send(new DeleteCommand({ TableName: lifecycleTable, Key: key }));
 }
 

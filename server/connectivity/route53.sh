@@ -64,6 +64,12 @@ connectivity_prepare() {
   return 0
 }
 
+# A stopped world's name answers this instead of disappearing (ADR-0086). A
+# missing name is cached as missing for the zone's negative TTL; an address is
+# cached for the record's 30 seconds, so the next start is seen at once.
+# 192.0.2.1 is TEST-NET-1 (RFC 5737): reserved, routed nowhere.
+ROUTE53_PARKED_ADDRESS="192.0.2.1"
+
 route53_change() {
   local action="$1" change
   change="$(jq -cn --arg action "${action}" --arg name "${CONNECTIVITY_HOST}." --arg ip "${CONNECTIVITY_PUBLIC_IP}" \
@@ -82,13 +88,26 @@ connectivity_publish() {
   return 0
 }
 
-# DELETE includes the exact address this host published. If another session has
-# already replaced it, Route 53 refuses the deletion instead of erasing the
-# newer address. The terminal-host EventBridge reconciler handles crashes.
+# One batch: DELETE the exact address this host published, CREATE the parked
+# one. If another session has already replaced the address, Route 53 refuses the
+# DELETE and with it the whole batch, so a newer address is never erased. The
+# terminal-host EventBridge reconciler parks the name the same way after a crash.
+route53_park() {
+  local change
+  change="$(jq -cn --arg name "${CONNECTIVITY_HOST}." --arg ip "${CONNECTIVITY_PUBLIC_IP}" --arg parked "${ROUTE53_PARKED_ADDRESS}" \
+    '{Changes:[
+      {Action:"DELETE",ResourceRecordSet:{Name:$name,Type:"A",TTL:30,ResourceRecords:[{Value:$ip}]}},
+      {Action:"CREATE",ResourceRecordSet:{Name:$name,Type:"A",TTL:30,ResourceRecords:[{Value:$parked}]}}
+    ]}')"
+  aws route53 change-resource-record-sets --hosted-zone-id "${CONNECTIVITY_ZONE_ID}" \
+    --change-batch "${change}" >/dev/null || return 1
+  return 0
+}
+
 connectivity_retract() {
   route53_configure || return 1
   CONNECTIVITY_PUBLIC_IP="$("${SCRIPT_DIR}/read-public-address.sh")" || return 1
-  route53_change DELETE || return 1
+  route53_park || return 1
   route53_ledger_retract || return 1
   return 0
 }

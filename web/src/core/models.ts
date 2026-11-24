@@ -8,7 +8,6 @@ import type { WorldsView } from "../routing";
 import type { SessionReason } from "../session";
 import type { Theme, ThemePreference, ViewerProfile } from "../telegram";
 import type { Action } from "./actions";
-import type { RoleChoice } from "./roles";
 
 /*
  * The bones hand each surface one of these. A model carries facts and
@@ -435,6 +434,13 @@ export type UsersModel = Readonly<{
   closeManaged: Action;
   /** The open "Delete <name>?" dialog, if any. */
   deletion: ConfirmationModel | null;
+}>;
+
+/** What a role select draws: the roles the caller may give, and the value held now. */
+export type RoleChoice = Readonly<{
+  value: string;
+  options: readonly Readonly<{ value: string; label: string }>[];
+  disabled: boolean;
 }>;
 
 /** The open role form. Create asks for an id; edit keeps it. Reserved permissions are not in the list. */

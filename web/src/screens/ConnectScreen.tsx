@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { AuthState } from "../auth";
+import type { AuthState } from "../api/contract";
 import { inspectOAuthAuthorization, decideOAuthAuthorization, type OAuthAuthorizationSummary } from "../api/live/oauth";
 import { SignInPanel } from "../components/SignIn";
 import { ActionRow, Button } from "../components/ui/Button";

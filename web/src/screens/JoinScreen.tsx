@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { AuthState, checkAccessInvitation, redeemAccessInvitation, requestAccessInvitationProof, restoreAuth, switchLogin } from "../auth";
+import { useApi } from "../api/context";
+import type { AuthState } from "../api/contract";
 import { SignInPanel } from "../components/SignIn";
 import { Button } from "../components/ui/Button";
 import { SpawnpointMark } from "../shell/AppBar";
@@ -8,6 +9,7 @@ import { SpawnpointMark } from "../shell/AppBar";
 const pendingInvitationKey = "spawnpoint.pending-access-invitation";
 
 export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: AuthState; onAuth: (state: AuthState) => void; token: string; proof: string | null }>) {
+  const api = useApi();
   const [validity, setValidity] = useState<"checking" | "valid" | "invalid" | "error">("checking");
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
@@ -17,7 +19,7 @@ export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: Auth
   useEffect(() => {
     let active = true;
     if (token) window.sessionStorage.setItem(pendingInvitationKey, token);
-    void checkAccessInvitation(token)
+    void api.checkAccessInvitation(token)
       .then((result) => { if (active) { setValidity(result.valid ? "valid" : "invalid"); setInvitedEmail(result.email); } })
       .catch(() => { if (active) setValidity("error"); });
     return () => { active = false; };
@@ -27,9 +29,9 @@ export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: Auth
     setError("");
     setAccepting(true);
     try {
-      await redeemAccessInvitation(token, proof ?? undefined);
+      await api.redeemAccessInvitation(token, proof ?? undefined);
       window.sessionStorage.removeItem(pendingInvitationKey);
-      onAuth(await restoreAuth());
+      onAuth(await api.restoreSession());
       window.location.hash = "#/worlds";
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The invitation could not be accepted. Try again.");
@@ -42,7 +44,7 @@ export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: Auth
     setError("");
     setAccepting(true);
     try {
-      await requestAccessInvitationProof(token);
+      await api.requestAccessInvitationProof(token);
       setProofSent(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The confirmation email could not be sent.");
@@ -54,7 +56,7 @@ export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: Auth
   async function useDifferentAccount() {
     setAccepting(true);
     try {
-      await switchLogin();
+      await api.revokeSession();
       onAuth({ status: "signed-out" });
     } finally {
       setAccepting(false);
@@ -89,7 +91,7 @@ export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: Auth
       {validity === "valid" && member && <Button onClick={() => { window.location.hash = "#/worlds"; }} variant="filled">Open dashboard</Button>}
       {validity === "valid" && (member || emailMismatch) && <Button loading={accepting} onClick={() => void useDifferentAccount()} variant="text">Use a different account</Button>}
       {error && <p className="boot-error" role="alert">{error}</p>}
-      {validity === "error" && <Button onClick={() => { setValidity("checking"); void checkAccessInvitation(token).then((result) => { setValidity(result.valid ? "valid" : "invalid"); setInvitedEmail(result.email); }).catch(() => setValidity("error")); }} variant="outlined">Try again</Button>}
+      {validity === "error" && <Button onClick={() => { setValidity("checking"); void api.checkAccessInvitation(token).then((result) => { setValidity(result.valid ? "valid" : "invalid"); setInvitedEmail(result.email); }).catch(() => setValidity("error")); }} variant="outlined">Try again</Button>}
     </section>
   </main>;
 }

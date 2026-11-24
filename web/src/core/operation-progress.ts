@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { HostLogLine, OperationProgress } from "../api/contract";
-import { loadOperationProgress } from "../auth";
+import { useApi } from "../api/context";
 import { clock, elapsedSeconds, eta } from "../lib/operation-time";
 import type { Operation } from "../model";
 import type { Detail, DetailValue, HostLogRow, OperationProgressModel } from "./models";
@@ -238,13 +238,15 @@ type Held = Readonly<{ world: string; progress: OperationProgress }>;
 export function useOperationProgress(
   scope: Readonly<{ gameId: string; worldId: string }> | null,
   running: Operation | null,
-  load: ProgressLoader = loadOperationProgress,
+  load?: ProgressLoader,
 ): OperationProgress | null {
+  const api = useApi();
   const [held, setHeld] = useState<Held | null>(null);
   const world = scope === null ? null : `${scope.gameId}/${scope.worldId}`;
   const runningId = scope === null ? null : running?.id ?? null;
-  const loader = useRef(load);
-  loader.current = load;
+  const read: ProgressLoader = load ?? ((gameId, worldId, operationId) => api.loadOperationProgress(gameId, worldId, operationId));
+  const loader = useRef(read);
+  loader.current = read;
   const heldRef = useRef(held);
   heldRef.current = held;
   const before = useRef<Readonly<{ world: string; id: string }> | null>(null);

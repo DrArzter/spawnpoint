@@ -2,17 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { ApiError, failureKind } from "../api/contract";
-import {
-  changePassword, createAccessInvitation, createAccessRole, deleteAccessRole, deleteIdentity, googleOidcClientId, linkGoogle, linkPassword, linkTelegram, loadAccessInvitations,
-  loadBackups, loadConsole, loadInvitationHistory, loadWorldMetrics, loadInvitationRecipients, loadLinkedAccounts, loadLoginOptions, loadReleaseDiff, loadReleaseMods, loadWhitelist, loadSubscriptions, requestPasswordReset, resendEmailVerification, revokeAccessInvitation,
-  runConsoleCommand, sendInvitation, telegramOidcClientId, updateAccessRole, updateDefaultRole, updateSubscriptions, updateWhitelist,
-} from "../auth";
-import type { SnackInput } from "../components/ui/Snackbar";
+import { useApi, useSignInConfig } from "../api/context";
 import type { StatusKind } from "./status";
 import { formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, Member, OwnerBootstrap, Role, World } from "../model";
 import { action, type Action } from "./actions";
+import type { Notify } from "./notify";
 import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RoleEditorModel, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseChangeRows } from "./release-diff";
 import { candidateKey, type AccessDirectory } from "./access-directory";
@@ -26,8 +22,6 @@ import { whitelistNameError } from "./whitelist";
  * touches the API. `notify` is how an outcome reaches the person, whatever
  * the skin draws it as.
  */
-
-export type Notify = (input: SnackInput) => void;
 
 type LoadState<T> = { status: "loading" } | { status: "ready"; value: T } | { status: "error"; error: string; kind: ApiFailureKind };
 
@@ -57,9 +51,10 @@ function asLoading<T>(state: LoadState<T>, retry: () => void, retryId: string): 
 // --- backups -----------------------------------------------------------------
 
 export function useBackups(gameId: string, world: World, opts: Readonly<{ canRead: boolean; canRestore: boolean; busy: boolean; settled: string; onRestore: (entry: BackupEntry) => void; onDownload: ((entry: BackupEntry) => void) | null }>): BackupsModel {
+  const api = useApi();
   const [filter, setFilter] = useState<string | null>(null);
   useEffect(() => { setFilter(null); }, [world.id]);
-  const [state, retry] = useLoad<BackupInventory>(opts.canRead ? () => loadBackups(gameId, world.id) : null, [opts.canRead, gameId, world.id, opts.settled]);
+  const [state, retry] = useLoad<BackupInventory>(opts.canRead ? () => api.loadBackups(gameId, world.id) : null, [opts.canRead, gameId, world.id, opts.settled]);
   const onDownload = opts.onDownload;
   const inventory = useMemo<Loading<{ entries: readonly BackupEntry[]; unverified: number; truncated: boolean }>>(() => {
     if (state.status !== "ready") return asLoading(state, retry, "backups.retry");
@@ -92,7 +87,8 @@ export function useBackups(gameId: string, world: World, opts: Readonly<{ canRea
  * whole list; a running world reloads it at once, a stopped one at its start.
  */
 export function useWhitelist(gameId: string, world: World, open: boolean, notify: Notify): WhitelistModel {
-  const [state, retry, update] = useLoad<WorldWhitelist>(open ? () => loadWhitelist(gameId, world.id) : null, [open, gameId, world.id]);
+  const api = useApi();
+  const [state, retry, update] = useLoad<WorldWhitelist>(open ? () => api.loadWhitelist(gameId, world.id) : null, [open, gameId, world.id]);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const names = state.status === "ready" ? state.value.names : [];
@@ -102,7 +98,7 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
   const save = async (next: readonly string[], said: (saved: SavedWhitelist) => string): Promise<boolean> => {
     setSaving(true);
     try {
-      const saved = await updateWhitelist(gameId, world.id, next);
+      const saved = await api.updateWhitelist(gameId, world.id, next);
       update(() => saved);
       notify({ tone: "success", message: said(saved) });
       return true;
@@ -150,6 +146,7 @@ type ModsState = Readonly<{ key: string; view: ModsView }>;
  * tab is closed, and starts again for another release.
  */
 export function useReleaseMods(gameId: string, release: Readonly<{ presetId: string; version: string }> | null, onDownload: (presetId: string, version: string, mod: ReleaseMod) => void): ModsModel | null {
+  const api = useApi();
   const key = release === null ? "" : `${gameId}/${release.presetId}/${release.version}`;
   const [kept, setKept] = useState<ModsState>({ key, view: FRESH_MODS_VIEW });
   const view = kept.key === key ? kept.view : FRESH_MODS_VIEW;
@@ -161,7 +158,7 @@ export function useReleaseMods(gameId: string, release: Readonly<{ presetId: str
   }, [view.search, view.applied, change]);
 
   const query = modListQuery(view);
-  const [state, retry] = useLoad<ReleaseModPage>(release === null ? null : () => loadReleaseMods(gameId, release.presetId, release.version, query), [key, query.search, query.source, query.sort, query.order, query.page]);
+  const [state, retry] = useLoad<ReleaseModPage>(release === null ? null : () => api.loadReleaseMods(gameId, release.presetId, release.version, query), [key, query.search, query.source, query.sort, query.order, query.page]);
   const [held, setHeld] = useState<Readonly<{ key: string; split: boolean; pages: number; sources: ReleaseModPage["sources"] }> | null>(null);
   useEffect(() => {
     if (state.status === "ready") setHeld({ key, split: state.value.split, pages: state.value.pages, sources: state.value.sources });
@@ -207,7 +204,8 @@ export function useReleaseMods(gameId: string, release: Readonly<{ presetId: str
  * against `from` while a promotion waits, otherwise against what its build compared.
  */
 export function useReleaseChanges(gameId: string, release: Readonly<{ presetId: string; version: string; from: string | null }> | null): ReleaseChangesModel | null {
-  const [state, retry] = useLoad<ReleaseDiff | null>(release === null ? null : () => loadReleaseDiff(gameId, release.presetId, release.version, release.from), [gameId, release?.presetId, release?.version, release?.from]);
+  const api = useApi();
+  const [state, retry] = useLoad<ReleaseDiff | null>(release === null ? null : () => api.loadReleaseDiff(gameId, release.presetId, release.version, release.from), [gameId, release?.presetId, release?.version, release?.from]);
   if (release === null) return null;
   if (state.status !== "ready") return { release: release.version, changes: asLoading(state, retry, "changes.retry") };
   const diff = state.value;
@@ -230,8 +228,9 @@ export const METRIC_RANGES: readonly { id: MetricRange; label: string }[] = [
 
 /** The host one world runs on, measured; read only while the tab is open, and again when its session starts or ends. */
 export function useWorldMetrics(gameId: string | undefined, worldId: string | undefined, sessionId: string | null): MetricsModel {
+  const api = useApi();
   const [range, setRange] = useState<MetricRange>("24h");
-  const [state, retry] = useLoad<HostMetrics | null>(gameId === undefined || worldId === undefined ? null : () => loadWorldMetrics(gameId, worldId, range), [gameId, worldId, range, sessionId]);
+  const [state, retry] = useLoad<HostMetrics | null>(gameId === undefined || worldId === undefined ? null : () => api.loadWorldMetrics(gameId, worldId, range), [gameId, worldId, range, sessionId]);
   return { range, ranges: METRIC_RANGES, setRange, metrics: asLoading(state, retry, "metrics.retry") };
 }
 
@@ -254,6 +253,7 @@ export type ConsoleGateway = Readonly<{
  * its answer is read again sooner than a quiet log.
  */
 export function useConsoleGateway(gameId: string | undefined, worldId: string | undefined, notify: Notify): ConsoleGateway {
+  const api = useApi();
   const [entries, setEntries] = useState<LoadState<readonly ConsoleEntry[]>>({ status: "loading" });
   const [sending, setSending] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -262,7 +262,7 @@ export function useConsoleGateway(gameId: string | undefined, worldId: string | 
     if (gameId === undefined || worldId === undefined) return;
     let current = true;
     setEntries({ status: "loading" });
-    loadConsole(gameId, worldId)
+    api.loadConsole(gameId, worldId)
       .then((value) => { if (current) setEntries({ status: "ready", value }); })
       .catch((cause: unknown) => { if (current) setEntries({ status: "error", error: cause instanceof Error ? cause.message : "The console history could not be loaded.", kind: failureKind(cause) }); });
     return () => { current = false; };
@@ -273,7 +273,7 @@ export function useConsoleGateway(gameId: string | undefined, worldId: string | 
     if (gameId === undefined || worldId === undefined || entries.status !== "ready") return;
     let current = true;
     const timer = window.setTimeout(() => {
-      loadConsole(gameId, worldId)
+      api.loadConsole(gameId, worldId)
         .then((value) => { if (current) setEntries({ status: "ready", value }); })
         .catch(() => undefined);
     }, pending ? CONSOLE_POLL_PENDING_MS : CONSOLE_POLL_IDLE_MS);
@@ -284,7 +284,7 @@ export function useConsoleGateway(gameId: string | undefined, worldId: string | 
     if (gameId === undefined || worldId === undefined) return false;
     setSending(true);
     try {
-      const entry = await runConsoleCommand(gameId, worldId, command);
+      const entry = await api.runConsoleCommand(gameId, worldId, command);
       setEntries((state) => state.status === "ready" ? { status: "ready", value: [entry, ...state.value.filter((item) => item.id !== entry.id)] } : state);
       return true;
     } catch (cause) {
@@ -377,6 +377,7 @@ export async function deleteMember(member: Member, deps: Readonly<{ remove: (ide
 }
 
 export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: boolean; directory: AccessDirectory; notify: Notify }>): UsersModel {
+  const api = useApi();
   const { directory, notify } = opts;
   const { members, candidates: waiting, working } = directory;
   const { roles, defaultRoleId } = directory.roles;
@@ -397,7 +398,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
   async function confirmDeletion(member: Member) {
     setRemoving(true);
     setRefusal(null);
-    const refused = await deleteMember(member, { remove: deleteIdentity, members, onMembersChange: directory.setMembers, managing, closeManaged: () => setManaging(null), notify });
+    const refused = await deleteMember(member, { remove: api.deleteIdentity, members, onMembersChange: directory.setMembers, managing, closeManaged: () => setManaging(null), notify });
     setRemoving(false);
     if (refused === null) setDeleting(null);
     else setRefusal(refused);
@@ -448,13 +449,14 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
 // --- access: invitations to the project -------------------------------------------
 
 function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | null {
+  const api = useApi();
   const [email, setEmail] = useState("");
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [issued, setIssued] = useState<{ url: string; id: string; email: string } | null>(null);
   const [emailMode, setEmailMode] = useState<boolean | null>(null);
-  const [state, retry] = useLoad<AccessInvitation[]>(enabled ? () => loadAccessInvitations() : null, [enabled]);
-  useEffect(() => { if (enabled) void loadLoginOptions().then((options) => setEmailMode(options.emailActions)); }, [enabled]);
+  const [state, retry] = useLoad<AccessInvitation[]>(enabled ? () => api.loadAccessInvitations() : null, [enabled]);
+  useEffect(() => { if (enabled) void api.loadLoginOptions().then((options) => setEmailMode(options.emailActions)); }, [enabled]);
   if (!enabled) return null;
 
   async function create() {
@@ -462,7 +464,7 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
     setIssued(null);
     try {
       const recipient = emailMode ? email.trim() : null;
-      const result = await createAccessInvitation(recipient);
+      const result = await api.createAccessInvitation(recipient);
       setIssued({ url: result.url, id: result.id, email: recipient ?? "" });
       setEmail("");
       notify({ tone: result.delivery === "failed" ? "error" : "success", message: result.delivery === "failed" ? "Invitation created, but the email could not be sent. Copy the link below." : "Invitation created." });
@@ -486,7 +488,7 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
   async function revoke(invitation: AccessInvitation) {
     setRevoking(invitation.id);
     try {
-      await revokeAccessInvitation(invitation.id);
+      await api.revokeAccessInvitation(invitation.id);
       if (issued?.id === invitation.id) setIssued(null);
       retry();
       notify({ message: "Invitation revoked." });
@@ -528,6 +530,7 @@ type RoleForm = Readonly<{ mode: "create" } | { mode: "edit"; roleId: string; ve
 const sameSet = (a: ReadonlySet<string>, b: readonly string[]) => a.size === b.length && b.every((item) => a.has(item));
 
 export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: ReadonlySet<string>; notify: Notify }>): RolesModel {
+  const api = useApi();
   const { granted, notify } = opts;
   const directory = opts.directory.roles;
   const state = opts.directory.rolesState;
@@ -567,7 +570,7 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
     setBusy(true);
     setRefusal(null);
     try {
-      const saved = current.mode === "create" ? await createAccessRole(draft.id, body) : await updateAccessRole(current.roleId, body, current.version);
+      const saved = current.mode === "create" ? await api.createAccessRole(draft.id, body) : await api.updateAccessRole(current.roleId, body, current.version);
       setForm(null);
       notify({ message: current.mode === "create" ? `${saved.name} created.` : `${saved.name} saved.` });
       await refresh();
@@ -582,7 +585,7 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
     setBusy(true);
     setRefusal(null);
     try {
-      await deleteAccessRole(role.id, version);
+      await api.deleteAccessRole(role.id, version);
       setDeleting(null);
       notify({ message: `${role.name} deleted.` });
       await refresh();
@@ -596,7 +599,7 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
   async function chooseDefault(roleId: string) {
     setBusy(true);
     try {
-      await updateDefaultRole(roleId);
+      await api.updateDefaultRole(roleId);
       notify({ message: `New people now get ${roles.find((role) => role.id === roleId)?.name ?? roleId}.` });
       await refresh();
     } catch (cause) {
@@ -673,6 +676,7 @@ function saveStatusLabel(state: "loading" | "ready" | "saving" | "error"): strin
 }
 
 export function useNotifications(games: readonly Game[], notify: Notify): NotificationsModel {
+  const api = useApi();
   const [subscriptions, setSubscriptions] = useState<SubscriptionState>({});
   const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
   const [error, setError] = useState("");
@@ -681,7 +685,7 @@ export function useNotifications(games: readonly Game[], notify: Notify): Notifi
     setState("loading");
     setError("");
     try {
-      setSubscriptions(await loadSubscriptions());
+      setSubscriptions(await api.loadSubscriptions());
       setState("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Your notification subscriptions could not be loaded.");
@@ -698,7 +702,7 @@ export function useNotifications(games: readonly Game[], notify: Notify): Notifi
     setSubscriptions(next);
     setState("saving");
     try {
-      setSubscriptions(await updateSubscriptions(next));
+      setSubscriptions(await api.updateSubscriptions(next));
       setState("ready");
     } catch (cause) {
       setSubscriptions(previous);
@@ -761,12 +765,13 @@ function sendHint(audience: "broadcast" | "direct", selected: number): string {
 }
 
 export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose: () => void; notify: Notify }>): InvitationModel {
+  const api = useApi();
   const [audience, setAudience] = useState<"broadcast" | "direct">("broadcast");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [sending, setSending] = useState(false);
-  const [recipientState, retryRecipients] = useLoad<InvitationRecipient[]>(() => loadInvitationRecipients(), [game.id, world.id]);
-  const [historyState, refreshHistory] = useLoad<InvitationSummary[]>(() => loadInvitationHistory(game.id, world.id), [game.id, world.id]);
+  const [recipientState, retryRecipients] = useLoad<InvitationRecipient[]>(() => api.loadInvitationRecipients(), [game.id, world.id]);
+  const [historyState, refreshHistory] = useLoad<InvitationSummary[]>(() => api.loadInvitationHistory(game.id, world.id), [game.id, world.id]);
   const recipients = recipientState.status === "ready" ? recipientState.value : [];
   const needle = query.trim().toLocaleLowerCase();
 
@@ -786,7 +791,7 @@ export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose
   async function submit() {
     setSending(true);
     try {
-      await sendInvitation(game.id, world.id, audience, [...selected]);
+      await api.sendInvitation(game.id, world.id, audience, [...selected]);
       opts.notify({ tone: "success", message: audience === "broadcast" ? "Invitation accepted for delivery to everyone." : `Invitation accepted for ${players(selected.size)}.` });
       setSelected(new Set());
       refreshHistory();
@@ -822,7 +827,9 @@ export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose
 // --- profile: sign-in methods -------------------------------------------------------
 
 export function useLoginAccounts(displayName: string, notify: Notify): LoginAccountsModel {
-  const [state, retry] = useLoad<LinkedLoginAccounts>(() => loadLinkedAccounts(), []);
+  const api = useApi();
+  const signIn = useSignInConfig();
+  const [state, retry] = useLoad<LinkedLoginAccounts>(() => api.loadLinkedAccounts(), []);
   const [form, setForm] = useState<"add" | "change" | null>(null);
   const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -855,10 +862,10 @@ export function useLoginAccounts(displayName: string, notify: Notify): LoginAcco
     setBusy(true);
     try {
       if (form === "add") {
-        await linkPassword(email, password, displayName);
+        await api.linkPassword(email, password, displayName);
         notify({ tone: "success", message: `A verification link was sent to ${email}.` });
       } else {
-        await changePassword(email, currentPassword, password);
+        await api.changePassword(email, currentPassword, password);
         notify({ tone: "success", message: "Password changed. Existing password sessions were signed out." });
       }
       setForm(null);
@@ -873,7 +880,7 @@ export function useLoginAccounts(displayName: string, notify: Notify): LoginAcco
   async function recover(kind: "verify" | "reset", address: string) {
     setBusy(true);
     try {
-      if (kind === "verify") await resendEmailVerification(address); else await requestPasswordReset(address);
+      if (kind === "verify") await api.resendEmailVerification(address); else await api.requestPasswordReset(address);
       notify({ tone: "success", message: kind === "verify" ? `A new verification link was sent to ${address}.` : `If the account is eligible, a reset link is on its way to ${address}.` });
     } catch (cause) {
       notify({ tone: "error", message: cause instanceof Error ? cause.message : "The email could not be sent." });
@@ -887,8 +894,8 @@ export function useLoginAccounts(displayName: string, notify: Notify): LoginAcco
   return {
     accounts: state.status !== "ready" ? asLoading(state, retry, "accounts.retry") : { status: "ready", value: accounts },
     linkable,
-    connectTelegram: ready !== null && !has("telegram") && linkable.includes("telegram") && /^[1-9]\d+$/.test(telegramOidcClientId) ? (idToken) => connect(linkTelegram, "Telegram", idToken) : null,
-    connectGoogle: ready !== null && !has("google") && linkable.includes("google") && GOOGLE_CLIENT_ID.test(googleOidcClientId) ? (idToken) => connect(linkGoogle, "Google", idToken) : null,
+    connectTelegram: ready !== null && !has("telegram") && linkable.includes("telegram") && /^[1-9]\d+$/.test(signIn.telegramClientId) ? (idToken) => connect(api.linkTelegram, "Telegram", idToken) : null,
+    connectGoogle: ready !== null && !has("google") && linkable.includes("google") && GOOGLE_CLIENT_ID.test(signIn.googleClientId) ? (idToken) => connect(api.linkGoogle, "Google", idToken) : null,
     addPassword: ready !== null && passwordAccount === undefined && ready.passwordManagementAvailable ? action("accounts.password.add", "Add email and password", () => openForm("add"), { icon: "add" }) : null,
     form: form === null ? null : {
       kind: form,

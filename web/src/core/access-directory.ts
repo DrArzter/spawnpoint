@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
-import { failureKind, type AccessCandidate, type AccessIdentity, type AccessRoleDirectory, type ApiFailureKind } from "../api/contract";
-import { approveAccessCandidate, dismissAccessCandidate, loadAccessCandidates, loadAccessIdentities, loadAccessRoles, updateIdentityRole, type ActiveSession } from "../auth";
+import { failureKind, type AccessCandidate, type AccessIdentity, type AccessRoleDirectory, type ActiveSession, type ApiFailureKind, type SpawnpointApi } from "../api/contract";
+import { useApi } from "../api/context";
 import type { LinkKind, Member, Role } from "../model";
 import { action } from "./actions";
-import type { Notify } from "./data";
+import type { Notify } from "./notify";
 import type { Loading } from "./models";
 import type { RoleDirectory } from "./roles";
 
@@ -67,14 +67,15 @@ export type DirectoryApi = Readonly<{
   changeRole: (identityId: string, roleId: string) => Promise<void>;
 }>;
 
-const liveApi: DirectoryApi = {
-  loadCandidates: loadAccessCandidates,
-  loadIdentities: loadAccessIdentities,
-  loadRoles: loadAccessRoles,
-  approve: approveAccessCandidate,
-  dismiss: dismissAccessCandidate,
-  changeRole: updateIdentityRole,
-};
+/** The directory's calls, on the port. */
+const directoryApi = (api: SpawnpointApi): DirectoryApi => ({
+  loadCandidates: () => api.loadAccessCandidates(),
+  loadIdentities: () => api.loadAccessIdentities(),
+  loadRoles: () => api.loadAccessRoles(),
+  approve: (platform, platformUserId, roleId) => api.approveAccessCandidate(platform, platformUserId, roleId),
+  dismiss: (platform, platformUserId) => api.dismissAccessCandidate(platform, platformUserId),
+  changeRole: (identityId, roleId) => api.updateIdentityRole(identityId, roleId),
+});
 
 const failed = (cause: unknown): Remote<never> => ({ status: "error", error: cause instanceof Error ? cause.message : "The request failed.", kind: failureKind(cause) });
 
@@ -231,10 +232,11 @@ export function readDirectory(state: DirectoryState, reading: Reading, retry: Re
 }
 
 export function useAccessDirectory(opts: Readonly<{ session: ActiveSession; canRead: boolean; canManage: boolean; notify: Notify; api?: DirectoryApi }>): AccessDirectory {
+  const api = useApi();
   const { session, canRead, canManage } = opts;
   const notifyRef = useRef(opts.notify);
   notifyRef.current = opts.notify;
-  const store = useMemo(() => new AccessDirectoryStore(opts.api ?? liveApi, (input) => notifyRef.current(input)), [opts.api]);
+  const store = useMemo(() => new AccessDirectoryStore(opts.api ?? directoryApi(api), (input) => notifyRef.current(input)), [opts.api, api]);
   const state = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => { if (canManage) void store.readPeople(false); }, [store, canManage]);
   useEffect(() => { if (canRead) void store.readRoles(false); }, [store, canRead]);

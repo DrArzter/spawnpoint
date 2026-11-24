@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { ApiFailureKind, ConsoleEntry } from "../api/contract";
-import type { ActiveSession } from "../auth";
+import type { ActiveSession } from "../api/contract";
 import { useSnackbar } from "../components/ui/Snackbar";
 import type { Game, Preset, World, WorldTab } from "../model";
 import { routeHash, type WorldsView } from "../routing";

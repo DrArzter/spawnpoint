@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-import { AuthState, exchangeTelegramOidc, telegramOidcClientId } from "../auth";
+import { useApi, useSignInConfig } from "../api/context";
+import type { AuthState } from "../api/contract";
 import type { TelegramLoginResult } from "../telegram";
 import { Button } from "./ui/Button";
 
@@ -15,6 +16,8 @@ export function TelegramLoginButton({ onChange, onToken, className, label = "Con
   // form, so one surface carries one primary action.
   variant?: "filled" | "outlined";
 }>) {
+  const api = useApi();
+  const { telegramClientId } = useSignInConfig();
   const mounted = useRef(true);
   const onChangeRef = useRef(onChange);
   const onTokenRef = useRef(onToken);
@@ -27,7 +30,7 @@ export function TelegramLoginButton({ onChange, onToken, className, label = "Con
 
   useEffect(() => {
     mounted.current = true;
-    const clientId = Number(telegramOidcClientId);
+    const clientId = Number(telegramClientId);
     if (!Number.isSafeInteger(clientId) || clientId <= 0) {
       setLoginError("Telegram OIDC is missing its Client ID.");
       return;
@@ -45,7 +48,7 @@ export function TelegramLoginButton({ onChange, onToken, className, label = "Con
           .finally(() => { if (mounted.current) setBusy(false); });
       } else if (onChangeRef.current !== undefined) {
         onChangeRef.current({ status: "loading" });
-        void exchangeTelegramOidc(result.id_token).then((state) => onChangeRef.current?.(state));
+        void api.exchangeTelegramOidc(result.id_token).then((state) => onChangeRef.current?.(state));
       }
     };
     const script = document.createElement("script");

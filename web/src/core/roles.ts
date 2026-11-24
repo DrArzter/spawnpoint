@@ -1,5 +1,5 @@
 import type { PermissionInfo, Role } from "../model";
-import type { RoleEditorModel } from "./models";
+import type { RoleChoice, RoleEditorModel } from "./models";
 
 /** Everything the API serves about roles: who may be given which, the permission words, and the role an approval gives. */
 export type RoleDirectory = Readonly<{
@@ -7,13 +7,6 @@ export type RoleDirectory = Readonly<{
   permissions: readonly PermissionInfo[];
   /** Null until the role list has loaded. */
   defaultRoleId: string | null;
-}>;
-
-/** What a role select draws: the roles the caller may give, and the value held now. */
-export type RoleChoice = Readonly<{
-  value: string;
-  options: readonly Readonly<{ value: string; label: string }>[];
-  disabled: boolean;
 }>;
 
 /**

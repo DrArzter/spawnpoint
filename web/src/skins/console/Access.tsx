@@ -2,10 +2,10 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { AccessInvitation } from "../../api/contract";
 import type { Action } from "../../core/actions";
-import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RoleEditorModel, RolesModel, UsersModel } from "../../core/models";
+import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RoleChoice, RoleEditorModel, RolesModel, UsersModel } from "../../core/models";
 import type { StatusDescriptor } from "../../core/status";
 import { Icon } from "../../icons";
-import { permissionGroups, ROLE_ID_HINT, roleFormFields, permissionRows, rolePermissions, type RoleChoice } from "../../core/roles";
+import { permissionGroups, ROLE_ID_HINT, roleFormFields, permissionRows, rolePermissions } from "../../core/roles";
 import type { Member, PermissionInfo, Role } from "../../model";
 import { ConfirmationDialog } from "./Dialogs";
 import { providerIcon, providerName } from "./providers";

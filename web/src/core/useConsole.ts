@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { failureKind, type ApiFailureKind, type ReleaseMod, type ReleasePackName, type StopPlayersPolicy } from "../api/contract";
-import { removeAvatar, requestReleaseBuild, uploadAvatar } from "../auth";
+import { failureKind, type ActiveSession, type ApiFailureKind, type BackupEntry, type ReleaseMod, type ReleasePackName, type StopPlayersPolicy } from "../api/contract";
 import { browserAvatarEnvironment, prepareAvatar } from "./avatar-image";
-import { ActiveSession, endSession, loadAppearance, loadControlPlane, requestBackupDownload, requestCreateWorld, requestModDownload, requestPackDownload, requestReleasePack, requestSessionOperation, requestPromotion, requestUpdateWorldSettings, requestWorldLifecycle, subscribeControlPlane, updateAppearance, updateGameSettings, type BackupEntry } from "../auth";
+import { useApi } from "../api/context";
+import { endSession } from "../api/end-session";
 import { startableReleases } from "./presets";
 import { sessionStatus } from "./status";
 import { formatDateTime } from "../lib/format";
@@ -16,7 +16,7 @@ import { useAppearance, useBootCard, useRoute, useStoredState } from "../shell/h
 import { initializeTelegram, openInBrowser, type ViewerProfile } from "../telegram";
 import { action } from "./actions";
 import { releaseBuildExpectation } from "./release-builds";
-import type { Notify } from "./data";
+import type { Notify } from "./notify";
 import { openDownload } from "./download";
 import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from "./models";
 import { visibleNavigation } from "./navigation";
@@ -188,6 +188,7 @@ export type ConsoleController = Readonly<{
 }>;
 
 export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, notify: Notify): ConsoleController {
+  const api = useApi();
   // The picture is the one part of the session the person changes here.
   const [photoUrl, setPhotoUrl] = useState<string | null | undefined>(undefined);
   const session = useMemo<ActiveSession>(() => (photoUrl === undefined ? signedIn : { ...signedIn, profile: { ...signedIn.profile, photoUrl } }), [signedIn, photoUrl]);
@@ -195,7 +196,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   const [route, navigate] = useRoute();
   // The console only exists for a signed-in person, so every change here is
   // the account's to keep. The front door has no session and syncs nothing.
-  const appearance = useAppearance({ sync: updateAppearance });
+  const appearance = useAppearance({ sync: api.updateAppearance });
   const [storedGame, setStoredGame] = useStoredState<string>("spawnpoint.scope", "");
   const [scopeOpen, setScopeOpen] = useState(false);
   const [controlPlane, setControlPlane] = useState<ControlPlaneState>({ status: "loading", snapshot: null, error: "" });
@@ -248,7 +249,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     setControlPlane((current) => (silent || current.snapshot ? { status: "loading", snapshot: current.snapshot, error: "" } : { status: "loading", snapshot: null, error: "" }));
     const ticket = loads.current.begin();
     try {
-      const next = await loadControlPlane();
+      const next = await api.loadControlPlane();
       if (loads.current.keep(ticket)) setControlPlane({ status: "ready", snapshot: next, error: "" });
     } catch (error) {
       if (loads.current.keep(ticket)) setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded.", kind: failureKind(error) }));
@@ -278,15 +279,15 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   const { adopt } = appearance;
   useEffect(() => {
     let cancelled = false;
-    loadAppearance().then((stored) => { if (!cancelled) adopt(stored); }).catch(() => undefined);
+    api.loadAppearance().then((stored) => { if (!cancelled) adopt(stored); }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [adopt]);
 
   // EventBridge updates the projection and the socket carries only an
   // invalidation. Permission-filtered state still comes from the HTTP API.
-  useEffect(() => subscribeControlPlane(() => {
+  useEffect(() => api.subscribeControlPlane(() => {
     const ticket = loads.current.begin();
-    loadControlPlane().then((next) => { if (loads.current.keep(ticket)) setControlPlane({ status: "ready", snapshot: next, error: "" }); }).catch(() => undefined);
+    api.loadControlPlane().then((next) => { if (loads.current.keep(ticket)) setControlPlane({ status: "ready", snapshot: next, error: "" }); }).catch(() => undefined);
   }), []);
 
   // Keep the scope in the hash and remember it for the next visit.
@@ -301,7 +302,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     holdPending(mine);
     try {
       const expected = releaseBuildExpectation(preset);
-      const result = await requestReleaseBuild(target.id, preset.id, expected.profileDigest, expected.retryRelease);
+      const result = await api.requestReleaseBuild(target.id, preset.id, expected.profileDigest, expected.retryRelease);
       notify({ tone: "success", message: `Release ${result.release}: build attempt ${result.attempt} accepted.` });
       await refresh(true);
     } catch (error) {
@@ -314,7 +315,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     const mine: Pending = { kind: "session", worldId: targetWorld.id, action: sessionAction };
     holdPending(mine);
     try {
-      const result = await requestSessionOperation(target.id, targetWorld.id, sessionAction, players);
+      const result = await api.requestSessionOperation(target.id, targetWorld.id, sessionAction, players);
       notify({ tone: "success", message: sessionAcceptedMessage(targetWorld, sessionAction, result.result) });
       await refresh(true);
     } catch (error) {
@@ -328,7 +329,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     const mine: Pending = { kind: "lifecycle", worldId: targetWorld.id, action: kind };
     holdPending(mine);
     try {
-      await requestWorldLifecycle(target.id, targetWorld.id, kind === "wipe" ? "regenerate" : kind, backupKey, release);
+      await api.requestWorldLifecycle(target.id, targetWorld.id, kind === "wipe" ? "regenerate" : kind, backupKey, release);
       notify({ tone: "success", message: `${lifecycleLabel(kind)} of ${targetWorld.displayName} accepted. It appears in Operations while it runs.` });
       await refresh(true);
       if (kind === "purge") navigate({ page: "worlds", gameId: target.id, worldId: null });
@@ -343,7 +344,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     const mine: Pending = { kind: "promote", worldId: targetWorld.id };
     holdPending(mine);
     try {
-      const { result } = await requestPromotion(target.id, targetWorld.id, release);
+      const { result } = await api.requestPromotion(target.id, targetWorld.id, release);
       notify({ tone: "success", message: result === "switched"
         ? `${targetWorld.displayName} will start on release ${release}.`
         : `Update of ${targetWorld.displayName} to release ${release} accepted. It appears in Operations while it runs.` });
@@ -359,7 +360,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     const mine: Pending = { kind: "pack", worldId: targetWorld.id };
     holdPending(mine);
     try {
-      const { release } = await openDownload(() => requestPackDownload(target.id, targetWorld.id));
+      const { release } = await openDownload(() => api.requestPackDownload(target.id, targetWorld.id));
       notify({ tone: "success", message: `Pack for release ${release} is downloading.` });
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : "The pack link failed." });
@@ -369,21 +370,21 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   }
 
   function downloadBackup(target: Game, targetWorld: World, entry: BackupEntry) {
-    openDownload(() => requestBackupDownload(target.id, targetWorld.id, entry.key)).then(
+    openDownload(() => api.requestBackupDownload(target.id, targetWorld.id, entry.key)).then(
       () => notify({ tone: "success", message: `${entry.archiveName} is downloading.` }),
       (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
     );
   }
 
   function downloadMod(target: Game, presetId: string, release: string, mod: ReleaseMod) {
-    openDownload(() => requestModDownload(target.id, presetId, release, mod.sha256)).then(
+    openDownload(() => api.requestModDownload(target.id, presetId, release, mod.sha256)).then(
       () => notify({ tone: "success", message: `${mod.file} is downloading.` }),
       (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
     );
   }
 
   function downloadReleasePack(target: Game, presetId: string, release: string, pack: ReleasePackName) {
-    openDownload(() => requestReleasePack(target.id, presetId, release, pack)).then(
+    openDownload(() => api.requestReleasePack(target.id, presetId, release, pack)).then(
       () => notify({ tone: "success", message: `The ${pack} pack of ${presetId} ${release} is downloading.` }),
       (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
     );
@@ -392,7 +393,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   async function saveGameSettings(target: Game, targetWorld: World, values: Readonly<Record<string, SettingValue>>) {
     setSavingGameSettings(true);
     try {
-      await updateGameSettings(target.id, targetWorld.id, values);
+      await api.updateGameSettings(target.id, targetWorld.id, values);
       // The host reads them when a session starts; a running game is not touched.
       notify({ tone: "success", message: worldSessionActive(target, targetWorld)
         ? `Game settings saved. ${targetWorld.displayName} uses them from its next start.`
@@ -410,7 +411,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     const mine: Pending = { kind: "create" };
     holdPending(mine);
     try {
-      const created = await requestCreateWorld(target.id, preset.id, displayName, release, placement, connectivity, auth);
+      const created = await api.requestCreateWorld(target.id, preset.id, displayName, release, placement, connectivity, auth);
       notify({ tone: "success", message: `${created.displayName} was created from ${preset.displayName} ${release}.` });
       setCreating(null);
       await refresh(true);
@@ -425,7 +426,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   async function saveWorldSettings(target: Game, targetWorld: World, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") {
     setSavingWorldSettings(true);
     try {
-      await requestUpdateWorldSettings(target.id, targetWorld.id, placement, connectivity, auth);
+      await api.requestUpdateWorldSettings(target.id, targetWorld.id, placement, connectivity, auth);
       notify({ tone: "success", message: `Connection settings for ${targetWorld.displayName} saved.` });
       setEditing(null);
       await refresh(true);
@@ -483,7 +484,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     setAvatarBusy(true);
     try {
       const prepared = await prepareAvatar(file, browserAvatarEnvironment);
-      setPhotoUrl(await uploadAvatar(prepared.base64));
+      setPhotoUrl(await api.uploadAvatar(prepared.base64));
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : "The picture could not be saved." });
     } finally {
@@ -493,7 +494,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   const deleteAvatar = async () => {
     setAvatarBusy(true);
     try {
-      await removeAvatar();
+      await api.removeAvatar();
       setPhotoUrl(null);
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : "The picture could not be removed." });
@@ -538,7 +539,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     bootstrap,
     appearance: appearanceModel,
     avatar: { busy: avatarBusy, change: (file) => void changeAvatar(file), remove: () => void deleteAvatar() },
-    signOut: () => void endSession(),
+    signOut: () => void endSession(api),
     openInBrowser: viewer.inTelegram ? openInBrowser : null,
     confirmation,
     closeConfirmation: () => setConfirmation(null),

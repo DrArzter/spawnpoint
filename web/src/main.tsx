@@ -2,6 +2,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { ApiProvider } from "./api/context";
+import { composition } from "./auth";
 import { applyAccent, DEFAULT_ACCENT } from "./styles/accent";
 import { getStoredAccent, getThemePreference, resolveTheme } from "./telegram";
 import "./styles/tokens.css";
@@ -19,6 +21,8 @@ applyAccent(document.documentElement, getStoredAccent() ?? DEFAULT_ACCENT, resol
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <ApiProvider composition={composition}>
+      <App />
+    </ApiProvider>
   </StrictMode>,
 );

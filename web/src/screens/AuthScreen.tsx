@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { AuthState, requestAccess } from "../auth";
+import { useApi } from "../api/context";
+import type { AuthState } from "../api/contract";
 import { Avatar } from "../components/Avatar";
 import { SignInPanel } from "../components/SignIn";
 import { Button } from "../components/ui/Button";
@@ -15,6 +16,7 @@ function visitorAccount(auth: AuthState): string {
 }
 
 export function AuthScreen({ auth, onChange }: Readonly<{ auth: AuthState; onChange: (state: AuthState) => void }>) {
+  const api = useApi();
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState("");
   const visitor = auth.status === "authenticated" && auth.session.state === "visitor" ? auth.session : null;
@@ -25,7 +27,7 @@ export function AuthScreen({ auth, onChange }: Readonly<{ auth: AuthState; onCha
   async function sendRequest() {
     setRequestError("");
     try {
-      await requestAccess();
+      await api.requestAccess();
       setRequesting(true);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "The access request could not be sent.");

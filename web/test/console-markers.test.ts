@@ -30,7 +30,7 @@ const html = (element: ReactElement) => renderToStaticMarkup(element);
 
 test("markers: the page header is one spread line and its breadcrumb is marked", () => {
   const markup = html(createElement(PageHeader, { trail: [{ label: "Minecraft", href: "#/worlds/minecraft" }], title: "Worlds", actions: createElement("button", null, "Create") }));
-  assert.match(markup, /<header class="c-page-header" data-from="760" data-layout="one-line spread">/);
+  assert.match(markup, /<header class="c-page-header" data-from="760" data-layout="one-line spread" data-tip-side="bottom">/);
   assert.match(markup, /<nav aria-label="Breadcrumb" class="c-crumbs" data-layout="crumbs">/);
 });
 
@@ -84,7 +84,7 @@ test("markers: a status and a status indicator name their state; a plain fact do
 
 test("markers: menus are their own layer; the tab ink is a glyph laid over its tab", () => {
   const anchor = { current: null };
-  assert.match(html(createElement(Menu, { id: "m", label: "More", groups: [{ actions: [action("a", "A", noop)] }], open: false, anchor, onClose: noop })), /class="c-menu" data-layer="menu"/);
+  assert.match(html(createElement(Menu, { id: "m", label: "More", groups: [{ actions: [action("a", "A", noop)] }], open: false, anchor, onClose: noop })), /class="c-menu c-popover" data-layer="menu"/);
   const tabs = html(createElement(Tabs<"a" | "b">, { label: "World", prefix: "w", tabs: [{ id: "a", label: "A" }, { id: "b", label: "B" }], value: "a", onChange: noop }));
   assert.match(tabs, /class="c-tab-ink" data-layer="glyph"/);
 });

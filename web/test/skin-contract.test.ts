@@ -396,6 +396,9 @@ for (const skin of SKINS) {
     const without = renderToStaticMarkup(createElement(skin.Profile, { model: { ...profile, viewer: { displayName: "DrArzter", inTelegram: true }, avatar: { ...profile.avatar, remove: null } } }));
     assert.match(without, /data-action="profile\.avatar\.change"/);
     assert.doesNotMatch(without, /profile\.avatar\.remove/);
+    // The picture is the menu's button, in the page head; no card of its own.
+    assert.match(withPicture, /<button[^>]*aria-haspopup="menu"[^>]*aria-label="Change your picture"/);
+    assert.doesNotMatch(withPicture, />Picture</);
   });
 
   test(`${skin.name}: dialogs and sheets draw confirm, cancel, submit, save, send and close`, () => {

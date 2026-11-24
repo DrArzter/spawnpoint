@@ -1,18 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useLayer } from "../../../components/ui/layer";
+import { type Align, type Side, positionPopover } from "../../../lib/placement";
 
 /*
  * One tooltip for the whole skin. A control names its tip with `data-tip`;
- * this layer shows it on hover and keyboard focus, above the anchor or below
- * it when the top bar is in the way, and ties it to the anchor with
- * aria-describedby while it shows. It is a popover, so a dialog cannot cover it.
+ * this layer shows it on hover and keyboard focus, on the side the nearest
+ * `data-tip-side` asks for (above by default; the page header asks for below),
+ * aligned by `data-tip-align`, and ties it to the anchor with aria-describedby
+ * while it shows. It is a popover, so a dialog cannot cover it.
  */
 
 const TIP_ID = "c-tip";
-const GAP = 8;
 
-type Placed = Readonly<{ text: string; left: number; top: number }>;
+type Placed = Readonly<{ text: string }>;
 
 export function TooltipLayer() {
   const [placed, setPlaced] = useState<Placed | null>(null);
@@ -28,8 +29,7 @@ export function TooltipLayer() {
       if (!text) return;
       anchor.current = element;
       element.setAttribute("aria-describedby", TIP_ID);
-      const rect = element.getBoundingClientRect();
-      setPlaced({ text, left: rect.left + rect.width / 2, top: rect.top });
+      setPlaced({ text });
     };
     const hide = () => {
       anchor.current?.removeAttribute("aria-describedby");
@@ -61,21 +61,15 @@ export function TooltipLayer() {
 
   useLayer(tip, placed !== null);
 
-  // Clamped to the viewport; flipped below when it would cover the top bar.
+  // The shared placement: a gap, a tail at the anchor's middle, flipped when its side does not fit.
   useLayoutEffect(() => {
     const element = tip.current;
     const target = anchor.current;
     if (!element || !target || !placed) return;
-    const rect = target.getBoundingClientRect();
-    const bar = document.querySelector(".c-topbar")?.getBoundingClientRect().bottom ?? 0;
-    const width = element.offsetWidth;
-    const height = element.offsetHeight;
-    const left = Math.max(GAP, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - GAP));
-    let top = rect.top - height - GAP;
-    if (top < GAP || (rect.top >= bar && top < bar + GAP)) top = rect.bottom + GAP;
-    element.style.left = `${left}px`;
-    element.style.top = `${top}px`;
+    const side = (target.closest<HTMLElement>("[data-tip-side]")?.dataset.tipSide ?? "top") as Side;
+    const align = (target.closest<HTMLElement>("[data-tip-align]")?.dataset.tipAlign ?? "center") as Align;
+    positionPopover(element, target, side, align);
   }, [placed]);
 
-  return <div className="c-tip" data-layer="tip" id={TIP_ID} popover="manual" ref={tip} role="tooltip">{placed?.text}</div>;
+  return <div className="c-tip c-popover" data-layer="tip" id={TIP_ID} popover="manual" ref={tip} role="tooltip">{placed?.text}</div>;
 }

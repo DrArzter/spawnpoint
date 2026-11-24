@@ -283,7 +283,6 @@
 .tip {
   max-width: 264px;
   padding: 6px 8px;
-  transform: translate(-50%, calc(-100% - 8px));
   border-radius: var(--radius-control);
   background: var(--snack-bg);
   color: var(--snack-ink);
@@ -292,10 +291,6 @@
   text-align: center;
   text-wrap: pretty;
   pointer-events: none;
-}
-
-.tip-below {
-  transform: translate(-50%, 8px);
 }
 
 /* Fields */
@@ -381,14 +376,12 @@
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-3);
-  overflow: hidden;
   /* The top layer draws the menu above everything, but it still inherits from
      the element it is mounted in. A row's menu lives in a right-aligned,
      non-wrapping action cell: its items read right-aligned, and a long detail
      pushed the label past the menu's edge. */
   text-align: start;
   white-space: normal;
-  transform-origin: top;
   animation: menu-in var(--dur) var(--ease) both;
 }
 
@@ -793,4 +786,71 @@
   .field select {
     height: 44px;
   }
+}
+
+/* Popovers: every menu and tooltip outside the console skin. The shared
+   placement (src/lib/placement.ts) sets the side it opened on (data-side) and
+   where its tail points (--tail); this draws the tail there and grows the
+   popover out of it. */
+.popover {
+  --popover-fill: var(--surface);
+  --popover-line: transparent;
+}
+
+.popover::before {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid transparent;
+  border-top-color: var(--popover-line);
+  border-left-color: var(--popover-line);
+  border-top-left-radius: 2px;
+  background: var(--popover-fill);
+  pointer-events: none;
+}
+
+.popover[data-side="bottom"] {
+  transform-origin: var(--tail) 0;
+}
+
+.popover[data-side="bottom"]::before {
+  top: -6px;
+  left: calc(var(--tail) - 5px);
+  rotate: 45deg;
+}
+
+.popover[data-side="top"] {
+  transform-origin: var(--tail) 100%;
+}
+
+.popover[data-side="top"]::before {
+  bottom: -6px;
+  left: calc(var(--tail) - 5px);
+  rotate: 225deg;
+}
+
+.popover[data-side="left"] {
+  transform-origin: 100% var(--tail);
+}
+
+.popover[data-side="left"]::before {
+  top: calc(var(--tail) - 5px);
+  right: -6px;
+  rotate: 135deg;
+}
+
+.popover[data-side="right"] {
+  transform-origin: 0 var(--tail);
+}
+
+.popover[data-side="right"]::before {
+  top: calc(var(--tail) - 5px);
+  left: -6px;
+  rotate: -45deg;
+}
+
+.tip.popover {
+  --popover-fill: var(--snack-bg);
+  animation: menu-in var(--dur) var(--ease) both;
 }

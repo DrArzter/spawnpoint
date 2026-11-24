@@ -1,0 +1,81 @@
+/* Popovers: every menu and tooltip. The shared placement (src/lib/placement.ts)
+   sets the side it opened on (data-side) and where its tail points (--tail);
+   this sheet draws the tail at that point and grows the popover out of it. */
+
+html[data-skin="console"] .c-popover {
+  --c-popover-fill: var(--c-surface-pop);
+  --c-popover-line: var(--c-line-2);
+  overflow: visible;
+  animation: c-popover-in var(--c-d1) var(--c-ease);
+}
+
+html[data-skin="console"] .c-popover::before {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1px solid transparent;
+  border-top-left-radius: 3px;
+  background: var(--c-popover-fill);
+  pointer-events: none;
+}
+
+html[data-skin="console"] .c-popover[data-side="bottom"] {
+  transform-origin: var(--tail) 0;
+}
+
+html[data-skin="console"] .c-popover[data-side="bottom"]::before {
+  top: -7px;
+  left: calc(var(--tail) - 6px);
+  border-top-color: var(--c-popover-line);
+  border-left-color: var(--c-popover-line);
+  rotate: 45deg;
+}
+
+html[data-skin="console"] .c-popover[data-side="top"] {
+  transform-origin: var(--tail) 100%;
+}
+
+html[data-skin="console"] .c-popover[data-side="top"]::before {
+  bottom: -7px;
+  left: calc(var(--tail) - 6px);
+  border-top-color: var(--c-popover-line);
+  border-left-color: var(--c-popover-line);
+  rotate: 225deg;
+}
+
+html[data-skin="console"] .c-popover[data-side="left"] {
+  transform-origin: 100% var(--tail);
+}
+
+html[data-skin="console"] .c-popover[data-side="left"]::before {
+  top: calc(var(--tail) - 6px);
+  right: -7px;
+  border-top-color: var(--c-popover-line);
+  border-left-color: var(--c-popover-line);
+  rotate: 135deg;
+}
+
+html[data-skin="console"] .c-popover[data-side="right"] {
+  transform-origin: 0 var(--tail);
+}
+
+html[data-skin="console"] .c-popover[data-side="right"]::before {
+  top: calc(var(--tail) - 6px);
+  left: -7px;
+  border-top-color: var(--c-popover-line);
+  border-left-color: var(--c-popover-line);
+  rotate: -45deg;
+}
+
+html[data-skin="console"] .c-tip.c-popover {
+  --c-popover-fill: var(--c-tip);
+  --c-popover-line: var(--c-tip);
+}
+
+@keyframes c-popover-in {
+  from {
+    opacity: 0;
+    scale: .96;
+  }
+}

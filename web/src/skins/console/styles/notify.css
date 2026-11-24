@@ -137,7 +137,6 @@ html[data-skin="console"] .c-tip {
   font-weight: 600;
   box-shadow: var(--c-shadow-pop);
   pointer-events: none;
-  animation: c-fade var(--c-d1) var(--c-ease);
 }
 
 @media (max-width: 759px) {

@@ -21,7 +21,7 @@ export function PageHeader({ trail = [], title, count, lead, after, actions }: R
 }>) {
   const back = trail.at(-1);
   return (
-    <header className="c-page-header" data-from="760" data-layout="one-line spread">
+    <header className="c-page-header" data-from="760" data-layout="one-line spread" data-tip-side="bottom">
       <div className="c-page-title">
         {back && (
           <a aria-label={`Back to ${back.label}`} className="c-page-back" href={back.href}>

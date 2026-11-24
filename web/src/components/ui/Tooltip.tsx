@@ -1,34 +1,26 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { cx } from "../../lib/cx";
+import { type Align, type Side, positionPopover } from "../../lib/placement";
 import { useLayer } from "./layer";
 
 const OPEN_DELAY_MS = 120;
-const HALF_WIDTH = 132;
-
-type Placement = { left: number; top: number; below: boolean };
 
 // The browser's own `title` waits about a second, never appears on a touch
 // screen and cannot be reached from the keyboard. Anything a reader needs in
 // order to understand a label gets this instead: hover, focus or tap.
-export function Tooltip({ text, children, className }: Readonly<{ text: string; children: ReactNode; className?: string }>) {
-  const [placement, setPlacement] = useState<Placement | null>(null);
+// `side` and `align` place it through the shared placement; without `side`
+// the nearest `data-tip-side` decides (a page head asks for below), else above.
+export function Tooltip({ text, children, className, side, align = "center" }: Readonly<{ text: string; children: ReactNode; className?: string; side?: Side; align?: Align }>) {
+  const [shown, setShown] = useState(false);
   const anchor = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
   const timer = useRef(0);
   const id = useId();
 
   function place() {
-    const rect = anchor.current?.getBoundingClientRect();
-    if (!rect) return;
-    const below = rect.top < 72;
-    setPlacement({
-      // Clamped so a tip at the edge of the screen stays on it.
-      left: Math.min(Math.max(rect.left + rect.width / 2, HALF_WIDTH + 8), window.innerWidth - HALF_WIDTH - 8),
-      top: below ? rect.bottom : rect.top,
-      below,
-    });
+    setShown(true);
   }
 
   function open() {
@@ -38,17 +30,23 @@ export function Tooltip({ text, children, className }: Readonly<{ text: string; 
 
   function close() {
     window.clearTimeout(timer.current);
-    setPlacement(null);
+    setShown(false);
   }
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   // A popover in the top layer: a dialog or drawer the anchor sits in cannot cover it.
-  useLayer(tip, placement !== null);
+  useLayer(tip, shown);
+
+  useLayoutEffect(() => {
+    if (!shown || !tip.current || !anchor.current) return;
+    const preferred = side ?? (anchor.current.closest<HTMLElement>("[data-tip-side]")?.dataset.tipSide as Side | undefined) ?? "top";
+    positionPopover(tip.current, anchor.current, preferred, align);
+  }, [shown, side, align]);
 
   useEffect(() => {
-    if (placement === null) return;
-    const dismiss = () => setPlacement(null);
+    if (!shown) return;
+    const dismiss = () => setShown(false);
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
     // A tip is placed against the viewport, so anything that moves the page
     // leaves it behind. Closing is the honest answer to that.
@@ -60,14 +58,14 @@ export function Tooltip({ text, children, className }: Readonly<{ text: string; 
       window.removeEventListener("resize", dismiss);
       window.removeEventListener("keydown", onKey);
     };
-  }, [placement]);
+  }, [shown]);
 
   return (
     <span // NOSONAR the tooltip anchor is focusable on purpose; its handlers only show and hide the tip
-      aria-describedby={placement ? id : undefined}
+      aria-describedby={shown ? id : undefined}
       className={cx("tip-anchor", className)}
       onBlur={close}
-      onClick={() => { if (placement) close(); else place(); }} // NOSONAR touch toggle; focus and hover already show the tip
+      onClick={() => { if (shown) close(); else place(); }} // NOSONAR touch toggle; focus and hover already show the tip
       onFocus={open}
       onMouseEnter={open}
       onMouseLeave={close}
@@ -75,8 +73,8 @@ export function Tooltip({ text, children, className }: Readonly<{ text: string; 
       tabIndex={0} // NOSONAR keyboard users reach the tip through focus
     >
       {children}
-      {placement && createPortal(
-        <span className={cx("tip", placement.below && "tip-below")} data-layer="tip" id={id} popover="manual" ref={tip} role="tooltip" style={{ left: placement.left, top: placement.top }}>
+      {shown && createPortal(
+        <span className="tip popover" data-layer="tip" id={id} popover="manual" ref={tip} role="tooltip">
           {text}
         </span>,
         document.body,

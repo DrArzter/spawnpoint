@@ -28,7 +28,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
 
   return (
     <Page>
-      <header className="t-page-head">
+      <header className="t-page-head" data-tip-side="bottom">
         <div className="t-page-title">
           <a className="t-crumb" href={model.worldsHref}><span aria-hidden="true">&lt;</span> Worlds</a>
           <h1>{world.displayName}</h1>

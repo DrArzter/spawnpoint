@@ -13,22 +13,14 @@
 GAME_COMPOSE_FILES="games/factorio/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/factorio/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="factorio"
-# The port a player types after the address the connectivity strategy publishes.
-GAME_CONNECT_PORT="34197"
-GAME_CONNECT_PROTOCOL="udp"
-GAME_PROBE_PORT="27015"
-# A direct UDP connection to the port the address names; nothing in the
-# protocol tells the client another port.
-GAME_SLOTTABLE="true"
-# Fail closed, and for the same reason the server needs no factorio.com
-# account: a hidden server skips matchmaking entirely, so it also verifies
-# nobody. Identity verification belongs to a visible, credentialed server; a
-# world that runs one declares `auth: game` in the catalog (ADR-0033).
-GAME_DEFAULT_AUTH="none"
-# What a session is placed with and limited to (ADR-0054). Factorio is a
-# native server: a couple of gigabytes hold a large base.
-GAME_FOOTPRINT_MEMORY_MIB="2048"
-GAME_FOOTPRINT_CORES="0.5"
+# Why the facts in game.json are what they are (ADR-0088):
+# - slottable: a direct UDP connection to the port the address names; nothing
+#   in the protocol tells the client another port.
+# - default_auth none: fail closed, and for the same reason the server needs no
+#   factorio.com account: a hidden server skips matchmaking entirely, so it
+#   also verifies nobody. A world that runs a visible, credentialed server
+#   declares `auth: game` in the catalog (ADR-0033).
+# - footprint: a native server; a couple of gigabytes hold a large base.
 
 FACTORIO_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FACTORIO_DATA_DIR="${FACTORIO_DATA_DIR:-${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${FACTORIO_GAME_DIR}/data}}"

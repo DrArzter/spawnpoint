@@ -1,0 +1,19 @@
+{
+  "id": "valheim",
+  "code": "VH",
+  "display_name": "Valheim",
+  "connect": {
+    "port": 2456,
+    "protocol": "udp"
+  },
+  "probe_port": 2457,
+  "slottable": true,
+  "default_auth": "none",
+  "footprint": {
+    "memory_mib": 4096,
+    "cores": 1
+  },
+  "capabilities": {
+    "whitelist": false
+  }
+}

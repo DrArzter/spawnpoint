@@ -543,6 +543,7 @@ player_entries=0' >/dev/null 2>&1; then exit 1; fi
 )
 (
   source "${GAMES}/valheim/game.sh"
+  load_game_facts "${GAMES}/valheim/game.json"
   [[ "${GAME_CONNECT_PORT}" == "2456" && "${GAME_CONNECT_PROTOCOL}" == "udp" ]]
   [[ "${GAME_PROBE_PORT}" == "$((GAME_CONNECT_PORT + 1))" ]]
   [[ "${GAME_DEFAULT_AUTH}" == "none" ]]
@@ -702,6 +703,7 @@ listed_players=0' >/dev/null 2>&1; then exit 1; fi
 )
 (
   source "${GAMES}/palworld/game.sh"
+  load_game_facts "${GAMES}/palworld/game.json"
   [[ "${GAME_CONNECT_PORT}" == "8211" && "${GAME_CONNECT_PROTOCOL}" == "udp" ]]
   [[ "${GAME_PROBE_PORT}" == "8212" && "${GAME_SLOTTABLE}" == "true" ]]
   [[ "${GAME_DEFAULT_AUTH}" == "none" ]]
@@ -922,5 +924,37 @@ expect_failure "archiving a palworld data dir whose world is not named" \
   env SPAWNPOINT_GAME=palworld SERVER_DATA_DIR="${fixture}/palworld-nameless" \
     SERVER_BACKUP_DIR="${fixture}/backups" WORLD_NAME=palworld \
     "${SCRIPTS}/archive-world.sh"
+
+# Every module declares its facts once, in a manifest the Lambdas, Terraform
+# and the release builder read too (ADR-0088). The shape is checked here, and
+# a capability the manifest claims is a hook the module defines.
+for module in "${GAMES}"/*/game.sh; do
+  game="$(basename "$(dirname "${module}")")"
+  manifest="${GAMES}/${game}/game.json"
+  jq -e --arg id "${game}" '
+    .id == $id and
+    (.code | type == "string" and test("^[A-Z]{2}$")) and
+    (.display_name | type == "string" and length > 0) and
+    (.connect.port | type == "number" and . > 0 and . < 65536) and
+    (.connect.protocol | IN("tcp", "udp")) and
+    ((.connect.port_implied // false) | type == "boolean") and
+    (.probe_port | type == "number" and . > 0 and . < 65536) and
+    (.slottable | type == "boolean") and
+    (.default_auth | IN("none", "game")) and
+    (.footprint.memory_mib | type == "number" and . > 0) and
+    (.footprint.cores | type == "number" and . > 0) and
+    (.capabilities.whitelist | type == "boolean") and
+    (.release == null or (.release | (.version_field | type == "string") and (.loader_versioned | type == "boolean")
+      and (.runtime_image_required | type == "boolean")))
+  ' "${manifest}" >/dev/null || { printf 'FAIL: %s has no valid game.json\n' "${game}" >&2; exit 1; }
+  (
+    # shellcheck source=/dev/null
+    source "${module}"
+    claims="$(jq -r '.capabilities.whitelist' "${manifest}")"
+    defines=false
+    declare -F game_render_whitelist >/dev/null && declare -F game_reload_whitelist >/dev/null && defines=true
+    [[ "${claims}" == "${defines}" ]] || { printf 'FAIL: %s claims whitelist=%s but defines its hooks: %s\n' "${game}" "${claims}" "${defines}" >&2; exit 1; }
+  )
+done
 
 printf 'game-adapter-test: ok\n'

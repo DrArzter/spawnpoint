@@ -2,27 +2,16 @@ import { requirementsFor } from "../domain/placement.ts";
 import type { Footprint, LaunchRequirements } from "../domain/placement.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
+import { gameModules } from "./game-modules.ts";
 
 export type CatalogPreset = PresetObservation;
 
-// What a session of each game needs from a host (ADR-0054): the container's
-// hard memory limit — the heap plus the off-heap margin the JVM games carry,
-// never the heap alone — and a core weight. A world may override its game's
-// figure; a game not listed here cannot be placed, which is the point.
-export const gameFootprints: Readonly<Record<string, Footprint>> = {
-  // Measured near 6 GiB of container memory on a 4 GiB heap; the limit leaves
-  // room above the peak rather than sitting on it.
-  minecraft: { memoryMiB: 7 * 1024, cores: 1 },
-  factorio: { memoryMiB: 2 * 1024, cores: 0.5 },
-  // The image defaults to a 6 GiB heap (MEMORY_XMX_GB), and a Java server's
-  // process is larger than its heap.
-  zomboid: { memoryMiB: 8 * 1024, cores: 1 },
-  // Documented, not yet measured: the egg catalogue and the image both name 4 GiB.
-  valheim: { memoryMiB: 4 * 1024, cores: 1 },
-  // Documented, not yet measured: Pocketpair recommends 16 GB and 4 cores, and
-  // memory growth over a long session is reported. Not shrunk to fit a host.
-  palworld: { memoryMiB: 16 * 1024, cores: 4 },
-};
+// What a session of each game needs from a host (ADR-0054), from its manifest:
+// the container's hard memory limit and a core weight. A world may override its
+// game's figure; a game with no module cannot be placed, which is the point.
+export const gameFootprints: Readonly<Record<string, Footprint>> = Object.fromEntries(
+  gameModules.map((module) => [module.id, module.footprint]),
+);
 
 // The instance families a launch may draw from, as EC2 Fleet AllowedInstanceTypes
 // patterns: a filter, never a ranking. ADR-0032 chose x86 for single-thread
@@ -79,8 +68,7 @@ export type CatalogGame = Readonly<{
   footprint?: Footprint;
   // False for a game whose server tells its clients which port to continue on:
   // a slot's host mapping would send them to a port nothing listens on, so its
-  // sessions take slot zero, where the ports are the game's own. Mirrors
-  // GAME_SLOTTABLE in the game modules.
+  // sessions take slot zero, where the ports are the game's own.
   slottable?: boolean;
   /** The game keeps a whitelist the host can write from a world's record (ADR-0066). */
   whitelist?: boolean;
@@ -88,51 +76,27 @@ export type CatalogGame = Readonly<{
   worlds: readonly CatalogWorld[];
 }>;
 
-// This is deployment configuration, not observed runtime state. A world may be
-// listed before it has a release pointer or an active session.
-export const gameCatalog: readonly CatalogGame[] = [
-  {
-    id: "minecraft",
-    code: "MC",
-    displayName: "Minecraft",
-    connectPort: 25565,
-    portImplied: true,
-    whitelist: true,
-    worlds: [
-      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier", hostBinding: "configured" },
-      { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier", footprint: { memoryMiB: 3 * 1024, cores: 0.5 }, hostBinding: "configured" },
-    ],
-  },
-  {
-    id: "factorio",
-    code: "FA",
-    displayName: "Factorio",
-    connectPort: 34197,
-    worlds: [],
-  },
-  {
-    id: "zomboid",
-    code: "PZ",
-    displayName: "Project Zomboid",
-    connectPort: 16261,
-    slottable: false,
-    worlds: [],
-  },
-  {
-    id: "valheim",
-    code: "VH",
-    displayName: "Valheim",
-    connectPort: 2456,
-    worlds: [],
-  },
-  {
-    id: "palworld",
-    code: "PW",
-    displayName: "Palworld",
-    connectPort: 8211,
-    worlds: [],
-  },
-];
+// The worlds this deployment manages from before presets: deployment
+// configuration, not observed runtime state. A world may be listed before it
+// has a release pointer or an active session.
+const configuredWorlds: Readonly<Record<string, readonly CatalogWorld[]>> = {
+  minecraft: [
+    { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier", hostBinding: "configured" },
+    { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier", footprint: { memoryMiB: 3 * 1024, cores: 0.5 }, hostBinding: "configured" },
+  ],
+};
+
+// Every game comes from its module's manifest (ADR-0088); only the worlds are this deployment's.
+export const gameCatalog: readonly CatalogGame[] = gameModules.map((module) => ({
+  id: module.id,
+  code: module.code,
+  displayName: module.displayName,
+  connectPort: module.connectPort,
+  ...(module.portImplied ? { portImplied: true as const } : {}),
+  ...(module.slottable ? {} : { slottable: false }),
+  ...(module.whitelist ? { whitelist: true } : {}),
+  worlds: configuredWorlds[module.id] ?? [],
+}));
 
 // Static entries preserve every already managed legacy world. Presets remain
 // reusable templates in their own collection; they are never projected into

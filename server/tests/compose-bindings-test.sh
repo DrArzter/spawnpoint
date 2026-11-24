@@ -282,8 +282,8 @@ opened_port() {
   local port="$1"
   (( port >= 30010 && port <= 32559 )) && return 0
   local module
-  for module in "${server_directory}"/games/*/game.sh; do
-    [[ "$(sed -nE 's/^GAME_CONNECT_PORT="([0-9]+)".*/\1/p' "${module}")" == "${port}" ]] && return 0
+  for module in "${server_directory}"/games/*/game.json; do
+    [[ "$(jq -r '.connect.port' "${module}")" == "${port}" ]] && return 0
   done
   return 1
 }
@@ -291,7 +291,7 @@ for module in "${server_directory}"/games/*/game.sh; do
   game="$(basename "$(dirname "${module}")")"
   slots=("")
   # A game whose server names its own ports to clients never runs in a slot.
-  grep -q '^GAME_SLOTTABLE="\{0,1\}false' "${module}" || slots+=(7)
+  [[ "$(jq -r '.slottable' "$(dirname "${module}")/game.json")" == "false" ]] || slots+=(7)
   for slot in "${slots[@]}"; do
     # A placed session carries its footprint; an unplaced one does not need it.
     bound="$(WORLD_ID=bindcheck WORLD_FOOTPRINT_MEMORY_MIB=4096 SPAWNPOINT_SLOT="${slot}" SPAWNPOINT_GAME_BIND="${overlay_address}" render_game "${game}" 2>/dev/null || true)"

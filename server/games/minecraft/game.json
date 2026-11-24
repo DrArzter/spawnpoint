@@ -1,0 +1,28 @@
+{
+  "id": "minecraft",
+  "code": "MC",
+  "display_name": "Minecraft",
+  "connect": {
+    "port": 25565,
+    "protocol": "tcp",
+    "port_implied": true
+  },
+  "probe_port": 25575,
+  "slottable": true,
+  "default_auth": "none",
+  "footprint": {
+    "memory_mib": 7168,
+    "cores": 1
+  },
+  "capabilities": {
+    "whitelist": true
+  },
+  "release": {
+    "version_field": "minecraft_version",
+    "loader_type": "minecraft",
+    "loader_versioned": true,
+    "mod_extension": "jar",
+    "resolver": "curseforge-files",
+    "runtime_image_required": false
+  }
+}

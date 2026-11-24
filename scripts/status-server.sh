@@ -16,8 +16,8 @@ connect_port_for_world() {
     printf 'error: unknown world: %s\n' "${world}" >&2
     exit 1
   }
-  awk -F'"' '/^GAME_CONNECT_PORT=/ { print $2 }' \
-    "$(dirname -- "${BASH_SOURCE[0]}")/../server/games/${game}/game.sh"
+  jq -r '.connect.port' \
+    "$(dirname -- "${BASH_SOURCE[0]}")/../server/games/${game}/game.json"
 }
 
 grafana_url="${SPAWNPOINT_GRAFANA_URL:-http://172.29.23.24:3000}"

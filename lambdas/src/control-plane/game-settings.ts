@@ -1,7 +1,6 @@
-import minecraftDefinitions from "../../../server/games/minecraft/settings.json" with { type: "json" };
-import palworldDefinitions from "../../../server/games/palworld/settings.json" with { type: "json" };
-import valheimDefinitions from "../../../server/games/valheim/settings.json" with { type: "json" };
 import { type SettingDefinition, type SettingValue, settingValueValid } from "../../../contract/settings.ts";
+
+import { gameModules } from "./game-modules.ts";
 
 export { type SettingDefinition, type SettingValue, settingValueValid };
 
@@ -34,11 +33,9 @@ function definition(raw: RawDefinition): SettingDefinition {
   }
 }
 
-const definitionsByGame: Readonly<Record<string, readonly SettingDefinition[]>> = {
-  minecraft: (minecraftDefinitions.settings as RawDefinition[]).map(definition),
-  valheim: (valheimDefinitions.settings as RawDefinition[]).map(definition),
-  palworld: (palworldDefinitions.settings as RawDefinition[]).map(definition),
-};
+const definitionsByGame: Readonly<Record<string, readonly SettingDefinition[]>> = Object.fromEntries(
+  gameModules.map((module) => [module.id, module.settings.map(definition)]),
+);
 
 export function gameSettingDefinitions(gameId: string): readonly SettingDefinition[] {
   return definitionsByGame[gameId] ?? [];

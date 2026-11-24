@@ -1,0 +1,19 @@
+{
+  "id": "palworld",
+  "code": "PW",
+  "display_name": "Palworld",
+  "connect": {
+    "port": 8211,
+    "protocol": "udp"
+  },
+  "probe_port": 8212,
+  "slottable": true,
+  "default_auth": "none",
+  "footprint": {
+    "memory_mib": 16384,
+    "cores": 4
+  },
+  "capabilities": {
+    "whitelist": false
+  }
+}

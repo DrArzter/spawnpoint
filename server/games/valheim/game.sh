@@ -11,24 +11,15 @@
 GAME_COMPOSE_FILES="games/valheim/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/valheim/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="valheim"
-# The port a player types after the address the connectivity strategy publishes.
-GAME_CONNECT_PORT="2456"
-GAME_CONNECT_PROTOCOL="udp"
-# Valheim has no RCON. Its Steam query port, always the game port plus one, is
-# the probe port, so the host side stays the game port plus one in every slot.
-# It is bound to localhost.
-GAME_PROBE_PORT="2457"
-# The client connects to the port the address names, and the query port keeps
-# its offset in every slot. The server names no other port.
-GAME_SLOTTABLE="true"
-# Fail closed: a server password is one shared secret, not an identity, and
-# this configuration verifies no player. A world declares anything stronger
-# (ADR-0033, and server/games/README.md).
-GAME_DEFAULT_AUTH="none"
-# What a session is placed with and limited to (ADR-0054). Documented by the
-# image and the egg catalogue, not yet measured here.
-GAME_FOOTPRINT_MEMORY_MIB="4096"
-GAME_FOOTPRINT_CORES="1"
+# Why the facts in game.json are what they are (ADR-0088):
+# - probe_port: Valheim has no RCON. Its Steam query port, always the game port
+#   plus one, is the probe port, so the host side stays the game port plus one
+#   in every slot. It is bound to localhost.
+# - slottable: the client connects to the port the address names, the query
+#   port keeps its offset in every slot, and the server names no other port.
+# - default_auth none: fail closed. A server password is one shared secret,
+#   not an identity (ADR-0033, and server/games/README.md).
+# - footprint: documented by the image and the egg catalogue, not yet measured.
 
 VALHEIM_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 VALHEIM_QUERY_HOST="${VALHEIM_QUERY_HOST:-127.0.0.1}"

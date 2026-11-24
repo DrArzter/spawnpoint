@@ -8,6 +8,8 @@ One word per thing. If a word here disagrees with a word in the product, the pro
 
 **Game**: A server runtime family such as Minecraft or Factorio. A game may have many worlds.
 
+**Game module**: The folder that teaches Spawnpoint one game: a manifest of its facts (`game.json`) that every layer reads, and the hooks the host calls. Platform code knows a game only through its module. _Avoid_: Game adapter when the whole folder is meant.
+
 **Preset**: A versioned declaration from a preset source describing a reusable mod and server-configuration template. A preset is authoring input, not a world, save, preset snapshot or deployable release. One preset may produce many releases and may be used to create many worlds. _Avoid_: Pack or uploaded archive when the declaration is meant.
 
 **Preset source**: An external authoring origin from which Spawnpoint can obtain a versioned preset snapshot. GitHub is one preset source, not part of the preset's identity. _Avoid_: Configuration repository when the source need not be Git.

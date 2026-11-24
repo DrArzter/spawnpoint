@@ -1,0 +1,27 @@
+{
+  "id": "zomboid",
+  "code": "PZ",
+  "display_name": "Project Zomboid",
+  "connect": {
+    "port": 16261,
+    "protocol": "udp"
+  },
+  "probe_port": 27015,
+  "slottable": false,
+  "default_auth": "none",
+  "footprint": {
+    "memory_mib": 8192,
+    "cores": 1
+  },
+  "capabilities": {
+    "whitelist": false
+  },
+  "release": {
+    "version_field": "zomboid_build",
+    "loader_type": "workshop",
+    "loader_versioned": false,
+    "mod_extension": "zip",
+    "resolver": "zomboid-workshop",
+    "runtime_image_required": false
+  }
+}

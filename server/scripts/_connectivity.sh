@@ -32,41 +32,33 @@ connectivity_is_gate() {
   esac
 }
 
-# The game's own auth model, read from its module in a subshell so nothing the
-# module sets leaks into the caller. A module that declares none is treated as
-# authenticating nobody — fail closed.
+# The game's own auth model, from its manifest (ADR-0088). A manifest that
+# declares none is treated as authenticating nobody — fail closed.
 game_default_auth() {
   local games_dir="$1" game_id="$2"
-  local module="${games_dir}/${game_id}/game.sh"
-  [[ -f "${module}" ]] || {
-    printf 'error: unknown game: %s (no %s)\n' "${game_id}" "${module}" >&2
+  local manifest="${games_dir}/${game_id}/game.json"
+  [[ -f "${manifest}" ]] || {
+    printf 'error: unknown game: %s (no %s)\n' "${game_id}" "${manifest}" >&2
     exit 1
   }
-  (
-    # shellcheck source=/dev/null
-    source "${module}"
-    printf '%s\n' "${GAME_DEFAULT_AUTH:-none}"
-  )
+  jq -r '.default_auth // "none"' "${manifest}"
 }
 
-# A game module's footprint default, read the same way as its auth default:
-# in a subshell, so loading a module to ask one question leaves nothing behind.
+# A game's footprint default, from its manifest like its auth default.
 game_footprint_default() {
   local games_dir="$1" game_id="$2" field="$3"
-  local module="${games_dir}/${game_id}/game.sh"
-  [[ -f "${module}" ]] || {
-    printf 'error: unknown game: %s (no %s)\n' "${game_id}" "${module}" >&2
+  local manifest="${games_dir}/${game_id}/game.json"
+  [[ -f "${manifest}" ]] || {
+    printf 'error: unknown game: %s (no %s)\n' "${game_id}" "${manifest}" >&2
     exit 1
   }
-  (
-    # shellcheck source=/dev/null
-    source "${module}"
-    case "${field}" in
-      memory_mib) printf '%s\n' "${GAME_FOOTPRINT_MEMORY_MIB:?${game_id} declares no GAME_FOOTPRINT_MEMORY_MIB}" ;;
-      cores) printf '%s\n' "${GAME_FOOTPRINT_CORES:?${game_id} declares no GAME_FOOTPRINT_CORES}" ;;
-      *) printf 'error: unknown footprint field: %s\n' "${field}" >&2; exit 1 ;;
-    esac
-  )
+  case "${field}" in
+    memory_mib | cores) jq -er --arg field "${field}" '.footprint[$field]' "${manifest}" || {
+      printf 'error: %s declares no footprint %s\n' "${game_id}" "${field}" >&2
+      exit 1
+    } ;;
+    *) printf 'error: unknown footprint field: %s\n' "${field}" >&2; exit 1 ;;
+  esac
 }
 
 assert_connectivity_invariant() {

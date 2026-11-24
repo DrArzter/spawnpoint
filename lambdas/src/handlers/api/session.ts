@@ -1,6 +1,6 @@
 import { roleOf } from "../../access/domain.ts";
 import { GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { type Caller, type Response, response } from "./http.ts";
+import { type Caller, type Response, response, errorResponse } from "./http.ts";
 import { observe, resolveIdentity, bootstrapOwner, identityAccounts } from "./identity-store.ts";
 import { providerPhoto } from "../../access/avatar.ts";
 import { avatarLink, copyProviderAvatar } from "./avatars.ts";
@@ -51,7 +51,7 @@ export async function requestAccess(account: Caller): Promise<Response> {
   try {
     await document.send(new UpdateCommand(requestAccountAccess(tableName, account.provider, account.subject, now, true)));
   } catch {
-    if (await resolveIdentity(account) !== null) return response(409, { error: "already_approved" });
+    if (await resolveIdentity(account) !== null) return errorResponse(409, "already_approved");
     throw new Error("access candidate is unavailable");
   }
   return response(202, { state: "requested" });

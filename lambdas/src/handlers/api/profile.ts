@@ -2,7 +2,7 @@ import { type Identity, roleOf } from "../../access/domain.ts";
 import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { defaultSubscriptions, validateSubscriptions } from "../../access/subscriptions.ts";
 import { validateAppearance, defaultAppearance } from "../../access/appearance.ts";
-import { type Response, response, parseJsonObject } from "./http.ts";
+import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
 import { document, tableName } from "./access-store.ts";
 import { identitySettingKey } from "../../access/keys.ts";
 
@@ -14,7 +14,7 @@ export async function subscriptions(identity: Identity): Promise<Response> {
 export async function updateSubscriptions(identity: Identity, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
   const next = validateSubscriptions(parsed.subscriptions);
-  if (next === null) return response(400, { error: "invalid_subscriptions" });
+  if (next === null) return errorResponse(400, "invalid_subscriptions");
   await document.send(new PutCommand({ TableName: tableName, Item: {
     ...identitySettingKey(identity.id, "SUBSCRIPTIONS"), subscriptions: next, updated_at: new Date().toISOString(),
   } }));
@@ -32,7 +32,7 @@ export async function appearance(identity: Identity): Promise<Response> {
 export async function updateAppearance(identity: Identity, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
   const next = validateAppearance(parsed.appearance);
-  if (next === null) return response(400, { error: "invalid_appearance" });
+  if (next === null) return errorResponse(400, "invalid_appearance");
   await document.send(new PutCommand({ TableName: tableName, Item: {
     ...identitySettingKey(identity.id, "APPEARANCE"), appearance: next, updated_at: new Date().toISOString(),
   } }));

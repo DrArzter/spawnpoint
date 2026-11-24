@@ -1,5 +1,5 @@
 import { browserSessionCookieName, refreshCookieName, trustedCookieRequest } from "../../access/login-session.ts";
-import { type Event, type Response, type Caller, InvalidBodyError, response, requestCookie } from "./http.ts";
+import { type Event, type Response, type Caller, InvalidBodyError, response, requestCookie, errorResponse } from "./http.ts";
 import { type Route } from "./routing.ts";
 import { type Identity } from "../../access/domain.ts";
 import { requirePermission } from "./permissions.ts";
@@ -19,7 +19,7 @@ export function createDispatcher(routes: Readonly<Record<string, Route>>, author
     const route = routes[routeKey];
     // Default deny: an unrouted request never reaches a handler, and neither does
     // a route somebody deployed without declaring its authority here.
-    if (route === undefined) return response(404, { error: "not_found" });
+    if (route === undefined) return errorResponse(404, "not_found");
 
     // Cookies are sent automatically, including with SameSite=None on the
     // legacy CloudFront domain. A credential-bearing write must originate from
@@ -28,7 +28,7 @@ export function createDispatcher(routes: Readonly<Record<string, Route>>, author
     const hasCookie = requestCookie(event, browserSessionCookieName) !== null || requestCookie(event, refreshCookieName) !== null;
     const origin = Object.entries(event.headers ?? {}).find(([key]) => key.toLowerCase() === "origin")?.[1];
     if (!trustedCookieRequest(routeKey.split(" ", 1)[0]!, hasCookie, origin, authority.panelOrigins)) {
-      return response(403, { error: "untrusted_origin" });
+      return errorResponse(403, "untrusted_origin");
     }
 
     // A handler that reads its body throws InvalidBodyError for a body that is
@@ -37,18 +37,18 @@ export function createDispatcher(routes: Readonly<Record<string, Route>>, author
       try {
         return await (route.handle as (subject: unknown, event: Event) => Promise<Response> | Response)(subject, event);
       } catch (error) {
-        if (error instanceof InvalidBodyError) return response(400, { error: "invalid_json" });
+        if (error instanceof InvalidBodyError) return errorResponse(400, "invalid_json");
         throw error;
       }
     };
     if (route.access.kind === "public") return call(undefined);
 
     const account = await authority.caller(event);
-    if (account === null) return response(401, { error: "invalid_or_expired_session" });
+    if (account === null) return errorResponse(401, "invalid_or_expired_session");
     if (route.access.kind === "session") return call(account);
 
     const identity = await authority.resolveIdentity(account);
-    if (identity === null) return response(403, { error: "access_not_granted" });
+    if (identity === null) return errorResponse(403, "access_not_granted");
     if (route.access.kind === "identity") return call(identity);
 
     const forbidden = requirePermission(identity, route.access.permission);

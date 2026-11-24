@@ -15,7 +15,7 @@ import { ReleaseHolders, resolveFromWorldRecords } from "../../control-plane/rel
 import { ReleaseRefs } from "../../control-plane/release-refs.ts";
 import { S3WorldReader, S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
 import { type WorldRecord } from "../../control-plane/world-registry.ts";
-import { type Response, response } from "./http.ts";
+import { type Response, response, errorResponse } from "./http.ts";
 import { document, tableName, type Item } from "./access-store.ts";
 import { deleteIdentityAvatars } from "./avatars.ts";
 import { callerCondition, escalationRefusal, lastHolderRefusal } from "./owner-guard.ts";
@@ -298,17 +298,17 @@ function deletionTransaction(caller: Identity, deletion: Deletion): Transaction 
 async function cancellationResponse(error: Cancellation, deletion: Deletion): Promise<Response> {
   const reasons = error.CancellationReasons ?? [];
   const failed = (index: number) => reasons[index]?.Code === "ConditionalCheckFailed";
-  if (failed(0)) return response(409, { error: "caller_changed" });
+  if (failed(0)) return errorResponse(409, "caller_changed");
   // Index 0 is the caller check; the partition's items follow it.
   const profileIndex = 1 + deletion.partition.findIndex((item) => item.sk === profileSort);
   if (failed(profileIndex)) {
     const current = await document.send(new GetCommand({
       TableName: tableName, Key: profileKey(deletion.identityId), ConsistentRead: true,
     }));
-    return current.Item === undefined ? response(204, null) : response(409, { error: "identity_changed" });
+    return current.Item === undefined ? response(204, null) : errorResponse(409, "identity_changed");
   }
-  if (reasons.some((reason) => reason.Code === "ConditionalCheckFailed")) return response(409, { error: "identity_changed" });
-  return response(409, { error: "deletion_conflict" });
+  if (reasons.some((reason) => reason.Code === "ConditionalCheckFailed")) return errorResponse(409, "identity_changed");
+  return errorResponse(409, "deletion_conflict");
 }
 
 // Returns the refusal when the transaction was cancelled, or null once committed.
@@ -365,7 +365,7 @@ async function sweepRemainder(identityId: string, accounts: readonly Account[], 
 }
 
 export async function deleteIdentity(caller: Identity, identityId: string, worlds: () => WorldStore = worldsInReleaseBucket): Promise<Response> {
-  if (identityId === caller.id) return response(409, { error: "self_delete_forbidden" });
+  if (identityId === caller.id) return errorResponse(409, "self_delete_forbidden");
   const profile = (await document.send(new GetCommand({
     TableName: tableName, Key: profileKey(identityId), ConsistentRead: true,
   }))).Item;

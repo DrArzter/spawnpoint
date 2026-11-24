@@ -3,7 +3,7 @@ import { identityRoute, type Route } from "./routing.ts";
 import { me, subscriptions, updateSubscriptions, appearance, updateAppearance } from "./profile.ts";
 import { linkedAccounts, linkProofAccount } from "./linked-accounts.ts";
 import { proofLinkProviders, loginProviderDisabled } from "./login-providers.ts";
-import { parameter, response } from "./http.ts";
+import { parameter, response, errorResponse } from "./http.ts";
 import { passwordLoginEnabled } from "./auth-config.ts";
 import { emailDeliveryProvider } from "./mail.ts";
 import { linkPassword, changePassword } from "./passwords.ts";
@@ -13,7 +13,7 @@ export const profileRoutes: Readonly<Record<string, Route>> = {
   "GET /me/accounts": identityRoute((identity) => linkedAccounts(identity)),
   "POST /me/accounts/{provider}": identityRoute((identity, event) => {
     const provider = proofLinkProviders.get(parameter(event, "provider"));
-    return provider === undefined ? response(404, { error: "not_found" }) : linkProofAccount(identity, provider, event);
+    return provider === undefined ? errorResponse(404, "not_found") : linkProofAccount(identity, provider, event);
   }),
   "POST /me/password": identityRoute((identity, event) => (
     passwordLoginEnabled && emailDeliveryProvider !== "none" ? linkPassword(identity, event) : loginProviderDisabled()

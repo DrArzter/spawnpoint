@@ -3,9 +3,11 @@ import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../m
 import type { ConsoleEntry } from "../../../contract/console";
 import type { HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange } from "../../../contract/metrics";
 import type { BackupEntry, BackupInventory } from "../../../contract/backups";
+import type { ApiErrorCode } from "../../../contract/errors";
 import type { HostLogLine, OperationProgress, OperationStep } from "../../../contract/operations";
 
 // Shapes the API and the panel share live in ../contract (review X2).
+export type { ApiErrorCode };
 export type { BackupEntry, BackupInventory, ConsoleEntry, HostLogLine, HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
 
 export type PromotionResult = { result: "requested"; operationId: string } | { result: "switched" };
@@ -24,15 +26,20 @@ export type ApiFailureKind = "unavailable" | "forbidden" | "failed";
 /** The body of an error answer. `error` is the code; other fields (a name, a setting) are its detail. */
 export type ApiErrorBody = Readonly<{ error?: unknown } & Record<string, unknown>>;
 
+/** The body's code, read as the contract's (contract/errors.ts): the API refuses with no other. */
+export function errorCode(body: ApiErrorBody | null): ApiErrorCode | null {
+  return typeof body?.error === "string" ? body.error as ApiErrorCode : null;
+}
+
 export class ApiError extends Error {
   readonly kind: ApiFailureKind;
   /** The HTTP status; 0 when no answer came. */
   readonly status: number;
   /** The body's `error` field, when the API sent one. */
-  readonly code: string | null;
+  readonly code: ApiErrorCode | null;
   readonly detail: ApiErrorBody | null;
 
-  constructor(kind: ApiFailureKind, message: string, source: Readonly<{ status?: number; code?: string | null; detail?: ApiErrorBody | null }> = {}) {
+  constructor(kind: ApiFailureKind, message: string, source: Readonly<{ status?: number; code?: ApiErrorCode | null; detail?: ApiErrorBody | null }> = {}) {
     super(message);
     this.name = "ApiError";
     this.kind = kind;
@@ -86,8 +93,8 @@ export type VisitorSession = Readonly<{
 // and a world that was never created stay apart.
 export async function apiFailure(response: Response, message: string, parsed?: ApiErrorBody | null): Promise<ApiError> {
   const body = parsed !== undefined ? parsed : await response.json().catch(() => null) as ApiErrorBody | null;
-  const code = typeof body?.error === "string" ? body.error : null;
-  const source = { status: response.status, code, detail: body };
+  const source = { status: response.status, code: errorCode(body), detail: body };
+  const code = source.code;
   if (response.status === 403) return new ApiError("forbidden", message, source);
   if (response.status === 501 || response.status === 503) return new ApiError("unavailable", message, source);
   if (response.status === 404 && code === "not_found") return new ApiError("unavailable", message, source);

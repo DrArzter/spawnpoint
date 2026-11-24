@@ -4,7 +4,7 @@ import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../../domain/access-events.ts";
 import { PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { randomUUID } from "node:crypto";
-import { type Response, response, type Event, parameter, parseJsonObject } from "./http.ts";
+import { type Response, response, type Event, parameter, parseJsonObject, errorResponse } from "./http.ts";
 import { document, tableName, type Item } from "./access-store.ts";
 import { requirePermission } from "./permissions.ts";
 import { events } from "./clients.ts";
@@ -108,7 +108,7 @@ async function commitRoleChange(callerIdentity: Identity, identityId: string, ro
       } },
     ] }));
   } catch (error) {
-    if (isConditionFailure(error)) return response(409, { error: "role_change_conflict" });
+    if (isConditionFailure(error)) return errorResponse(409, "role_change_conflict");
     throw error;
   }
   return null;
@@ -118,10 +118,10 @@ export async function updateRole(callerIdentity: Identity, identityId: string, b
   const parsed = parseJsonObject({ body });
   const roleId = typeof parsed.roleId === "string" ? parsed.roleId : "";
   const role = roleId === "" ? null : await readRole(roleId);
-  if (role === null) return response(400, { error: "unknown_role" });
-  if (identityId === callerIdentity.id && roleId !== callerIdentity.roleId) return response(409, { error: "self_role_change_forbidden" });
+  if (role === null) return errorResponse(400, "unknown_role");
+  if (identityId === callerIdentity.id && roleId !== callerIdentity.roleId) return errorResponse(409, "self_role_change_forbidden");
   const target = await identityById(identityId);
-  if (target === null) return response(404, { error: "identity_not_found" });
+  if (target === null) return errorResponse(404, "identity_not_found");
   // Giving the new role and taking the old one away are both checked.
   const refusal = escalationRefusal(callerIdentity, [role, target.role ?? null]) ?? await lastHolderRefusal(target.roleId, roleId);
   if (refusal !== null) return refusal;
@@ -142,10 +142,10 @@ function approvalInput(body: string | undefined): ApprovalInputResult {
     (permission) => typeof permission === "string" && permissions.includes(permission as Permission),
   ) ? requestedGrants as Permission[] : [];
   if (requestedGrants !== undefined && (!Array.isArray(requestedGrants) || directGrants.length !== requestedGrants.length)) {
-    return { value: null, error: response(400, { error: "invalid_direct_grant" }) };
+    return { value: null, error: errorResponse(400, "invalid_direct_grant") };
   }
   if (directGrants.some((permission) => reservedPermissions.includes(permission))) {
-    return { value: null, error: response(400, { error: "reserved_permission" }) };
+    return { value: null, error: errorResponse(400, "reserved_permission") };
   }
   return { value: { roleId, directGrants }, error: null };
 }
@@ -179,14 +179,14 @@ export async function approve(identity: Identity, platform: string, platformUser
   if (input.error !== null) return input.error;
   const { directGrants } = input.value;
   const role = await readRole(input.value.roleId ?? await readDefaultRoleId());
-  if (role === null) return response(400, { error: "unknown_role" });
+  if (role === null) return errorResponse(400, "unknown_role");
   const roleId = role.id;
   // A direct grant is an exception only a holder of the protected role makes.
   const forbidden = directGrants.length > 0 ? requirePermission(identity, "access.owner.grant") : escalationRefusal(identity, [role]);
   if (forbidden !== null) return forbidden;
   const account = accountItemKey(platform, platformUserId);
   const candidate = await document.send(new GetCommand({ TableName: tableName, Key: account }));
-  if (candidate.Item === undefined || candidate.Item.identity_id !== undefined) return response(409, { error: "candidate_unavailable" });
+  if (candidate.Item === undefined || candidate.Item.identity_id !== undefined) return errorResponse(409, "candidate_unavailable");
   const identityId = randomUUID();
   const now = new Date().toISOString();
   const name = String(candidate.Item.display_name ?? candidate.Item.email ?? platformUserId);
@@ -199,7 +199,7 @@ export async function approve(identity: Identity, platform: string, platformUser
     ] }));
   } catch (error) {
     // Another Owner approved or dismissed the candidate first.
-    if (isConditionFailure(error)) return response(409, { error: "candidate_unavailable" });
+    if (isConditionFailure(error)) return errorResponse(409, "candidate_unavailable");
     throw error;
   }
   await publishAccessApproval(platform, candidate.Item, identityId, name, role.name);
@@ -218,7 +218,7 @@ export async function dismiss(identity: Identity, platform: string, platformUser
     }));
   } catch (error) {
     // The candidate was approved first, or no longer exists.
-    if (isConditionFailure(error)) return response(409, { error: "candidate_unavailable" });
+    if (isConditionFailure(error)) return errorResponse(409, "candidate_unavailable");
     throw error;
   }
   return response(204, null);
@@ -233,6 +233,6 @@ const PLATFORM_USER_ID = /^[A-Za-z0-9._:@-]{1,255}$/;
 export const withCandidateAddress = (event: Event, handle: (platform: string, platformUserId: string) => Promise<Response>): Promise<Response> | Response => {
   const platform = parameter(event, "platform");
   const platformUserId = parameter(event, "platformUserId");
-  if (!PLATFORM_ID.test(platform) || !PLATFORM_USER_ID.test(platformUserId)) return response(400, { error: "invalid_account_address" });
+  if (!PLATFORM_ID.test(platform) || !PLATFORM_USER_ID.test(platformUserId)) return errorResponse(400, "invalid_account_address");
   return handle(platform, platformUserId);
 };

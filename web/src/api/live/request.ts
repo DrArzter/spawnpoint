@@ -1,4 +1,4 @@
-import { apiFailure, ApiError, type ApiErrorBody } from "../contract";
+import { apiFailure, ApiError, errorCode, type ApiErrorBody, type ApiErrorCode } from "../contract";
 import { API_ERROR_TEXT, UNREACHABLE } from "../error-text";
 import { authorizedFetch, sessionFetch } from "./transport";
 
@@ -13,9 +13,9 @@ export type RequestOptions<T> = Readonly<{
   /** Text for a failure that has no code text. */
   failure: string;
   /** Text by error code for this call. The shared table (error-text.ts) words the rest. */
-  refusals?: Readonly<Record<string, Refusal>>;
+  refusals?: Readonly<Partial<Record<ApiErrorCode, Refusal>>>;
   /** Text by status and code, where the words depend on both (sign-in). Wins over `refusals`. */
-  describe?: (status: number, code: string | undefined) => string;
+  describe?: (status: number, code: ApiErrorCode | undefined) => string;
   /** An answer that is ok but lacks what the call needs is a failure. */
   valid?: (body: T) => boolean;
 }>;
@@ -63,8 +63,9 @@ export async function requestOrNull<T>(path: string, options: RequestOptions<T>,
 }
 
 function refusalText<T>(status: number, body: ApiErrorBody | null, options: RequestOptions<T>): string {
-  const code = typeof body?.error === "string" ? body.error : "";
-  if (options.describe) return options.describe(status, code === "" ? undefined : code);
+  const code = errorCode(body);
+  if (options.describe) return options.describe(status, code ?? undefined);
+  if (code === null) return options.failure;
   const refusal = options.refusals?.[code];
   if (typeof refusal === "function") return refusal(body ?? {});
   return refusal ?? API_ERROR_TEXT[code] ?? options.failure;

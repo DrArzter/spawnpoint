@@ -8,7 +8,7 @@ import { type Identity } from "../../access/domain.ts";
 import { profileKey } from "../../access/keys.ts";
 import { document, tableName } from "./access-store.ts";
 import { isConditionFailure } from "./conditions.ts";
-import { type Response, response, parseJsonObject } from "./http.ts";
+import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
 
 // Identity avatars (ADR-0084): copied once from a sign-in provider, or uploaded
 // by the person; served through presigned links; deleted with the identity.
@@ -107,12 +107,12 @@ function decode(image: unknown): Uint8Array | null {
 
 export async function uploadAvatar(identity: Identity, body: string | undefined): Promise<Response> {
   const parsed = parseJsonObject({ body });
-  if (typeof parsed.image === "string" && parsed.image.length > Math.ceil(UPLOAD_LIMIT / 3) * 4) return response(400, { error: "avatar_too_large" });
+  if (typeof parsed.image === "string" && parsed.image.length > Math.ceil(UPLOAD_LIMIT / 3) * 4) return errorResponse(400, "avatar_too_large");
   const bytes = decode(parsed.image);
-  if (bytes === null || bytes.length === 0) return response(400, { error: "invalid_avatar" });
-  if (bytes.length > UPLOAD_LIMIT) return response(400, { error: "avatar_too_large" });
+  if (bytes === null || bytes.length === 0) return errorResponse(400, "invalid_avatar");
+  if (bytes.length > UPLOAD_LIMIT) return errorResponse(400, "avatar_too_large");
   const key = await store(identity.id, bytes);
-  if (key === null) return response(400, { error: "invalid_avatar" });
+  if (key === null) return errorResponse(400, "invalid_avatar");
   await record(identity.id, key, "upload");
   await deleteOthers(identity.id, key);
   return response(200, { photoUrl: await avatarLink(key) });

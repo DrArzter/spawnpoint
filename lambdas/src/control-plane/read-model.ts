@@ -161,6 +161,8 @@ export async function readControlPlaneSnapshot(
       lifecycle: sessionView(lifecycles[gameIndex]?.serverId ?? game.id, lifecycles[gameIndex] ?? null),
       settings: gameSettingDefinitions(game.id),
       whitelist: game.whitelist === true,
+      playerName: game.playerName ?? null,
+      consoleSuggestions: game.consoleSuggestions ?? [],
       presets: (game.presets ?? []).map((preset) => ({
         id: preset.id,
         displayName: preset.displayName,

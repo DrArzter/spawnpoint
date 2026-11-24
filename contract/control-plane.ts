@@ -118,6 +118,10 @@ export type Game = Readonly<{
   settings: readonly SettingDefinition[];
   /** The game keeps a whitelist a world's record can hold (ADR-0066). */
   whitelist: boolean;
+  /** What a whitelisted player's name must match, and the words that say so; null without a whitelist (ADR-0090). */
+  playerName: Readonly<{ pattern: string; hint: string }> | null;
+  /** Commands the console offers to type, as the game's module lists them. */
+  consoleSuggestions: readonly string[];
   presets: readonly Preset[];
   worlds: readonly World[];
 }>;

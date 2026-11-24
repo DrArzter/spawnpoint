@@ -14,7 +14,7 @@ import { releaseChangeRows } from "./release-diff";
 import { candidateKey, type AccessDirectory } from "./access-directory";
 import { defaultRoleChoice, offeredPermissions, ROLE_ID_PATTERN, roleChoice, roleDeleteRefusal, roleEditRefusal, roleIdFor } from "./roles";
 import { FRESH_MODS_VIEW, MOD_SEARCH_DELAY_MS, modListQuery, modSourceEntries, type ModsView } from "./release-mods";
-import { whitelistNameError } from "./whitelist";
+import { type PlayerNameRule, whitelistNameError } from "./whitelist";
 
 /*
  * The data each page loads for itself and what may be done with it. Every
@@ -86,14 +86,14 @@ export function useBackups(gameId: string, world: World, opts: Readonly<{ canRea
  * A world's whitelist, read only while its tab is open. Every change saves the
  * whole list; a running world reloads it at once, a stopped one at its start.
  */
-export function useWhitelist(gameId: string, world: World, open: boolean, notify: Notify): WhitelistModel {
+export function useWhitelist(gameId: string, world: World, open: boolean, notify: Notify, playerName: PlayerNameRule | null): WhitelistModel {
   const api = useApi();
   const [state, retry, update] = useLoad<WorldWhitelist>(open ? () => api.loadWhitelist(gameId, world.id) : null, [open, gameId, world.id]);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const names = state.status === "ready" ? state.value.names : [];
   const name = draft.trim();
-  const draftError = name === "" ? null : whitelistNameError(name, names);
+  const draftError = name === "" ? null : whitelistNameError(name, names, playerName);
   const when = (saved: SavedWhitelist) => saved.applied === "reloading" ? "The running server reloads its list now." : `${world.displayName} reads it at its next start.`;
   const save = async (next: readonly string[], said: (saved: SavedWhitelist) => string): Promise<boolean> => {
     setSaving(true);

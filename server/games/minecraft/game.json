@@ -18,6 +18,24 @@
   "capabilities": {
     "whitelist": true
   },
+  "console": {
+    "lifecycle_commands": [
+      "stop",
+      "save-off"
+    ],
+    "suggestions": [
+      "list",
+      "save-all",
+      "say Server stops in 5 minutes"
+    ]
+  },
+  "whitelist": {
+    "name_pattern": "^\\w{3,16}$",
+    "name_hint": "3 to 16 letters, digits or underscores, as the player types it",
+    "list_command": "whitelist list",
+    "list_reply": "There are (\\d+) whitelisted player(?:s|\\(s\\))?:\\s*(.*)",
+    "list_empty": "There are no whitelisted players"
+  },
   "release": {
     "version_field": "minecraft_version",
     "loader_type": "minecraft",

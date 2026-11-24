@@ -16,6 +16,16 @@
   "capabilities": {
     "whitelist": false
   },
+  "console": {
+    "lifecycle_commands": [
+      "quit"
+    ],
+    "suggestions": [
+      "/players online",
+      "/server-save",
+      "/time"
+    ]
+  },
   "release": {
     "version_field": "factorio_version",
     "loader_type": "factorio",

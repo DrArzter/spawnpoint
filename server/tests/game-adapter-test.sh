@@ -944,6 +944,11 @@ for module in "${GAMES}"/*/game.sh; do
     (.footprint.memory_mib | type == "number" and . > 0) and
     (.footprint.cores | type == "number" and . > 0) and
     (.capabilities.whitelist | type == "boolean") and
+    (.console.lifecycle_commands | type == "array" and all(.[]; type == "string")) and
+    (.console.suggestions | type == "array" and all(.[]; type == "string")) and
+    # Whitelist rules exist exactly when the game keeps a whitelist (ADR-0090).
+    ((has("whitelist")) == .capabilities.whitelist) and
+    (.whitelist == null or ((.whitelist.name_pattern | type == "string") and (.whitelist.name_hint | type == "string"))) and
     (.release == null or (.release | (.version_field | type == "string") and (.loader_versioned | type == "boolean")
       and (.runtime_image_required | type == "boolean")
       and (.loader_types | type == "array" and length > 0) and (.default_loader_type as $d | .loader_types | index($d) != null)

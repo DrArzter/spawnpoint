@@ -203,7 +203,7 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
   const running = runningWorlds(game).some((item) => item.id === world.id);
   const consoleModel = useWorldConsole(game, world, open("console"), running, notify);
   const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id, worldSessionId(game, world));
-  const whitelist = useWhitelist(game.id, world, open("whitelist"), notify);
+  const whitelist = useWhitelist(game.id, world, open("whitelist"), notify, game.playerName);
   const mods = useReleaseMods(game.id, modsSource(world, open("releases") && capabilities.has("releaseFiles")), (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
   const changes = useReleaseChanges(game.id, changesSource(world, open("releases") && capabilities.has("releaseDiff")));
   return {
@@ -282,17 +282,6 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   return <skin.World model={model} />;
 }
 
-// What each game's console is most often asked; Factorio's commands start with a slash.
-const QUICK_COMMANDS: Readonly<Record<string, readonly string[]>> = {
-  minecraft: ["list", "save-all", "say Server stops in 5 minutes"],
-  factorio: ["/players online", "/server-save", "/time"],
-  zomboid: ["players", "save", "servermsg \"Server stops in 5 minutes\""],
-  // The server takes no command from outside the game.
-  valheim: [],
-  // The server's REST API, in its own words; see server/games/palworld/game.sh.
-  palworld: ["metrics", "save", "announce Server stops in 5 minutes"],
-};
-
 const consoleStatuses: Readonly<Record<ConsoleEntry["status"], StatusDescriptor>> = {
   pending: { kind: "progress", label: "Waiting for the game" },
   succeeded: { kind: "ok", label: "Answered" },
@@ -342,7 +331,7 @@ function useWorldConsole(game: Game, world: World, open: boolean, running: boole
       busy: gateway.sending,
       hint: unavailable ?? undefined,
     }),
-    quickCommands: (QUICK_COMMANDS[game.id] ?? []).map((command) => action("console.quick", command, () => send(command, false), {
+    quickCommands: game.consoleSuggestions.map((command) => action("console.quick", command, () => send(command, false), {
       disabled: unavailable !== null || gateway.sending,
       hint: unavailable ?? `Run ${command}`,
     })),

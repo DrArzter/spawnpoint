@@ -812,7 +812,7 @@ export function updateWhitelist(gameId: string, worldId: string, names: readonly
   const target = world(gameId, worldId);
   if (!target.worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
   names.forEach((name, index) => {
-    const error = whitelistNameError(name, names.slice(0, index));
+    const error = whitelistNameError(name, names.slice(0, index), game(gameId).playerName);
     if (error) throw new Error(`${name}: ${error}`);
   });
   const kept = { names: [...names], updatedAt: iso(), updatedBy: "DrArzter" };

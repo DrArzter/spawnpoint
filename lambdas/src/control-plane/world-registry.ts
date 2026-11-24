@@ -1,5 +1,6 @@
 import type { SettingValue } from "./game-settings.ts";
 import { checkWhitelist } from "./whitelist.ts";
+import { findGameModule } from "./game-modules.ts";
 import { usableByNewWipe, type PresetObservation } from "./preset-catalog.ts";
 
 export type GenerationSource =
@@ -92,10 +93,13 @@ export function withGameSettings(record: WorldRecord, gameSettings: WorldGameSet
   return { ...record, gameSettings };
 }
 
-function parseWhitelist(value: unknown): WorldWhitelist | null {
+// A stored whitelist is held to its game's rules; a game that keeps none has no valid list.
+function parseWhitelist(value: unknown, gameId: unknown): WorldWhitelist | null {
+  const rules = typeof gameId === "string" ? findGameModule(gameId)?.whitelistRules ?? null : null;
+  if (rules === null) return null;
   const root = object(value);
   const by = object(root?.updated_by);
-  const check = checkWhitelist(root?.names);
+  const check = checkWhitelist(root?.names, rules);
   if (
     root === null || by === null || !check.ok ||
     typeof root.updated_at !== "string" || Number.isNaN(Date.parse(root.updated_at)) ||
@@ -374,7 +378,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
   const previousValues = root?.previous_generations ?? [];
   const previous = Array.isArray(previousValues) ? previousValues.map((value) => parseGeneration(value, true)) : null;
   const gameSettings = root?.game_settings === undefined ? undefined : parseGameSettings(root.game_settings);
-  const whitelist = root?.whitelist === undefined ? undefined : parseWhitelist(root.whitelist);
+  const whitelist = root?.whitelist === undefined ? undefined : parseWhitelist(root.whitelist, root.game);
   if (
     root?.schema_version !== 1 || root.storage_layout !== "generation" ||
     typeof root.world_id !== "string" || !ID.test(root.world_id) ||

@@ -136,7 +136,7 @@ data "aws_iam_policy_document" "game_host_dns" {
     condition {
       test     = "ForAllValues:StringEquals"
       variable = "route53:ChangeResourceRecordSetsActions"
-      values   = ["UPSERT", "DELETE"]
+      values   = ["UPSERT", "DELETE", "CREATE"]
     }
   }
 }

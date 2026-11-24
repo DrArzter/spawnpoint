@@ -27,7 +27,7 @@ collected eleven before it was accepted.
 
 ## Start here — most of this is not blocking
 
-Eighty-five records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
+Eighty-six records is a wall, and a wall is not a plan. Read the two or three that cover what you are building now.
 
 | To do this | You need |
 | --- | --- |
@@ -150,6 +150,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0083](0083-panel-roles-are-owner-defined-data.md) | Panel roles are owner-defined data | Accepted | M6 |
 | [0084](0084-an-identity-owns-its-avatar.md) | An identity owns its avatar | Accepted | M6 |
 | [0085](0085-a-persistent-host-serves-public-worlds-too.md) | A persistent host serves public worlds too | Accepted | M6 |
+| [0086](0086-a-stopped-worlds-name-points-at-a-parked-address.md) | A stopped world's DNS name points at a parked address | Accepted | M6 |
 
 ## Decisions still to record
 

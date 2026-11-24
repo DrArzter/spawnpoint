@@ -34,6 +34,10 @@ grep -Fq 'dynamodb put-item' "${ROUTE53_CALLS}"
 grep -Fq 'dynamodb update-item' "${ROUTE53_CALLS}"
 grep -Fq 'UPSERT' "${ROUTE53_CALLS}"
 grep -Fq 'DELETE' "${ROUTE53_CALLS}"
+# A stop parks the name in the same batch as it deletes the address (ADR-0086).
+retract="$(grep -F 'DELETE' "${ROUTE53_CALLS}")"
+grep -Fq '"Action":"CREATE"' <<<"${retract}"
+grep -Fq '192.0.2.1' <<<"${retract}"
 grep -Fq '203.0.113.10' "${ROUTE53_CALLS}"
 grep -Fq 'factorio-test.games.spawnpoint.example.com.' "${ROUTE53_CALLS}"
 

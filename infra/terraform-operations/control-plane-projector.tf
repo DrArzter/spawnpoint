@@ -98,7 +98,7 @@ data "aws_iam_policy_document" "control_plane_projector" {
       condition {
         test     = "ForAllValues:StringEquals"
         variable = "route53:ChangeResourceRecordSetsActions"
-        values   = ["DELETE"]
+        values   = ["DELETE", "CREATE"]
       }
     }
   }

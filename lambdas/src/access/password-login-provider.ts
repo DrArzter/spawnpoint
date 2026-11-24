@@ -1,3 +1,4 @@
+import type { LoginProviderId } from "../../../contract/login.ts";
 import { randomBytes } from "node:crypto";
 
 import type { LoginPrincipal } from "./login-session.ts";
@@ -11,7 +12,7 @@ import {
   type SignInGuard,
 } from "./password-credential.ts";
 
-export const passwordProviderId = "password";
+export const passwordProviderId: LoginProviderId = "password";
 
 export type PasswordCredential = Readonly<{
   subject: string;

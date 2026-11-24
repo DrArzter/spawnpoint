@@ -1,4 +1,4 @@
-import { roleOf } from "../../access/domain.ts";
+import { type Identity, type Role, roleOf } from "../../access/domain.ts";
 import { GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Caller, type Response, response, errorResponse } from "./http.ts";
 import { observe, resolveIdentity, bootstrapOwner, identityAccounts } from "./identity-store.ts";
@@ -6,6 +6,9 @@ import { providerPhoto } from "../../access/avatar.ts";
 import { avatarLink, copyProviderAvatar } from "./avatars.ts";
 import { requestAccountAccess } from "../../access/account-writes.ts";
 import { document, tableName, type Item } from "./access-store.ts";
+import type { AccountProfile, ActiveSession, SessionIdentity, SessionRole, VisitorSession } from "../../../../contract/access.ts";
+
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 export async function session(account: Caller, capabilities: readonly string[]): Promise<Response> {
   const observed = await observe(account);
@@ -20,22 +23,35 @@ export async function session(account: Caller, capabilities: readonly string[]):
     if (key === null && !identity.avatarRemoved) key = await copyProviderAvatar(identity, providerPhoto(await identityAccounts(identity), account));
     if (key !== null) profile.photoUrl = await avatarLink(key);
     else if (identity.avatarRemoved) profile.photoUrl = null;
-    return response(200, { state: "active", identity, role, capabilities, profile,
+    const active: ActiveSession = { state: "active", identity: sessionIdentity(identity), role: sessionRole(role), capabilities, profile,
       bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
         state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: null, claimedAt: bootstrap.Item.claimed_at,
-      } });
+      } };
+    return response(200, active);
   }
-  return response(200, { state: "visitor", candidate: {
-    ...accountProfile(account, observed), displayName: observed.display_name, status: observed.status ?? "OBSERVED",
-  } });
+  const visitor: VisitorSession = { state: "visitor", candidate: {
+    ...accountProfile(account, observed), displayName: String(observed.display_name ?? ""), status: candidateStatus(observed.status),
+  } };
+  return response(200, visitor);
+}
+
+function candidateStatus(status: unknown): VisitorSession["candidate"]["status"] {
+  return status === "REQUESTED" || status === "DISMISSED" ? status : "OBSERVED";
+}
+
+/** The identity as it may know itself: named field by field, so a storage key never leaves the API. */
+export function sessionIdentity(identity: Identity): SessionIdentity {
+  return { id: identity.id, displayName: identity.displayName, roleId: identity.roleId, directGrants: identity.directGrants };
+}
+
+export function sessionRole(role: Role | null): SessionRole | null {
+  return role === null ? null : { id: role.id, name: role.name, description: role.description, permissions: role.permissions, protected: role.protected };
 }
 
 // The account a session was signed in through, as the panel shows it. The
 // Telegram id stays a named field because the owner bootstrap and the
 // Mini App read it; every other provider is described by its handle or email.
-function accountProfile(account: Caller, observed: Item): {
-  provider: string; platformUserId: string; telegramId: string | null; username: string | null; email: string | null; photoUrl: string | null;
-} {
+function accountProfile(account: Caller, observed: Item): Mutable<AccountProfile> {
   return {
     provider: account.provider,
     platformUserId: account.subject,

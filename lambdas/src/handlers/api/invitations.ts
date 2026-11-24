@@ -10,6 +10,7 @@ import { type Response, response, parseJsonObject, errorResponse } from "./http.
 import { document, tableName } from "./access-store.ts";
 import { events } from "./clients.ts";
 import { accessIndexName, activeIdentityIndex, identityIndex, identitySettingKey, playerInvitationKey, playerInvitationSenderIndex, profileKey } from "../../access/keys.ts";
+import type { InvitationRecipient, InvitationSummary } from "../../../../contract/access.ts";
 
 export async function invitationRecipients(identity: Identity): Promise<Response> {
   const profiles = await document.send(new QueryCommand({
@@ -19,7 +20,7 @@ export async function invitationRecipients(identity: Identity): Promise<Response
     ExpressionAttributeValues: { ":state": activeIdentityIndex },
   }));
   const candidates = (profiles.Items ?? []).filter((profile) => profile.identity_id !== identity.id);
-  const recipients = await Promise.all(candidates.map(async (profile) => {
+  const recipients = await Promise.all(candidates.map(async (profile): Promise<InvitationRecipient> => {
     const identityId = String(profile.identity_id);
     const subscriptions = await document.send(new GetCommand({
       TableName: tableName,
@@ -117,7 +118,7 @@ export async function invitationHistory(identity: Identity, gameId: string, worl
     ExpressionAttributeValues: { ":sender": playerInvitationSenderIndex(identity.id, gameId, worldId) }, ScanIndexForward: false, Limit: 5,
   }));
   return response(200, { invitations: (page.Items ?? [])
-    .map((item) => ({
+    .map((item): InvitationSummary => ({
       id: item.invitation_id, audience: item.audience, status: item.status,
       recipientCount: Array.isArray(item.recipient_identity_ids) ? item.recipient_identity_ids.length : null,
       targetCount: item.delivery_target_count ?? null, successCount: item.delivery_success_count ?? null,

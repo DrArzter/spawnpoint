@@ -8,6 +8,8 @@ import { passwordCredentials } from "./credentials.ts";
 import { telegramOidcClientId, googleOidcClientId, telegramLoginEnabled, googleLoginEnabled, passwordLoginEnabled, passwordRegistrationEnabled } from "./auth-config.ts";
 import { botToken } from "./secrets.ts";
 import { emailDeliveryProvider } from "./mail.ts";
+import type { LoginOptions } from "../../../../contract/access.ts";
+import type { LoginProviderId } from "../../../../contract/login.ts";
 
 export async function authenticate(provider: LoginProvider, event: Event): Promise<Response> {
   const attempt = parseJsonObject(event);
@@ -27,15 +29,15 @@ export const googleProvider = createGoogleLoginProvider({ clientId: googleOidcCl
 // Telegram, Google and Discord only need to verify a provider-owned proof.
 // A provider that is off is not linkable either: the profile offers only what
 // can be signed in with afterwards.
-export const proofLinkProviders: ReadonlyMap<string, LoginProvider> = new Map(
+export const proofLinkProviders: ReadonlyMap<LoginProviderId, LoginProvider> = new Map(
   [...(telegramLoginEnabled ? [telegramProvider] : []), ...(googleLoginEnabled ? [googleProvider] : [])]
-    .map((provider): [string, LoginProvider] => [provider.id, provider]),
+    .map((provider): [LoginProviderId, LoginProvider] => [provider.id, provider]),
 );
 
 // Which ways in this deployment offers, so the panel draws only buttons that
 // lead somewhere. Public by nature: it is read before there is a session.
 export function loginProviders(): Response {
-  return response(200, {
+  const options: LoginOptions = {
     providers: [
       ...(telegramLoginEnabled ? [telegramProvider.id] : []),
       ...(googleLoginEnabled ? [googleProviderId] : []),
@@ -43,7 +45,8 @@ export function loginProviders(): Response {
     ],
     selfRegistration: passwordLoginEnabled && passwordRegistrationEnabled && emailDeliveryProvider !== "none" ? [passwordProviderId] : [],
     emailActions: emailDeliveryProvider !== "none",
-  });
+  };
+  return response(200, options);
 }
 
 export const loginProviderDisabled = (): Response => errorResponse(404, "not_found");

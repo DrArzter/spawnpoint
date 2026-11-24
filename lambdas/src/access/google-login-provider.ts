@@ -1,8 +1,9 @@
+import type { LoginProviderId } from "../../../contract/login.ts";
 import type { LoginPrincipal } from "./login-session.ts";
 import type { LoginAttempt, LoginProvider } from "./login-provider.ts";
 import { verifyIdToken, type JwksFetcher, type OidcClaims, type OidcIssuer } from "./oidc.ts";
 
-export const googleProviderId = "google";
+export const googleProviderId: LoginProviderId = "google";
 
 // From https://accounts.google.com/.well-known/openid-configuration, and the
 // server-side verification guide, which says Google signs tokens under both

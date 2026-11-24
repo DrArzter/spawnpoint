@@ -5,6 +5,7 @@ import { canAssign } from "./owner-guard.ts";
 import {
   createRole, deleteRole, listRoles, readDefaultRoleId, readRole, roleHolders, updateRole, writeDefaultRoleId,
 } from "./role-store.ts";
+import type { AccessRole, AccessRoleDirectory, RoleDefinition } from "../../../../contract/access.ts";
 
 // Panel roles as owner-defined data (ADR-0083). Every write is under
 // access.manage at the route; here each one is checked against no escalation:
@@ -22,18 +23,24 @@ function rights(caller: Identity, role: StoredRole, holders: number, defaultRole
 
 export async function roles(caller: Identity): Promise<Response> {
   const [list, holders, defaultRoleId] = await Promise.all([listRoles(), roleHolders(), readDefaultRoleId()]);
-  return response(200, {
-    roles: list.map((role) => {
+  const body: AccessRoleDirectory = {
+    roles: list.map((role): AccessRole => {
       const held = holders.get(role.id) ?? 0;
-      return { ...role, holders: held, ...rights(caller, role, held, defaultRoleId) };
+      return { ...definition(role), holders: held, ...rights(caller, role, held, defaultRoleId) };
     }),
     permissions: permissionCatalogue,
     defaultRoleId,
-  });
+  };
+  return response(200, body);
+}
+
+/** A role as the API shows it, named field by field. */
+function definition(role: StoredRole): RoleDefinition {
+  return { id: role.id, name: role.name, description: role.description, permissions: role.permissions, builtIn: role.builtIn, protected: role.protected, version: role.version };
 }
 
 function served(role: StoredRole): Response {
-  return response(200, { role });
+  return response(200, { role: definition(role) });
 }
 
 export async function createRoleHandler(caller: Identity, body: string | undefined): Promise<Response> {
@@ -44,7 +51,7 @@ export async function createRoleHandler(caller: Identity, body: string | undefin
   if (typeof input === "string") return errorResponse(400, input);
   if (!holdsAll(caller, input.permissions)) return errorResponse(403, "forbidden");
   const written = await createRole(roleId, input, caller.id);
-  return "conflict" in written ? errorResponse(409, written.conflict) : response(201, { role: written.role });
+  return "conflict" in written ? errorResponse(409, written.conflict) : response(201, { role: definition(written.role) });
 }
 
 function versionOf(parsed: Readonly<Record<string, unknown>>): number | null {

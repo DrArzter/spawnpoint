@@ -17,13 +17,14 @@ import { passwordCredentials } from "./credentials.ts";
 import { providerPhoto } from "../../access/avatar.ts";
 import { avatarLink } from "./avatars.ts";
 import { isConditionFailure } from "./conditions.ts";
+import type { AccessCandidate, AccessIdentity, ApprovedIdentity } from "../../../../contract/access.ts";
 
 export async function candidates(): Promise<Response> {
   const pages = await Promise.all([candidateIndex.requested, candidateIndex.observed].map((state) => document.send(new QueryCommand({
     TableName: tableName, IndexName: accessIndexName, KeyConditionExpression: "gsi1pk = :state",
     ExpressionAttributeValues: { ":state": state }, ScanIndexForward: false,
   }))));
-  return response(200, { candidates: pages.flatMap((page) => page.Items ?? []).map((item) => ({
+  return response(200, { candidates: pages.flatMap((page) => page.Items ?? []).map((item): AccessCandidate => ({
     platform: item.platform, platformUserId: item.platform_user_id, displayName: item.display_name,
     username: item.username ?? null, email: item.email ?? null, photoUrl: item.photo_url ?? null, status: item.status,
     firstSeenAt: item.first_seen_at, lastSeenAt: item.last_seen_at, requestedAt: item.requested_at,
@@ -51,7 +52,7 @@ export async function identities(caller: Identity): Promise<Response> {
     KeyConditionExpression: "gsi1pk = :state",
     ExpressionAttributeValues: { ":state": activeIdentityIndex },
   }));
-  const items = await Promise.all((profiles.Items ?? []).map(async (profile) => {
+  const items = await Promise.all((profiles.Items ?? []).map(async (profile): Promise<AccessIdentity> => {
     const identityId = String(profile.identity_id);
     const accounts = await document.send(new QueryCommand({
       TableName: tableName,
@@ -203,7 +204,8 @@ export async function approve(identity: Identity, platform: string, platformUser
     throw error;
   }
   await publishAccessApproval(platform, candidate.Item, identityId, name, role.name);
-  return response(201, { identity: { id: identityId, displayName: name, roleId, directGrants } });
+  const approved: ApprovedIdentity = { id: identityId, displayName: name, roleId, directGrants };
+  return response(201, { identity: approved });
 }
 
 export async function dismiss(identity: Identity, platform: string, platformUserId: string): Promise<Response> {

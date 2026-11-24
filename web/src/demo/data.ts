@@ -64,7 +64,7 @@ export const demoSession: ActiveSession = {
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
   capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "releasePromotion", "operationProgress"],
-  role: { id: "owner", name: "Owner", permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
+  role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
@@ -231,10 +231,10 @@ export function initialState(): DemoState {
     ],
     defaultRoleId: "viewer",
     identities: [
-      { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], links: [{ platform: "telegram", value: "1780660807", handle: "drarzter", verified: true }, { platform: "minecraft", value: "DrArzter", handle: null, verified: true }, { platform: "zerotier", value: "b9bc15e2cf", handle: null, verified: true }] },
-      { id: "identity-alex", displayName: "Alex", roleId: "player", directGrants: [], links: [{ platform: "telegram", value: "128381920", handle: null, verified: true }] },
-      { id: "identity-mira", displayName: "Mira", roleId: "viewer", directGrants: [], links: [{ platform: "telegram", value: "998120144", handle: null, verified: true }, { platform: "factorio", value: "Mira", handle: null, verified: true }] },
-      { id: "identity-kira", displayName: "Kira", roleId: "player", directGrants: [], links: [{ platform: "password", value: "5b1c6e0a-2d4f-4a8e-9c3b-7e6f5d4c3b2a", handle: "kira@example.com", verified: false }] },
+      { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "1780660807", handle: "drarzter", verified: true }, { platform: "minecraft", value: "DrArzter", handle: null, verified: true }, { platform: "zerotier", value: "b9bc15e2cf", handle: null, verified: true }] },
+      { id: "identity-alex", displayName: "Alex", roleId: "player", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "128381920", handle: null, verified: true }] },
+      { id: "identity-mira", displayName: "Mira", roleId: "viewer", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "998120144", handle: null, verified: true }, { platform: "factorio", value: "Mira", handle: null, verified: true }] },
+      { id: "identity-kira", displayName: "Kira", roleId: "player", directGrants: [], photoUrl: null, links: [{ platform: "password", value: "5b1c6e0a-2d4f-4a8e-9c3b-7e6f5d4c3b2a", handle: "kira@example.com", verified: false }] },
     ],
     candidates: [
       { platform: "telegram", platformUserId: "771246120", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", firstSeenAt: "2026-09-14T17:20:00.000Z", lastSeenAt: "2026-09-14T18:10:00.000Z", requestedAt: "2026-09-14T18:10:00.000Z" },

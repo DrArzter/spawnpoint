@@ -101,3 +101,18 @@ test("a password sign-in copies the linked Telegram photo once, and shows the id
   assert.equal(stored.length, 1, "the photo is copied into the avatar bucket");
   assert.ok(profile.photoUrl?.startsWith(`https://spawnpoint-avatars-test.s3.eu-central-1.amazonaws.com/${stored[0]}?`), "and shown through a presigned link");
 });
+
+test("a session names the identity's own fields and never its avatar key or stored role", async (t) => {
+  process.env.AVATAR_BUCKET = "spawnpoint-avatars-test";
+  process.env.AWS_REGION ??= "eu-central-1";
+  process.env.AWS_ACCESS_KEY_ID ??= "AKIATEST";
+  process.env.AWS_SECRET_ACCESS_KEY ??= "secret";
+  storage(t, {
+    account: { pk: "TELEGRAM#1000", sk: "ACCOUNT", identity_id: "member-1" },
+    profile: { identity_id: "member-1", display_name: "Member", role_id: "player", direct_grants: [], status: "ACTIVE", avatar_key: "member-1/a.jpg" },
+    claims: [claim],
+  });
+  const found = await body() as { identity: Record<string, unknown>; role: Record<string, unknown> | null };
+  assert.deepEqual(Object.keys(found.identity).sort(), ["directGrants", "displayName", "id", "roleId"]);
+  assert.deepEqual(Object.keys(found.role ?? {}).sort(), ["description", "id", "name", "permissions", "protected"]);
+});

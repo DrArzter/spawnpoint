@@ -1,4 +1,5 @@
 import type { SettingDefinition, SettingValue } from "../../contract/settings";
+import type { AccessPermission, AccessRole } from "../../contract/access";
 import type { ControlPlaneSnapshot, Deployment, Game, Host, Operation, Preset, ReleasePointer, Wipe, World, WorldGameSettings, WorldSession } from "../../contract/control-plane";
 
 /** One setting a world of this game may set, as its game module defines it (contract/settings.ts). */
@@ -13,9 +14,9 @@ export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unk
 export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "console" | "metrics";
 
 /** A role as the API serves it; `assignable` is the caller's own reading, so a skin never works out who may give what. */
-export type Role = { id: string; name: string; description: string; permissions: string[]; builtIn: boolean; protected: boolean; assignable: boolean; version: number; holders: number; editable: boolean; deletable: boolean };
+export type Role = AccessRole;
 /** One permission of the served catalogue: the words every skin shows for it. */
-export type PermissionInfo = { id: string; group: string; label: string; description: string; reserved: boolean };
+export type PermissionInfo = AccessPermission;
 export type LinkKind = "telegram" | "email" | "google" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
 export type LinkedAccount = { id: string; kind: LinkKind; value: string; verified: boolean };
 /** `canDelete` is the backend's answer for this caller, not a rule the web works out. */

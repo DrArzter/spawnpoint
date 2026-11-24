@@ -16,10 +16,12 @@ import { accessIndexName, accessInvitationKey, accessInvitationProofKey, created
 import { type Item } from "./access-store.ts";
 import { type EmailSender } from "../../email/email-sender.ts";
 import { isConditionFailure } from "./conditions.ts";
+import type { AccessInvitation, ApprovedIdentity, IssuedAccessInvitation } from "../../../../contract/access.ts";
 
-function invitationStatus(item: Item): unknown {
+function invitationStatus(item: Item): AccessInvitation["status"] {
   if (accessInvitationUsable(item)) return "PENDING";
-  return item.status === "PENDING" ? "EXPIRED" : item.status;
+  // A pending invitation that is no longer usable has expired.
+  return item.status === "USED" || item.status === "REVOKED" ? item.status : "EXPIRED";
 }
 
 export async function checkAccessInvitation(event: Event): Promise<Response> {
@@ -38,7 +40,7 @@ export async function accessInvitations(): Promise<Response> {
     ScanIndexForward: false,
     Limit: 50,
   }));
-  return response(200, { invitations: (result.Items ?? []).map((item) => ({
+  return response(200, { invitations: (result.Items ?? []).map((item): AccessInvitation => ({
     id: item.token_hash,
     status: invitationStatus(item),
     createdAt: item.created_at,
@@ -73,7 +75,8 @@ export async function createAccessInvitation(identity: Identity, event: Event): 
     ConditionExpression: "attribute_not_exists(pk)",
   }));
   const delivery = await deliverAccessInvitation(sender, email, identity.displayName, url, invitation.tokenHash);
-  return response(201, { id: invitation.tokenHash, url, createdAt, expiresAt: new Date(invitation.expiresAtEpochSeconds * 1000).toISOString(), delivery });
+  const issued: IssuedAccessInvitation = { id: invitation.tokenHash, url, createdAt, expiresAt: new Date(invitation.expiresAtEpochSeconds * 1000).toISOString(), delivery };
+  return response(201, issued);
 }
 
 async function deliverAccessInvitation(sender: EmailSender | null, email: string | null, inviterName: string, url: string, tokenHash: string): Promise<"not_requested" | "sent" | "failed"> {
@@ -203,5 +206,6 @@ export async function redeemAccessInvitation(account: Caller, event: Event): Pro
     if (isConditionFailure(error)) return errorResponse(409, "invitation_unavailable");
     throw error;
   }
-  return response(201, { identity: { id: identityId, displayName: name, roleId, directGrants: [] } });
+  const approved: ApprovedIdentity = { id: identityId, displayName: name, roleId, directGrants: [] };
+  return response(201, { identity: approved });
 }

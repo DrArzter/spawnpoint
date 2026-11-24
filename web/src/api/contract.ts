@@ -4,10 +4,15 @@ import type { ConsoleEntry } from "../../../contract/console";
 import type { HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange } from "../../../contract/metrics";
 import type { BackupEntry, BackupInventory } from "../../../contract/backups";
 import type { ApiErrorCode } from "../../../contract/errors";
+import type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermission, AccessRole, AccessRoleDirectory, AccountProfile, AppearancePreference, ApprovedIdentity, InvitationRecipient, InvitationSummary, IssuedAccessInvitation, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, RoleDefinition, SubscriptionState, VisitorSession, ActiveSession as ServedSession } from "../../../contract/access";
 import type { HostLogLine, OperationProgress, OperationStep } from "../../../contract/operations";
 
 // Shapes the API and the panel share live in ../contract (review X2).
 export type { ApiErrorCode };
+/** What the access, session and profile routes send (contract/access.ts). */
+export type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermission, AccessRole, AccessRoleDirectory, AccountProfile, AppearancePreference, ApprovedIdentity, InvitationRecipient, InvitationSummary, IssuedAccessInvitation, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, RoleDefinition, SubscriptionState, VisitorSession };
+/** A signed-in session; `demo` is set by a transport whose data is not real, so the panel can say so. */
+export type ActiveSession = ServedSession & Readonly<{ demo?: boolean }>;
 export type { BackupEntry, BackupInventory, ConsoleEntry, HostLogLine, HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
 
 export type PromotionResult = { result: "requested"; operationId: string } | { result: "switched" };
@@ -53,40 +58,6 @@ export function failureKind(error: unknown): ApiFailureKind {
   return error instanceof ApiError ? error.kind : "failed";
 }
 
-/**
- * The account a session was signed in through. `provider` says which platform
- * vouches for it; the Telegram id stays a named field because the owner
- * bootstrap reads it, and an email account is described by its address.
- */
-export type AccountProfile = Readonly<{
-  provider: string;
-  platformUserId: string;
-  telegramId: string | null;
-  username: string | null;
-  email: string | null;
-  photoUrl: string | null;
-}>;
-
-export type ActiveSession = Readonly<{
-  state: "active";
-  /** Set by a transport whose data is not real, so the panel can say so without asking which mode it is in. */
-  demo?: boolean;
-  identity: { id: string; displayName: string; roleId: string; directGrants: string[] };
-  /** What this deployment routes. A screen whose capability is absent is not offered at all. */
-  capabilities: readonly string[];
-  role: { id: string; name: string; permissions: string[] } | null;
-  profile: AccountProfile;
-  bootstrap: { state: "unclaimed" } | { state: "claimed"; ownerId: string; telegramId: string | null; claimedAt: string };
-}>;
-
-export type VisitorSession = Readonly<{
-  state: "visitor";
-  candidate: AccountProfile & {
-    displayName: string;
-    status: "OBSERVED" | "REQUESTED" | "DISMISSED";
-  };
-}>;
-
 // The one place a failed answer becomes an ApiError. The API denies by default
 // and answers anything it does not route with its own `not_found`; a missing
 // resource answers with a code of its own. So a route that was never deployed
@@ -111,98 +82,9 @@ export function identityDeletionRefusal(status: number, error: unknown): string 
 
 export type SpawnpointSession = ActiveSession | VisitorSession;
 
-export type AccessCandidate = Readonly<{
-  platform: string;
-  platformUserId: string;
-  displayName: string;
-  username: string | null;
-  email: string | null;
-  photoUrl: string | null;
-  status: "OBSERVED" | "REQUESTED";
-  firstSeenAt: string;
-  lastSeenAt: string;
-  requestedAt: string | null;
-}>;
-
-export type AccessIdentity = Readonly<{
-  id: string;
-  displayName: string;
-  roleId: string;
-  directGrants: string[];
-  /** Whether the caller may delete this identity; the backend's owner rules decide, so the web keeps no copy of them. */
-  canDelete: boolean;
-  /** A photo from one of the person's linked accounts; absent from a server that predates it. */
-  photoUrl?: string | null;
-  /** `handle` is the account's own name where it has one: a Telegram username, an email address. */
-  links: ReadonlyArray<{ platform: string; value: string; handle: string | null; verified: boolean }>;
-}>;
-
-export type AccessRole = Readonly<{
-  id: string;
-  name: string;
-  description: string;
-  permissions: string[];
-  builtIn: boolean;
-  /** The one role that holds the reserved permission and must keep a holder. */
-  protected: boolean;
-  version: number;
-  /** Whether the caller may give this role; computed per caller. */
-  assignable: boolean;
-  /** How many active identities hold it; a held role cannot be deleted. */
-  holders: number;
-  /** The caller may edit it: manages access, the role is not protected and the caller holds all its permissions. */
-  editable: boolean;
-  /** The caller may delete it: editable, not built in, not held and not the default role. */
-  deletable: boolean;
-}>;
-
 /** What a role is created with; `id` is a lower-case slug. */
 export type AccessRoleDraft = Readonly<{ name: string; description: string; permissions: string[] }>;
 
-export type AccessPermission = Readonly<{
-  id: string;
-  group: string;
-  label: string;
-  description: string;
-  /** Held only through the protected role. */
-  reserved: boolean;
-}>;
-
-/** The role list with the permission catalogue and the role an approval gives when nobody picks one. */
-export type AccessRoleDirectory = Readonly<{
-  roles: AccessRole[];
-  permissions: AccessPermission[];
-  defaultRoleId: string;
-}>;
-
-export type SubscriptionState = Record<string, boolean>;
-
-/**
- * How the console looks for one person. `system` follows the device; the accent
- * is a hex colour the panel derives its blues from. Stored against the identity
- * rather than the browser, so a phone and a laptop agree.
- */
-export type AppearancePreference = Readonly<{
-  theme: "light" | "dark" | "system";
-  accent: string;
-}>;
-
-export type InvitationRecipient = Readonly<{
-  id: string;
-  displayName: string;
-  delivery: "ready" | "notifications_off" | "bot_unavailable";
-}>;
-
-export type InvitationSummary = Readonly<{
-  id: string;
-  audience: "broadcast" | "direct";
-  status: "READY" | "DELIVERING" | "DELIVERED" | "PARTIAL" | "FAILED" | "NO_RECIPIENTS" | "PUBLISH_FAILED";
-  recipientCount: number | null;
-  targetCount: number | null;
-  successCount: number | null;
-  failureCount: number | null;
-  createdAt: string;
-}>;
 
 
 /** Where a release's build fetched a mod. Releases built before it was recorded carry none. */
@@ -273,7 +155,6 @@ export type SavedWhitelist = WorldWhitelist & Readonly<{ applied: "reloading" | 
 /** A link the browser opens once; it expires, and is never kept. */
 export type FileLink = Readonly<{ url: string; expiresIn: number }>;
 
-
 export type AuthState =
   | { status: "loading" }
   | { status: "signed-out" }
@@ -290,48 +171,7 @@ export type StopPlayersPolicy = "refuse" | "disconnect";
 
 /** One line of the host's own output while a start ran, already filtered and redacted by the API. */
 
-/** How far one world operation has come, and why it ended badly (`GET .../operations/{id}`). */
-export type LoginOptions = Readonly<{
-  providers: readonly LoginProviderId[];
-  /** Providers through which an anonymous visitor may create a credential. */
-  selfRegistration: readonly LoginProviderId[];
-  emailActions: boolean;
-}>;
 
-export type LinkedLoginAccount = Readonly<{
-  provider: string;
-  subject: string;
-  displayName: string | null;
-  username: string | null;
-  email: string | null;
-  photoUrl: string | null;
-  verified: boolean;
-}>;
-
-export type LinkedLoginAccounts = Readonly<{
-  accounts: readonly LinkedLoginAccount[];
-  /** Proof-based providers that this deployment can add to an existing identity. */
-  linkableProviders: readonly string[];
-  passwordManagementAvailable: boolean;
-}>;
-
-export type AccessInvitation = Readonly<{
-  id: string;
-  status: "PENDING" | "USED" | "REVOKED" | "EXPIRED";
-  createdAt: string;
-  expiresAt: string;
-  usedAt: string | null;
-  delivery: "not_requested" | "pending" | "sent" | "failed";
-  deliveryEmail: string | null;
-}>;
-
-export type IssuedAccessInvitation = Readonly<{
-  id: string;
-  url: string;
-  createdAt: string;
-  expiresAt: string;
-  delivery: AccessInvitation["delivery"];
-}>;
 
 /** One console command and the game's answer, recorded against who ran it (ADR-0063). */
 

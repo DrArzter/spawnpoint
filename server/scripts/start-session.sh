@@ -148,16 +148,14 @@ if [[ -n "${release_bucket}" ]]; then
     if [[ "${WORLD_STORAGE_LAYOUT}" == "generation" ]]; then
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
         "${SPAWNPOINT_WORLD_MODS_DIRECTORY}" >&2
-    elif [[ "${GAME_ID}" == "minecraft" ]]; then
-      "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" >&2
+    elif declare -F game_legacy_mods_directory >/dev/null; then
+      "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" "$(game_legacy_mods_directory)" >&2
     else
       "${SCRIPT_DIR}/reconcile-release.sh" "${payload_dir}/manifest.json" \
         "${SPAWNPOINT_WORLD_MODS_DIRECTORY:-${SERVER_DIR}/games/${GAME_ID}/data/mods}" >&2
     fi
-    if [[ "${GAME_ID}" == "minecraft" ]]; then
-      overrides_target="${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${SERVER_DIR}/data}"
-      "${SCRIPT_DIR}/reconcile-server-overrides.sh" \
-        "${payload_dir}/manifest.json" "${overrides_target}" >&2
+    if declare -F game_apply_release_overrides >/dev/null; then
+      game_apply_release_overrides "${payload_dir}/manifest.json" >&2
     fi
     if declare -F game_prepare_runtime >/dev/null; then
       game_prepare_runtime "${payload_dir}/manifest.json"

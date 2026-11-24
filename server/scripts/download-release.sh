@@ -8,6 +8,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../games/_manifest.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_manifest.sh"
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
@@ -63,12 +66,14 @@ s3_cli get-object \
   --key "${manifest_key}" \
   "${manifest_tmp}" >/dev/null || die "release ${release} is not published: s3://${RELEASE_BUCKET}/${manifest_key}"
 
-jq -e '
+# The release's game states whether its releases carry a runtime image (ADR-0088).
+download_runtime_required="$(game_fact "$(jq -r '.game // empty' "${manifest_tmp}")" '.release.runtime_image_required // false' 2>/dev/null || printf 'false')"
+jq -e --argjson runtime_required "${download_runtime_required}" '
   .schema_version == 1 and
   (.game | type == "string") and
   (.release | type == "string") and
   (.source_profile.id | type == "string") and
-  (if .game == "factorio"
+  (if $runtime_required
     then (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$"))
     else ((has("runtime") | not) or
       (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))

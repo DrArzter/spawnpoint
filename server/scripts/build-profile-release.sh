@@ -13,7 +13,7 @@ usage: build-profile-release.sh <profile-directory> <release> <resolved-mods-dir
 The profile must belong to a clean Git checkout, or PROFILE_SOURCE_REPOSITORY and PROFILE_SOURCE_COMMIT must identify
 its verified Git snapshot. Its origin URL, full commit and profile ID are embedded in the release manifest. A profile
 with mods.source=null requires an empty resolved mod directory. The profile's game
-(ADR-0034) selects the version field, the loader contract and the mod extension; absence means minecraft.
+(ADR-0034) selects the version field, the loader contract and the mod extension; absence means the legacy game (ADR-0089).
 A profile with mods.addons (ADR-0077) needs the resolver's addons/ beside the mods: this step adds them to the client
 pack, whose version becomes <upstream>+<release>, and records them in client.addons and mod_index.
 EOF
@@ -164,7 +164,8 @@ fi
 # Every game's manifest carries its version in the minecraft_version field
 # (the recorded wart in ADR-0034), and a game that is its own loader repeats
 # the engine version there rather than inventing a second vocabulary.
-if [[ "${game}" == "minecraft" && "${loader_type}" == "vanilla" ]]; then
+# A bare loader (the game with no mod loader) is versioned by the game itself.
+if jq -e --arg loader "${loader_type}" '.bare_loader_types | index($loader) != null' <<<"${PROFILE_RULES}" >/dev/null; then
   loader_version="${game_version}"
 elif [[ "${PROFILE_LOADER_VERSIONED}" == true ]]; then
   loader_version="$(jq -r '.loader.version' "${profile}")"

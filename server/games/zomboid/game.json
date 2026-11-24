@@ -22,6 +22,15 @@
     "loader_versioned": false,
     "mod_extension": "zip",
     "resolver": "zomboid-workshop",
-    "runtime_image_required": false
+    "runtime_image_required": false,
+    "loader_types": [
+      "workshop"
+    ],
+    "default_loader_type": "workshop",
+    "bare_loader_types": [],
+    "resolvers": [],
+    "side_lists": false,
+    "addons": false,
+    "requires_curseforge_key": false
   }
 }

@@ -29,6 +29,20 @@ GAME_COMPOSE_SERVICE="mc"
 # backups, not this folder: each world has a data directory of its own, and a
 # world created from a preset has an id such as minecraft-rostik-1a2b3c4d.
 MINECRAFT_LEVEL_NAME="world"
+MINECRAFT_GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+# A legacy world's mods live where the pre-adapter scripts kept them: the
+# server's own mods folder, whatever the world's mods directory says.
+game_legacy_mods_directory() {
+  printf '%s\n' "${SERVER_MODS_DIR:-${SERVER_DIR}/mods}"
+}
+
+# A modpack release carries managed server overrides (ADR-0077); they land in
+# the world's data directory before the server starts.
+game_apply_release_overrides() {
+  "${MINECRAFT_GAME_DIR}/../../scripts/reconcile-server-overrides.sh" "$1" \
+    "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${SERVER_DIR}/data}"
+}
 
 game_prepare_runtime() {
   local manifest="$1" loader_type loader_version minecraft_version

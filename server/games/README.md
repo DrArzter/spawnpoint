@@ -15,7 +15,7 @@ minecraft, byte-identically.
 | Kind | Hooks |
 | --- | --- |
 | Required | `game_query_players_raw`, `game_parse_player_count`, `game_save`, `game_save_paths`, `game_save_sentinel`, `game_archive_sentinel_regex`, `game_tick_time_ms` |
-| Optional | `game_ready` (a shared default exists), `game_console`, `game_save_excludes`, `game_mod_data_paths`, `game_prepare_runtime`, `game_prepare_installed_runtime`, `game_prepare_session`, `game_render_whitelist`, `game_reload_whitelist` |
+| Optional | `game_ready` (a shared default exists), `game_console`, `game_save_excludes`, `game_mod_data_paths`, `game_prepare_runtime`, `game_prepare_installed_runtime`, `game_prepare_session`, `game_legacy_mods_directory`, `game_apply_release_overrides`, `game_render_whitelist`, `game_reload_whitelist` |
 
 Two more optional inputs: `GAME_DATA_OWNER` (a `uid:gid`, default `1000:1000`) and `settings.json` beside `game.sh`.
 `game_render_whitelist` and `game_reload_whitelist` go together: `apply-whitelist.sh` needs both.

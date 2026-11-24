@@ -1,0 +1,13 @@
+Spawnpoint pack, release {{release}} (Factorio {{game_version}}).
+
+Usually you do not need this: joining the server offers the mods it runs. Use the pack when that
+offer does not arrive, or when your game cannot reach the mod portal.
+
+1. Close Factorio.
+2. Delete every .zip in your mods folder. Leave mod-list.json alone; the game rewrites it.
+3. Copy the .zip files from this archive into that folder:
+     Windows  %APPDATA%\Factorio\mods
+     Linux    ~/.factorio/mods
+     macOS    ~/Library/Application Support/factorio/mods
+
+Two versions of one mod stop the game from loading, which is why step 2 is a deletion and not a merge.

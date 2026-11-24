@@ -15,7 +15,7 @@ cssRuleTests("terminal.css", {
   code: [...sourceTexts(root, /\.(tsx?|html)$/), readFileSync(new URL("../index.html", import.meta.url), "utf8")].join("\n"),
   prefix: "t-",
   // Behaviour the skins share (components/ui): the terminal restyles it under the shared class names.
-  shared: new Set(["snackbar", "timestamp", "tip", "tip-anchor"]),
+  shared: new Set(["popover", "snackbar", "timestamp", "tip", "tip-anchor"]),
   scope: 'html[data-skin="terminal"]',
   // A token block is a rule that holds custom properties and nothing else.
   mayHoldLiterals: (rule) => [...rule.declarations.keys()].every((property) => property.startsWith("--")),

@@ -14,7 +14,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
 
   return (
     <div className="t-shell">
-      <header className="t-bar">
+      <header className="t-bar" data-covers-top>
         <a className="t-brand" href="#/worlds">
           <SpawnpointMark size={24} />
           <strong>Spawnpoint</strong>
@@ -44,7 +44,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
       </header>
       {/* Scrolls sideways on a narrow screen by design; the half-visible next
           destination is the affordance. */}
-      <nav aria-label="Main navigation" className="t-menu-row" data-scroll="expected">
+      <nav aria-label="Main navigation" className="t-menu-row" data-covers-top data-scroll="expected">
         {model.navigation.map((item) => (
           <a aria-current={item.current ? "page" : undefined} className="t-menu-link" href={item.href} key={item.id}>{item.label}</a>
         ))}

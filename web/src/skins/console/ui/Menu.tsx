@@ -1,3 +1,4 @@
+import { type Align, type Side, positionPopover } from "../../../lib/placement";
 import { useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from "react";
 
 import { hideLayer, showLayer, useLightDismiss } from "../../../components/ui/layer";
@@ -16,7 +17,15 @@ export type MenuGroup = Readonly<{ label?: string; actions: readonly Action[] }>
  * so every Action in it is reachable markup. Arrows move, Escape and Tab close it, and focus
  * goes back to the anchor.
  */
-export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id: string; label: string; groups: readonly MenuGroup[]; open: boolean; anchor: RefObject<HTMLElement | null>; onClose: () => void }>) {
+/**
+ * `side` and `align` place the menu against its anchor through the shared
+ * placement: below and lined up with the anchor's end by default, a leading
+ * trigger lines up with its start.
+ */
+export function Menu({ id, label, groups, open, anchor, onClose, side = "bottom", align = "end" }: Readonly<{
+  id: string; label: string; groups: readonly MenuGroup[]; open: boolean; anchor: RefObject<HTMLElement | null>; onClose: () => void;
+  side?: Side; align?: Align;
+}>) {
   const menu = useRef<HTMLDivElement>(null);
   const toast = useToast();
   const items = () => [...(menu.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
@@ -30,14 +39,9 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
       return;
     }
     showLayer(element);
-    const rect = target.getBoundingClientRect();
-    const height = element.offsetHeight;
-    const width = element.offsetWidth;
-    const below = rect.bottom + 4 + height <= window.innerHeight || rect.top - 4 - height < 0;
-    element.style.top = `${below ? rect.bottom + 4 : rect.top - 4 - height}px`;
-    element.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`;
+    positionPopover(element, target, side, align);
     (items().find((item) => item.getAttribute("aria-disabled") !== "true") ?? items()[0])?.focus();
-  }, [open, anchor]);
+  }, [open, anchor, side, align]);
 
   useLightDismiss(open, [menu, anchor], onClose);
 
@@ -67,7 +71,7 @@ export function Menu({ id, label, groups, open, anchor, onClose }: Readonly<{ id
   const visible = groups.filter((group) => group.actions.length > 0);
 
   return (
-    <div aria-label={label} className="c-menu" data-layer="menu" id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
+    <div aria-label={label} className="c-menu c-popover" data-layer="menu" id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
       {visible.map((group, index) => (
         <div className={cx("c-menu-group", index > 0 && "c-menu-group-split")} key={group.label ?? index} role="group" aria-label={group.label} /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
           {group.label && <div aria-hidden="true" className="c-menu-label">{group.label}</div>}

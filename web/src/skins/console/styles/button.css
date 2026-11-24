@@ -160,6 +160,43 @@ html[data-skin="console"] .c-overflow {
   flex: none;
 }
 
+/* An avatar that opens its own menu: the picture is the button. */
+html[data-skin="console"] .c-avatar-trigger {
+  position: relative;
+  display: inline-grid;
+  padding: 0;
+  border: 0;
+  border-radius: var(--c-r-pill);
+  background: none;
+  cursor: pointer;
+}
+
+html[data-skin="console"] .c-avatar-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--c-surface);
+  border-radius: var(--c-r-pill);
+  background: var(--c-accent);
+  color: var(--c-accent-ink);
+  opacity: 0;
+  transition: opacity var(--c-d1);
+}
+
+html[data-skin="console"] .c-avatar-trigger:is(:hover, :focus-visible, [aria-expanded="true"]) .c-avatar-badge {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  html[data-skin="console"] .c-avatar-badge {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 759px) {
   html[data-skin="console"] .c-icon-btn-flash {
     width: var(--c-target);

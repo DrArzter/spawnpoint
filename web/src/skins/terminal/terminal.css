@@ -1234,17 +1234,38 @@ html[data-skin="terminal"] .t-avatar-large {
   font-size: 20px;
 }
 
-html[data-skin="terminal"] .t-avatar-xlarge {
-  width: 96px;
-  height: 96px;
-  font-size: 32px;
+/* An avatar that opens its own menu: the picture is the button. */
+html[data-skin="terminal"] .t-avatar-trigger {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
 }
 
-html[data-skin="terminal"] .t-picture {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px;
+html[data-skin="terminal"] .t-avatar-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  background: var(--primary);
+  color: var(--on-primary);
+  opacity: 0;
+}
+
+html[data-skin="terminal"] .t-avatar-trigger:is(:hover, :focus-visible, [aria-expanded="true"]) .t-avatar-badge {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  html[data-skin="terminal"] .t-avatar-badge {
+    opacity: 1;
+  }
 }
 
 /* --- tabs: cells on a rule, the chosen one inverted ------------------------------------ */
@@ -2697,6 +2718,16 @@ html[data-skin="terminal"] .snackbar p::before {
 html[data-skin="terminal"] .tip {
   border-radius: 0;
   font-family: var(--font-ui);
+}
+
+/* The terminal's popovers keep their square corners; a menu's tail carries its rule. */
+html[data-skin="terminal"] .popover::before {
+  border-top-left-radius: 0;
+}
+
+html[data-skin="terminal"] .t-menu.popover {
+  --popover-fill: var(--surface);
+  --popover-line: var(--rule);
 }
 
 /* The two provider widgets keep their own look; the wrapper only sizes them. */

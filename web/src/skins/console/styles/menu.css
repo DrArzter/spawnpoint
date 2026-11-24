@@ -9,7 +9,6 @@ html[data-skin="console"] .c-menu {
   border-radius: var(--c-r);
   background: var(--c-surface-pop);
   box-shadow: var(--c-shadow-pop);
-  animation: c-fade var(--c-d1) var(--c-ease);
 }
 
 html[data-skin="console"] .c-menu-group-split {

@@ -1,3 +1,4 @@
+import { positionPopover } from "../../lib/placement";
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes } from "react";
 
 import type { ApiFailureKind } from "../../api/contract";
@@ -358,7 +359,7 @@ export function Help({ text }: Readonly<{ text: string }>) {
   return <Tooltip className="t-help" text={text}><span aria-hidden="true">(?)</span><span className="visually-hidden">{text}</span></Tooltip>;
 }
 
-export function Avatar({ name, photoUrl, size = "medium", className }: Readonly<{ name: string; photoUrl?: string | null; size?: "small" | "medium" | "large" | "xlarge"; className?: string }>) {
+export function Avatar({ name, photoUrl, size = "medium", className }: Readonly<{ name: string; photoUrl?: string | null; size?: "small" | "medium" | "large"; className?: string }>) {
   return (
     <span aria-hidden="true" className={cx("t-avatar", `t-avatar-${size}`, className)}>
       {photoUrl ? <img alt="" src={photoUrl} /> : (name.trim().charAt(0) || "?").toUpperCase()}
@@ -559,7 +560,11 @@ export function Address({ value, connectivity, network, copyLabel, size = "mediu
 // --- overflow menu ---------------------------------------------------------------
 
 /** The overflow: a key that opens a list of verbs in the top layer, or the one verb as its own key. */
-export function Overflow({ label, groups, size = "medium", className, menu = false }: Readonly<{ label: string; groups: readonly (readonly Action[])[]; size?: "small" | "medium"; className?: string; menu?: boolean }>) {
+/** `avatar` makes the person's picture the trigger, for the menu that changes that picture. */
+export function Overflow({ label, groups, size = "medium", className, menu = false, avatar }: Readonly<{
+  label: string; groups: readonly (readonly Action[])[]; size?: "small" | "medium"; className?: string; menu?: boolean;
+  avatar?: Readonly<{ name: string; photoUrl?: string | null; size: "small" | "medium" | "large" }>;
+}>) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -571,17 +576,11 @@ export function Overflow({ label, groups, size = "medium", className, menu = fal
     const menu = panel.current;
     if (!button || !menu) return;
     const rect = button.getBoundingClientRect();
-    const width = 240;
-    const anchored = rect.left + rect.width / 2 < window.innerWidth / 2 ? rect.left : rect.right - width;
-    const left = Math.max(8, Math.min(anchored, window.innerWidth - width - 8));
-    const below = rect.bottom + 4;
-    menu.style.left = `${left}px`;
-    menu.style.top = `${below}px`;
-    menu.style.width = `${width}px`;
+    menu.style.width = "240px";
     showLayer(menu);
     // Measured once open: a coarse pointer's taller items outgrow any estimate (UI gate menuCut).
-    const height = menu.offsetHeight;
-    if (below + height > window.innerHeight) menu.style.top = `${Math.max(8, rect.top - height - 4)}px`;
+    // A trigger in the left half of the screen lines the menu up with its start, else its end.
+    positionPopover(menu, button, "bottom", rect.left + rect.width / 2 < window.innerWidth / 2 ? "start" : "end");
     setOpen(true);
     window.requestAnimationFrame(() => menu.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus());
   }
@@ -609,7 +608,7 @@ export function Overflow({ label, groups, size = "medium", className, menu = fal
   // One action is its own key: a menu that holds one item only hides it behind
   // a second tap. An action without an icon keeps the menu, and so does a
   // column whose other rows hold more (`menu`), so the column has one control.
-  const only = !menu && present.length === 1 && present[0]?.length === 1 ? present[0][0] : undefined;
+  const only = !menu && !avatar && present.length === 1 && present[0]?.length === 1 ? present[0][0] : undefined;
   if (only?.icon) {
     return (
       <IconKey
@@ -626,8 +625,15 @@ export function Overflow({ label, groups, size = "medium", className, menu = fal
 
   return (
     <>
-      <IconKey aria-controls={id} aria-expanded={open} aria-haspopup="menu" className={className} icon="more_vert" label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />
-      <div className="t-menu" data-layer="menu" id={id} onKeyDown={onKeyDown} popover="manual" ref={panel} role="menu" tabIndex={-1}>
+      {avatar
+        ? (
+          <button aria-controls={id} aria-expanded={open} aria-haspopup="menu" aria-label={label} className={cx("t-avatar-trigger", className)} onClick={() => (open ? hide() : show())} ref={trigger} type="button">
+            <Avatar name={avatar.name} photoUrl={avatar.photoUrl} size={avatar.size} />
+            <span aria-hidden="true" className="t-avatar-badge" data-layer="glyph"><Icon name="edit" size={14} /></span>
+          </button>
+        )
+        : <IconKey aria-controls={id} aria-expanded={open} aria-haspopup="menu" className={className} icon="more_vert" label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />}
+      <div className="t-menu popover" data-layer="menu" id={id} onKeyDown={onKeyDown} popover="manual" ref={panel} role="menu" tabIndex={-1}>
         {present.map((group, groupIndex) => (
           <div className="t-menu-group" key={group[0]?.id ?? groupIndex}>
             {groupIndex > 0 && <hr />}

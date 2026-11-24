@@ -9,14 +9,15 @@ import { Icon, type IconName } from "../../icons";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../../lib/signin";
 import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
-import { Avatar, Choice, Choices, Empty, Field, Indicator, Key, LoadError, Overflow, Page, Panel, SkeletonRows, TextInput, Verb, Verbs } from "./ui";
+import { Choice, Choices, Empty, Field, Indicator, Key, LoadError, Overflow, Page, Panel, SkeletonRows, TextInput, Verb, Verbs } from "./ui";
 
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   const { member, role, viewer } = model;
   return (
     <Page>
-      <header className="t-page-head">
+      <header className="t-page-head" data-tip-side="bottom">
         <div className="t-page-title t-page-title-person">
+          <Overflow avatar={{ name: member.name, photoUrl: viewer.photoUrl, size: "large" }} groups={[[model.avatar.change], model.avatar.remove ? [model.avatar.remove] : []]} label="Change your picture" />
           <div className="t-stack">
             <h1>{member.name}</h1>
             <small>{viewer.username ? `@${viewer.username}` : viewer.email ?? "Spawnpoint identity"}</small>
@@ -28,15 +29,6 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
           <Verb action={model.signOut} />
         </Verbs>
       </header>
-      <Panel name="Picture">
-        <div className="t-picture">
-          <Avatar name={member.name} photoUrl={viewer.photoUrl} size="xlarge" />
-          <Verbs>
-            <Verb action={model.avatar.change} />
-            {model.avatar.remove && <Verb action={model.avatar.remove} />}
-          </Verbs>
-        </div>
-      </Panel>
       <Appearance look={model.look} model={model.appearance} />
       <LoginAccounts model={model.loginAccounts} />
     </Page>

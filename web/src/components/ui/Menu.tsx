@@ -1,3 +1,4 @@
+import { positionPopover } from "../../lib/placement";
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { Icon, IconName } from "../../icons";
@@ -37,15 +38,9 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
     const button = trigger.current;
     const menu = panel.current;
     if (!button || !menu) return;
-    const rect = button.getBoundingClientRect();
-    const width = 224;
-    const left = align === "end" ? Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)) : Math.min(rect.left, window.innerWidth - width - 8);
-    const below = rect.bottom + 4;
-    const estimatedHeight = 16 + items.length * 44;
-    menu.style.left = `${left}px`;
-    menu.style.top = below + estimatedHeight > window.innerHeight ? `${Math.max(8, rect.top - estimatedHeight - 4)}px` : `${below}px`;
-    menu.style.width = `${width}px`;
+    menu.style.width = "224px";
     showLayer(menu);
+    positionPopover(menu, button, "bottom", align);
     setOpen(true);
     window.requestAnimationFrame(() => menu.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus());
   }
@@ -75,7 +70,7 @@ export function Menu({ label, icon = "more_vert", items, align = "end", size = "
     <>
       {avatar && <button aria-controls={id} aria-expanded={open} aria-haspopup="menu" aria-label={label} className="appbar-avatar" onClick={() => (open ? hide() : show())} ref={trigger} title={label} type="button"><Avatar name={avatar.name} photoUrl={avatar.photoUrl} /></button>}
       {!avatar && <IconButton aria-controls={id} aria-expanded={open} aria-haspopup="menu" icon={icon} label={label} onClick={() => (open ? hide() : show())} ref={trigger} size={size} />}
-      <div className="menu" data-layer="menu" data-open={open || undefined} id={id} onKeyDown={onKeyDown} popover="manual" ref={panel} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
+      <div className="menu popover" data-layer="menu" data-open={open || undefined} id={id} onKeyDown={onKeyDown} popover="manual" ref={panel} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
         {items.map((item, index) => item === "separator" ? <hr key={`separator-${index}`} /> : ( // NOSONAR separators have no id; the list is rebuilt whole
           <button
             className="menu-item"

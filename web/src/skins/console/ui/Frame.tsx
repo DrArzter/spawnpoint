@@ -98,7 +98,7 @@ function Refreshed({ model }: Readonly<{ model: ShellModel }>) {
 /** The top bar: brand and game at the start; search, refreshed time, demo and the account at the end. No theme control (R7). */
 export function TopBar({ model, scope, onSearch }: Readonly<{ model: ShellModel; scope: ReactNode; onSearch: () => void }>) {
   return (
-    <header className="c-topbar">
+    <header className="c-topbar" data-covers-top>
       <a className="c-brand" href={model.overview?.href ?? "#/worlds"}>
         <Mark />
         <span className="c-brand-name">Spawnpoint</span>

@@ -11,7 +11,6 @@ import { DEFAULT_ACCENT, parseHex } from "../../styles/accent";
 import type { ThemePreference } from "../../telegram";
 import { IRIS } from "./ui/accent";
 import { ActionButton } from "./ui/ActionButton";
-import { Avatar } from "./ui/Avatar";
 import { Card } from "./ui/Card";
 import { Chip } from "./ui/Chip";
 import { Copy } from "./ui/Copy";
@@ -45,9 +44,9 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
           </span>
           </>
         )}
+        lead={<Overflow actions={avatarActions(model.avatar)} avatar={{ name: member.name, photoUrl: viewer.photoUrl, size: "lg" }} label="Change your picture" />}
         title={member.name}
       />
-      <Picture model={model.avatar} name={member.name} photoUrl={viewer.photoUrl} />
       <Grid kind="profile">
         <SignInMethods model={model.loginAccounts} />
         <Appearance look={model.look} model={model.appearance} />
@@ -57,18 +56,8 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
   );
 }
 
-function Picture({ model, name, photoUrl }: Readonly<{ model: AvatarModel; name: string; photoUrl: string | undefined }>) {
-  return (
-    <Card title="Picture">
-      <div className="c-profile-picture">
-        <Avatar name={name} photoUrl={photoUrl} size="xl" />
-        <span className="c-profile-row-actions">
-          <ActionButton action={model.change} size="sm" />
-          {model.remove && <ActionButton action={model.remove} size="sm" variant="danger" />}
-        </span>
-      </div>
-    </Card>
-  );
+function avatarActions(model: AvatarModel): readonly Action[] {
+  return model.remove ? [model.change, model.remove] : [model.change];
 }
 
 const THEMES: readonly { value: ThemePreference; label: string; icon: IconName }[] = [

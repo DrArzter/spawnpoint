@@ -6,7 +6,10 @@ html[data-skin="console"] .c-panel {
   height: 100vh;
   max-height: 100vh;
   margin: 0 0 0 auto;
-  border-left: 1px solid var(--c-line-2);
+  /* Every edge is set: a dialog's own border would show on the other three. */
+  border-width: 0 0 0 1px;
+  border-style: solid;
+  border-color: var(--c-line-2);
   border-radius: 0;
 }
 
@@ -22,6 +25,13 @@ html[data-skin="console"] .c-panel > .c-dialog-body {
 html[data-skin="console"] .c-panel-foot {
   padding: 14px 22px calc(14px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--c-line);
+}
+
+/* A wide panel holds a whole file, such as a config file, and leaves a strip of the page in view. */
+@media (min-width: 760px) {
+  html[data-skin="console"] .c-panel.c-panel-wide {
+    width: clamp(560px, 72vw, 1440px);
+  }
 }
 
 @media (max-width: 759px) {

@@ -908,6 +908,19 @@ html[data-skin="terminal"] .t-field {
   min-width: 0;
 }
 
+/* A field that fills its column, and the text area in it. */
+html[data-skin="terminal"] .t-field.t-field-fill {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+html[data-skin="terminal"] .t-textarea.t-textarea-fill {
+  flex: 1 1 auto;
+  resize: none;
+}
+
 html[data-skin="terminal"] .t-input,
 html[data-skin="terminal"] .t-textarea {
   box-sizing: border-box;
@@ -2089,6 +2102,23 @@ html[data-skin="terminal"] .t-drawer-body {
   min-height: 0;
   overflow: auto;
   padding: 16px;
+}
+
+/* A wide drawer holds a whole file: as wide and as tall as the screen allows; its body is a column a field can fill.
+   On a phone it is the plain drawer. */
+@media (min-width: 600px) {
+  html[data-skin="terminal"] .t-drawer.t-drawer-wide {
+    width: min(1440px, calc(100vw - 64px));
+  }
+
+  html[data-skin="terminal"] .t-drawer-wide .t-drawer-panel {
+    height: calc(100dvh - 32px);
+  }
+}
+
+html[data-skin="terminal"] .t-drawer-wide .t-drawer-body {
+  display: flex;
+  flex-direction: column;
 }
 
 html[data-skin="terminal"] .t-drawer-desc {

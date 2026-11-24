@@ -68,13 +68,14 @@ function Editor({ editor }: Readonly<{ editor: ConfigEditorModel }>) {
       onClose={editor.close.run}
       open
       title={editor.path}
+      wide
     >
       {editor.reload && <Notice title="Someone changed this file" tone="warning" verbs={<Verb action={editor.reload} size="small" />} />}
       {content.status === "loading" && <SkeletonGroup label="Reading the file"><Skeleton width="long" /><Skeleton width="medium" /><Skeleton width="long" /></SkeletonGroup>}
       {content.status === "error" && <LoadError state={content} title="The file could not be loaded" verb="edit config files" />}
       {content.status === "ready" && (
-        <Field hideLabel hint="Changes apply at the world's next start." label={`Contents of ${editor.path}`}>
-          <TextArea onChange={(event) => editor.setText(event.target.value)} value={editor.text} />
+        <Field fill hideLabel hint="Changes apply at the world's next start." label={`Contents of ${editor.path}`}>
+          <TextArea fill onChange={(event) => editor.setText(event.target.value)} value={editor.text} />
         </Field>
       )}
     </Drawer>

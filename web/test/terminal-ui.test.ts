@@ -7,7 +7,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action } from "../src/core/actions.ts";
-import { Address, FilterRow, Indicator, LoadError, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table, TextArea } from "../src/skins/terminal/ui.tsx";
+import { Address, Drawer, Field, FilterRow, Indicator, LoadError, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table, TextArea } from "../src/skins/terminal/ui.tsx";
 
 test("terminal dense status keeps one visible mark and an accessible label", () => {
   const markup = renderToStaticMarkup(createElement(Indicator, { kind: "ok", label: "Verified" }));
@@ -171,4 +171,13 @@ test("a terminal text area is the shared monospaced block, named by its label an
   assert.match(markup, /<textarea class="t-textarea"/);
   assert.match(markup, /aria-label="Contents of config\/a\.toml"/);
   assert.match(markup, /spellcheck="false"/i);
+});
+
+test("a wide drawer holds a whole file: its field and text area fill the height it leaves", () => {
+  const editor = createElement(Field, { fill: true, hideLabel: true, label: "Contents" }, createElement(TextArea, { fill: true, onChange: () => undefined, value: "a = 1" }));
+  const markup = renderToStaticMarkup(createElement(Drawer, { onClose: () => undefined, open: true, title: "config/a.toml", wide: true }, editor));
+  assert.match(markup, /<dialog [^>]*class="t-drawer t-drawer-wide"/);
+  assert.match(markup, /<label class="t-field t-field-fill">/);
+  assert.match(markup, /<textarea class="t-textarea t-textarea-fill"/);
+  assert.match(renderToStaticMarkup(createElement(Drawer, { onClose: () => undefined, open: true, title: "Invite" })), /class="t-drawer"/);
 });

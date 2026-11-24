@@ -7,6 +7,7 @@ export type { ConsoleEntry, ConsoleStatus };
  */
 
 import hostOutput from "../../../server/scripts/host-output.json" with { type: "json" };
+import { findGameModule } from "./game-modules.ts";
 
 export const MAX_CONSOLE_COMMAND_LENGTH = 256;
 /** What one recorded reply keeps; a game can answer with pages. */
@@ -16,17 +17,8 @@ export const CONSOLE_RECORD_DAYS = 90;
 
 // A command that ends the game outside its lifecycle skips the verified backup
 // and leaves the record saying the session still runs. Stop is a verb of the
-// world page; the console refuses it. Factorio's commands start with a slash.
-// Valheim takes no command from outside the game, so its host answers every
-// one with "has no console"; nothing reaches the server to refuse.
-// Palworld's console speaks its REST API, whose shutdown and stop end the game.
-const LIFECYCLE_COMMANDS: Readonly<Record<string, readonly string[]>> = {
-  minecraft: ["stop", "save-off"],
-  factorio: ["quit"],
-  zomboid: ["quit"],
-  valheim: [],
-  palworld: ["shutdown", "stop"],
-};
+// world page; the console refuses it. Each game's manifest lists its own such
+// commands (ADR-0090); a leading slash is ignored, as some games use one.
 
 export type ConsoleCommandCheck =
   | Readonly<{ ok: true; command: string }>
@@ -40,7 +32,7 @@ export function checkConsoleCommand(gameId: string, raw: unknown): ConsoleComman
     return { ok: false, reason: "invalid_command" };
   }
   const verb = (command.replace(/^\/+/, "").split(/\s+/)[0] ?? "").toLowerCase();
-  if ((LIFECYCLE_COMMANDS[gameId] ?? []).includes(verb)) return { ok: false, reason: "lifecycle_command" };
+  if ((findGameModule(gameId)?.console.lifecycleCommands ?? []).includes(verb)) return { ok: false, reason: "lifecycle_command" };
   return { ok: true, command };
 }
 

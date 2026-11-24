@@ -58,3 +58,19 @@ test("a game that keeps no whitelist reads no record", async () => {
   const { feature } = fakes("updated");
   assert.equal((await feature.whitelistOf("factorio", "world-a")).statusCode, 409);
 });
+
+test("a whitelist name is held to the game's own rule, and the refusal carries its words", async () => {
+  const replaced: unknown[] = [];
+  const feature = worldsFeature({
+    sources: unused as ControlPlaneSources,
+    worlds: { ...unused, replaceWhitelist: async (_game: string, _world: string, list: unknown) => { replaced.push(list); return "updated"; } } as unknown as WorldRecords,
+    machines: unused as SessionMachines,
+    gateway: unused as never,
+    backupReleases: () => unused as never,
+  });
+  const refused = await feature.updateWhitelist(owner, "minecraft", "world-a", JSON.stringify({ names: ["no spaces allowed"] }));
+  assert.equal(refused.statusCode, 400);
+  assert.deepEqual(JSON.parse(refused.body), { error: "invalid_player_name", name: "no spaces allowed", hint: "3 to 16 letters, digits or underscores, as the player types it" });
+  assert.deepEqual(replaced, []);
+  assert.equal((await feature.updateWhitelist(owner, "factorio", "world-a", JSON.stringify({ names: ["Alex"] }))).statusCode, 409);
+});

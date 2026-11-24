@@ -15,5 +15,16 @@
   },
   "capabilities": {
     "whitelist": false
+  },
+  "console": {
+    "lifecycle_commands": [
+      "shutdown",
+      "stop"
+    ],
+    "suggestions": [
+      "metrics",
+      "save",
+      "announce Server stops in 5 minutes"
+    ]
   }
 }

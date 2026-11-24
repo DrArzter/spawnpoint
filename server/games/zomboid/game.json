@@ -16,6 +16,16 @@
   "capabilities": {
     "whitelist": false
   },
+  "console": {
+    "lifecycle_commands": [
+      "quit"
+    ],
+    "suggestions": [
+      "players",
+      "save",
+      "servermsg \"Server stops in 5 minutes\""
+    ]
+  },
   "release": {
     "version_field": "zomboid_build",
     "loader_type": "workshop",

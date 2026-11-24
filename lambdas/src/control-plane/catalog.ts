@@ -72,6 +72,10 @@ export type CatalogGame = Readonly<{
   slottable?: boolean;
   /** The game keeps a whitelist the host can write from a world's record (ADR-0066). */
   whitelist?: boolean;
+  /** Its whitelist's player-name rule (ADR-0090). */
+  playerName?: Readonly<{ pattern: string; hint: string }>;
+  /** Commands its console offers to type. */
+  consoleSuggestions?: readonly string[];
   presets?: readonly CatalogPreset[];
   worlds: readonly CatalogWorld[];
 }>;
@@ -95,6 +99,8 @@ export const gameCatalog: readonly CatalogGame[] = gameModules.map((module) => (
   ...(module.portImplied ? { portImplied: true as const } : {}),
   ...(module.slottable ? {} : { slottable: false }),
   ...(module.whitelist ? { whitelist: true } : {}),
+  ...(module.whitelist && module.whitelistRules !== null ? { playerName: { pattern: module.whitelistRules.namePattern.source, hint: module.whitelistRules.nameHint } } : {}),
+  consoleSuggestions: module.console.suggestions,
   worlds: configuredWorlds[module.id] ?? [],
 }));
 

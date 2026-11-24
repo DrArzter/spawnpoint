@@ -183,7 +183,9 @@ export const worldsApi = {
       failure: "The whitelist could not be saved.",
       refusals: {
         forbidden: "Your role cannot manage whitelists.",
-        invalid_player_name: named((name) => `${name} is not a Minecraft name: 3 to 16 letters, digits or underscores.`, API_ERROR_TEXT.invalid_player_name, "name"),
+        invalid_player_name: (detail) => typeof detail.name === "string"
+          ? `${detail.name} is not a name this game accepts${typeof detail.hint === "string" ? `: ${detail.hint}` : ""}.`
+          : API_ERROR_TEXT.invalid_player_name,
         duplicate_player_name: named((name) => `${name} is already on the list.`, API_ERROR_TEXT.duplicate_player_name, "name"),
         world_archived: "This world is archived. Restore a backup before changing its whitelist.",
       },

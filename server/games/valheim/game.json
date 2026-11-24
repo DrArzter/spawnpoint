@@ -15,5 +15,9 @@
   },
   "capabilities": {
     "whitelist": false
+  },
+  "console": {
+    "lifecycle_commands": [],
+    "suggestions": []
   }
 }

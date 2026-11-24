@@ -9,7 +9,8 @@ import { blockingOperations, sessionLifecycleKey, holdsWorld, type WorldHost, ty
 import { randomUUID } from "node:crypto";
 import { type WorldRecord, worldIdForName } from "../../control-plane/world-registry.ts";
 import { checkGameSettings } from "../../control-plane/game-settings.ts";
-import { checkWhitelist, parseServerWhitelist, SERVER_WHITELIST_COMMANDS } from "../../control-plane/whitelist.ts";
+import { checkWhitelist, parseServerWhitelist, type WhitelistRules } from "../../control-plane/whitelist.ts";
+import { findGameModule } from "../../control-plane/game-modules.ts";
 import { consoleResult, encodeConsoleCommand, type ConsoleGateway } from "../../control-plane/console.ts";
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
 import { backupGenerationId, resolveBackupRelease, type BackupReleaseSources } from "../../control-plane/backup-release.ts";
@@ -90,8 +91,10 @@ function parseWorldAccess(input: WorldAccessInput, useDefaults: boolean): WorldA
 // Kept on the world record, so it follows the world to every host. A running
 // world is asked to reload it at once; any start writes it anyway.
 
-function gameKeepsWhitelist(gameId: string): boolean {
-  return gameCatalog.find((game) => game.id === gameId)?.whitelist === true;
+/** The game's whitelist rules, when it keeps a whitelist (ADR-0090). */
+function whitelistRulesOf(gameId: string): WhitelistRules | null {
+  const module = findGameModule(gameId);
+  return module?.whitelist === true ? module.whitelistRules : null;
 }
 
 // The read goes through the console gateway's document (ADR-0063) but is not a
@@ -319,7 +322,7 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
   }
 
   async function whitelistOf(gameId: string, worldId: string): Promise<Response> {
-    if (!gameKeepsWhitelist(gameId)) return errorResponse(409, "game_has_no_whitelist");
+    if (whitelistRulesOf(gameId) === null) return errorResponse(409, "game_has_no_whitelist");
     const record = await worlds.read(worldId);
     if (record?.gameId !== gameId) return errorResponse(404, "unknown_world");
     if (record.whitelist !== undefined) {
@@ -338,8 +341,9 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
    * from an empty list would drop the server's players.
    */
   async function readServerWhitelist(gameId: string, worldId: string, pollMs = SERVER_READ_POLL_MS): Promise<readonly string[] | null> {
-    const command = SERVER_WHITELIST_COMMANDS[gameId];
-    if (command === undefined) return [];
+    const rules = whitelistRulesOf(gameId);
+    const command = rules?.listCommand ?? null;
+    if (rules === null || command === null) return [];
     try {
       const host = await runningWorldHost(gameId, worldId);
       if (host === null) return [];
@@ -348,7 +352,7 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
         await new Promise((resolve) => setTimeout(resolve, pollMs)); // NOSONAR each poll waits on the host, in order
         const result = consoleResult(await gateway.read(commandId, host.hostId)); // NOSONAR each poll waits on the host, in order
         if (result.status === "pending") continue;
-        return result.status === "succeeded" ? parseServerWhitelist(result.output ?? "") : null;
+        return result.status === "succeeded" ? parseServerWhitelist(result.output ?? "", rules) : null;
       }
       return null;
     } catch (error) {
@@ -375,9 +379,13 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
 
   async function updateWhitelist(identity: Identity, gameId: string, worldId: string, body: string | undefined): Promise<Response> {
     const parsed = parseJsonObject({ body });
-    if (!gameKeepsWhitelist(gameId)) return errorResponse(409, "game_has_no_whitelist");
-    const check = checkWhitelist(parsed.names);
-    if (!check.ok) return errorResponse(400, check.error, check.name === undefined ? {} : { name: check.name });
+    const rules = whitelistRulesOf(gameId);
+    if (rules === null) return errorResponse(409, "game_has_no_whitelist");
+    const check = checkWhitelist(parsed.names, rules);
+    if (!check.ok) {
+      const detail = check.error === "invalid_player_name" ? { name: check.name, hint: rules.nameHint } : check.name === undefined ? {} : { name: check.name };
+      return errorResponse(400, check.error, detail);
+    }
     const whitelist = {
       names: check.names,
       updatedAt: new Date().toISOString(),

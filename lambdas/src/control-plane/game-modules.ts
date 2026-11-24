@@ -7,6 +7,7 @@ import valheim from "../../../server/games/valheim/game.json" with { type: "json
 import valheimSettings from "../../../server/games/valheim/settings.json" with { type: "json" };
 import zomboid from "../../../server/games/zomboid/game.json" with { type: "json" };
 import type { Footprint } from "../domain/placement.ts";
+import type { WhitelistRules } from "./whitelist.ts";
 
 /*
  * The one place the Lambdas list the game modules (ADR-0088). Each module's
@@ -30,6 +31,10 @@ export type GameModule = Readonly<{
   whitelist: boolean;
   /** This module owns the records written before games were an axis, which name no game (ADR-0089). */
   legacyDefault: boolean;
+  /** What its console refuses (commands that end the game outside its lifecycle) and offers (ADR-0063). */
+  console: Readonly<{ lifecycleCommands: readonly string[]; suggestions: readonly string[] }>;
+  /** The rules of its whitelist, when it keeps one (ADR-0066, ADR-0090). */
+  whitelistRules: WhitelistRules | null;
   /** Presets of this game build releases: its manifest has release facts (ADR-0034). */
   buildsReleases: boolean;
   /** The game settings a world may carry (ADR-0064), as the module's settings.json states them. */
@@ -53,6 +58,29 @@ const isString = (value: unknown): value is string => typeof value === "string" 
 const isNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
 
+const isStringList = (value: unknown): value is readonly string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
+
+function consoleRules(manifest: Manifest, id: string): GameModule["console"] {
+  const rules = object(manifest.console, `${id} console`);
+  return {
+    lifecycleCommands: field(rules.lifecycle_commands, isStringList, `${id}.console.lifecycle_commands`).map((command) => command.toLowerCase()),
+    suggestions: field(rules.suggestions, isStringList, `${id}.console.suggestions`),
+  };
+}
+
+function whitelistRules(manifest: Manifest, id: string): WhitelistRules | null {
+  if (manifest.whitelist === undefined) return null;
+  const rules = object(manifest.whitelist, `${id} whitelist`);
+  const optional = (value: unknown, what: string): RegExp | null => value === undefined ? null : new RegExp(field(value, isString, what));
+  return {
+    namePattern: new RegExp(field(rules.name_pattern, isString, `${id}.whitelist.name_pattern`)),
+    nameHint: field(rules.name_hint, isString, `${id}.whitelist.name_hint`),
+    listCommand: rules.list_command === undefined ? null : field(rules.list_command, isString, `${id}.whitelist.list_command`),
+    listReply: optional(rules.list_reply, `${id}.whitelist.list_reply`),
+    listEmpty: optional(rules.list_empty, `${id}.whitelist.list_empty`),
+  };
+}
+
 // A malformed manifest stops the bundle loading rather than placing a game wrongly.
 function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
   const manifest = object(raw, "game manifest");
@@ -73,6 +101,8 @@ function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
     },
     whitelist: field(capabilities.whitelist, isBoolean, `${id}.capabilities.whitelist`),
     legacyDefault: manifest.legacy_default === true,
+    console: consoleRules(manifest, id),
+    whitelistRules: whitelistRules(manifest, id),
     buildsReleases: typeof manifest.release === "object" && manifest.release !== null,
     settings: settings?.settings ?? [],
   };

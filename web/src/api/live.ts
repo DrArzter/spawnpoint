@@ -8,6 +8,7 @@ import { consoleApi } from "./live/console";
 import { playerInvitationsApi } from "./live/player-invitations";
 import { preferencesApi } from "./live/preferences";
 import { worldsApi } from "./live/worlds";
+import { assistantApi } from "./live/assistant";
 
 export { googleOidcClientId, liveAuthConfigured, telegramOidcClientId } from "./live/auth";
 
@@ -23,4 +24,5 @@ export const liveApi: SpawnpointApi = {
   ...consoleApi,
   ...playerInvitationsApi,
   ...preferencesApi,
+  ...assistantApi,
 };

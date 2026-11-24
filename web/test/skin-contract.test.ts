@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { actionsOf } from "../src/core/actions.ts";
 import { roleChoice } from "../src/core/roles.ts";
-import type { AccessModel, AssistantPanelModel, WorldLogModel, ConfigEditorModel, ConfigFilesModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
+import type { AccessModel, AssistantChatModel, AssistantPanelModel, WorldLogModel, ConfigEditorModel, ConfigFilesModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
 import { SKINS } from "../src/skins/index.ts";
 import { aGame, aMember, aPermission, aPreset, aRole, aRolesModel, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
 
@@ -268,6 +268,33 @@ function checkSurface(name: string, markup: string, model: unknown, allowMissing
   assert.deepEqual([...new Set(missing)], [], `${name}: actions in the model that never reached the screen`);
 }
 
+const assistantChat: AssistantChatModel = {
+  open: spy("assistant.show", "Assistant"),
+  shown: true,
+  close: spy("assistant.close", "Close"),
+  conversations: { status: "ready", value: [
+    { id: "c1", title: "Start Creative", status: { kind: "pending", label: "Waiting for you" }, updatedAt: "2026-11-24T12:00:00Z", current: true, select: spy("assistant.open.c1", "Start Creative") },
+    { id: "c2", title: "Why the lag?", status: { kind: "ok", label: "Done" }, updatedAt: "2026-11-23T12:00:00Z", current: false, select: spy("assistant.open.c2", "Why the lag?") },
+  ] },
+  thread: {
+    title: "Start Creative", status: { kind: "pending", label: "Waiting for you" }, note: null, working: false,
+    entries: { status: "ready", value: [
+      { kind: "owner", id: "e0", text: "Start Creative please" },
+      { kind: "read", id: "e1", title: "Get Spawnpoint control plane", status: { kind: "ok", label: "Read" } },
+      { kind: "assistant", id: "e2", text: "Creative is stopped. I propose to start it." },
+      { kind: "proposal", id: "e3", title: "Start world", destructive: false, detail: '{\n  "worldId": "creative"\n}', status: { kind: "pending", label: "Waiting for you" }, result: null, apply: spy("assistant.apply.p1", "Apply"), reject: spy("assistant.reject.p1", "Reject") },
+      { kind: "proposal", id: "e4", title: "Wipe world", destructive: true, detail: "{}", status: { kind: "ok", label: "Applied" }, result: '{"result":"requested"}', apply: null, reject: null },
+    ] },
+  },
+  startNew: spy("assistant.new", "New conversation"),
+  choices: [{ value: "haiku", label: "Haiku", hint: "Fast and cheap" }, { value: "sonnet", label: "Sonnet", hint: "Slower and dearer" }],
+  model: "haiku",
+  setModel: noop,
+  draft: "",
+  setDraft: noop,
+  send: spy("assistant.send", "Send", { disabled: true, hint: "The assistant is working, or waits for your decision" }),
+};
+
 // Every registered face, so a skin added to the registry joins the contract
 // without anyone remembering to list it here.
 for (const skin of SKINS) {
@@ -277,6 +304,21 @@ for (const skin of SKINS) {
     const frame = renderToStaticMarkup(createElement(skin.Shell, { model: shell }, "page"));
     const dialog = renderToStaticMarkup(createElement(skin.ScopeDialog, { model: shell.scope }));
     checkSurface("Shell", frame + dialog, shell);
+  });
+
+  test(`${skin.name}: the Owner's assistant opens from the frame over any page, with its conversations, proposals and message box (ADR-0096)`, () => {
+    const closed = renderToStaticMarkup(createElement(skin.Shell, { model: { ...shell, assistant: { ...assistantChat, shown: false } } }, "page"));
+    assert.match(closed, /data-action="assistant\.show"/);
+    assert.doesNotMatch(closed, /data-action="assistant\.send"/, "the panel is closed");
+    assert.doesNotMatch(renderToStaticMarkup(createElement(skin.Shell, { model: shell }, "page")), /data-action="assistant\./, "no assistant for anyone else");
+    const open = renderToStaticMarkup(createElement(skin.Shell, { model: { ...shell, assistant: assistantChat } }, "page"));
+    checkSurface("Assistant", open, assistantChat);
+    for (const text of ["Start Creative please", "I propose to start it", "Get Spawnpoint control plane", "Start world", "Wipe world", "Haiku", "Sonnet", "Fast and cheap", "Why the lag?", "&quot;result&quot;:&quot;requested&quot;"]) assert.ok(open.includes(text), text);
+    assert.match(open, /aria-label="Message"|>Message</);
+    const working = renderToStaticMarkup(createElement(skin.Shell, { model: { ...shell, assistant: { ...assistantChat, thread: { ...assistantChat.thread!, working: true, status: { kind: "progress", label: "Working" } } } } }, "page"));
+    assert.match(working, /Working/);
+    const fresh = renderToStaticMarkup(createElement(skin.Shell, { model: { ...shell, assistant: { ...assistantChat, thread: null } } }, "page"));
+    assert.match(fresh, /New conversation/);
   });
 
   test(`${skin.name}: the worlds list draws every row verb, refresh and create`, () => {

@@ -252,3 +252,12 @@ test("a running world's log is read on request, and the assistant waits for a fi
   assert.throws(() => store.askAssistant(GAME, running, { logReadId: read.id, model: "haiku", question: null }), { code: "log_not_ready" });
   assert.throws(() => store.assistantAnswer(GAME, running, "answer-0"), { code: "unknown_assistant_answer" });
 });
+
+test("the demo's assistant reads, proposes a start, and runs it only once the Owner applies it (ADR-0096)", () => {
+  const started = store.startConversation("haiku", "Start a stopped world");
+  assert.deepEqual([started.status, started.entries.map((entry) => entry.kind)], ["working", ["owner"]]);
+  assert.deepEqual(store.listConversations().map((item) => item.id), [started.id]);
+  assert.throws(() => store.sendMessage(started.id, "haiku", "and?"), { code: "conversation_busy" });
+  assert.throws(() => store.decideProposal(started.id, "nope", "apply"), { code: "unknown_proposal" });
+  assert.throws(() => store.conversation("missing"), { code: "unknown_conversation" });
+});

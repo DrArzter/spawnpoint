@@ -72,6 +72,46 @@ export type ShellModel = Readonly<{
   worldActions?: (worldId: string) => Readonly<{ session: Action; invite: Action | null }> | null;
   /** The scoped game's running operations, for a skin's notification area. */
   flash?: Readonly<{ operations: readonly FlashOperation[] }>;
+  /** The Owner's assistant; null for anyone else, or while the deployment keeps it off. */
+  assistant?: AssistantChatModel | null;
+}>;
+
+/** One line of a conversation as both skins draw it (ADR-0096). */
+export type ThreadEntry =
+  | Readonly<{ kind: "owner"; id: string; text: string }>
+  | Readonly<{ kind: "assistant"; id: string; text: string }>
+  | Readonly<{ kind: "read"; id: string; title: string; status: StatusDescriptor }>
+  | Readonly<{
+    kind: "proposal"; id: string; title: string; destructive: boolean;
+    /** The arguments the model gave, as indented JSON. */
+    detail: string;
+    status: StatusDescriptor;
+    result: string | null;
+    /** Null once the proposal is decided. */
+    apply: Action | null;
+    reject: Action | null;
+  }>;
+
+export type ConversationRow = Readonly<{ id: string; title: string; status: StatusDescriptor; updatedAt: string; current: boolean; select: Action }>;
+
+/**
+ * The Owner's assistant panel, opened from the frame anywhere (ADR-0096): the
+ * conversations, the open one, and the message box with the model to ask.
+ */
+export type AssistantChatModel = Readonly<{
+  open: Action;
+  shown: boolean;
+  close: Action;
+  conversations: Loading<readonly ConversationRow[]>;
+  /** The open conversation; null for a new one. */
+  thread: Readonly<{ title: string; status: StatusDescriptor; entries: Loading<readonly ThreadEntry[]>; note: string | null; working: boolean }> | null;
+  startNew: Action;
+  choices: readonly AssistantChoice[];
+  model: AssistantModel;
+  setModel: (value: AssistantModel) => void;
+  draft: string;
+  setDraft: (value: string) => void;
+  send: Action;
 }>;
 
 export type FlashOperation = Readonly<{ id: string; label: string; worldName: string; worldId: string; startedAt: string; expectedSeconds?: number; expectedSamples?: number }>;

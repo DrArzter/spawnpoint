@@ -245,8 +245,9 @@ export function TextInput({ className, mono = false, ...props }: Omit<ComponentP
 }
 
 /** Text of many lines, monospaced and never wrapped, for a file's contents. `fill` takes the height its field leaves. */
-export function TextArea({ className, fill = false, ...props }: Omit<ComponentPropsWithRef<"textarea">, "className"> & Readonly<{ className?: string; fill?: boolean }>) {
-  return <textarea className={cx("t-textarea", fill && "t-textarea-fill", className)} spellCheck={false} {...props} />;
+/** A file's text by default; `prose` is a short message instead: wrapped, a few lines tall, and spell-checked. */
+export function TextArea({ className, fill = false, prose = false, ...props }: Omit<ComponentPropsWithRef<"textarea">, "className"> & Readonly<{ className?: string; fill?: boolean; prose?: boolean }>) {
+  return <textarea className={cx("t-textarea", fill && "t-textarea-fill", prose && "t-textarea-prose", className)} spellCheck={prose} {...props} />;
 }
 
 export function SelectInput({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {

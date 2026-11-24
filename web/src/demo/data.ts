@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AccessPermission, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../api/contract";
-import type { AssistantAnswer, ConsoleEntry, WorldLogRead } from "../api/contract";
+import type { AssistantAnswer, AssistantConversation, ConsoleEntry, WorldLogRead } from "../api/contract";
 import type { ControlPlaneSnapshot, Game, SettingDefinition, World, WorldSession } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";
 
@@ -57,6 +57,8 @@ export type DemoState = {
   answers: Record<string, { world: string; answer: AssistantAnswer }>;
   /** Questions asked today, for the assistant's daily limit. */
   questionsToday: number;
+  /** The Owner's conversations with the assistant (ADR-0096), by id. */
+  conversations: Record<string, AssistantConversation>;
   /** Effects that land when their time passes; read calls settle them. */
   scheduled: { operationId: string; at: number; apply: (state: DemoState) => void }[];
   /** How far each operation has come, by id; read by the operation progress call. */
@@ -304,6 +306,7 @@ export function initialState(): DemoState {
     worldLogs: {},
     answers: {},
     questionsToday: 0,
+    conversations: {},
     configEdits: {
       // The release's claims.toml has changed since this edit started from it.
       "minecraft/minecraft-rostik-12345678": {

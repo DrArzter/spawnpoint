@@ -951,6 +951,12 @@ html[data-skin="terminal"] .t-textarea {
   white-space: pre;
 }
 
+/* A message, not a file: wrapped, a few lines tall. */
+html[data-skin="terminal"] .t-textarea.t-textarea-prose {
+  min-height: 80px;
+  white-space: pre-wrap;
+}
+
 html[data-skin="terminal"] .t-input::placeholder {
   color: var(--ink-secondary);
 }
@@ -2609,6 +2615,55 @@ html[data-skin="terminal"] .t-assistant-answer {
   border-top: 1px solid var(--rule);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* --- the Owner's assistant (ADR-0096) ------------------------------------------------------- */
+
+html[data-skin="terminal"] .t-assistant-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+html[data-skin="terminal"] .t-assistant-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+html[data-skin="terminal"] .t-assistant-message {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* The Owner's words are marked as theirs from the left, as everything in this face starts. */
+html[data-skin="terminal"] .t-assistant-message[data-from="owner"] {
+  padding-left: 12px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-secondary);
+}
+
+html[data-skin="terminal"] .t-assistant-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--outline-strong);
+}
+
+html[data-skin="terminal"] .t-assistant-proposal.t-assistant-destructive {
+  border-color: var(--error-ink);
+}
+
+html[data-skin="terminal"] .t-assistant-detail {
+  max-height: 200px;
+  margin: 0;
+  overflow: auto;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 /* --- the console: a terminal inside the terminal -------------------------------------------- */

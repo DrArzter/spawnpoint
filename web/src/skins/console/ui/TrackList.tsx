@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import type { Action } from "../../../core/actions";
+
 import { cx } from "../../../lib/cx";
 import { Skeleton } from "./Skeleton";
 import { useSkeletonRows } from "./rows";
@@ -97,10 +99,26 @@ function placeholder<Row>(track: Track<Row>) {
 }
 
 /** A stack cell: the title (a link that covers the row on narrow widths) and its secondary line. */
-export function TrackTitle({ title, href, line, compactLine }: Readonly<{ title: ReactNode; href?: string; line?: ReactNode; /** What optional tracks show, on the second line, under 1024px. */ compactLine?: ReactNode }>) {
+function titleOf(title: ReactNode, href: string | undefined, run: Action | undefined, current: boolean): ReactNode {
+  if (href) return <a className="c-track-title" href={href}>{title}</a>;
+  if (run) return <button aria-current={current || undefined} className="c-track-title" data-action={run.id} onClick={run.run} type="button">{title}</button>;
+  return <span className="c-track-title">{title}</span>;
+}
+
+export function TrackTitle({ title, href, action: run, current = false, line, compactLine }: Readonly<{
+  title: ReactNode;
+  href?: string;
+  /** A title that opens its row in place rather than at a link: the row's button. */
+  action?: Action;
+  /** The row that is open, marked as the current one. */
+  current?: boolean;
+  line?: ReactNode;
+  /** What optional tracks show, on the second line, under 1024px. */
+  compactLine?: ReactNode;
+}>) {
   return (
     <span className="c-track-stack-body">
-      {href ? <a className="c-track-title" href={href}>{title}</a> : <span className="c-track-title">{title}</span>}
+      {titleOf(title, href, run, current)}
       {line && (
         <span className="c-track-line">
           {line}

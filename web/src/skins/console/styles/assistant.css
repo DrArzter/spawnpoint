@@ -1,0 +1,111 @@
+/* The Owner's assistant panel (ADR-0096): the conversations beside the open one, the message box under it. */
+
+html[data-skin="console"] .c-assistant {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  gap: 20px;
+  min-height: 100%;
+}
+
+html[data-skin="console"] .c-assistant-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-assistant-list .c-tracklist {
+  width: 100%;
+}
+
+html[data-skin="console"] .c-assistant-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+html[data-skin="console"] .c-assistant-entries {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+}
+
+html[data-skin="console"] .c-assistant-message {
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+/* The Owner's words sit at the end edge on a quiet ground, the assistant's at the start. */
+html[data-skin="console"] .c-assistant-message[data-from="owner"] {
+  align-self: flex-end;
+  padding: 8px 12px;
+  border-radius: var(--c-r-ctl);
+  background: var(--c-surface-2);
+}
+
+html[data-skin="console"] .c-assistant-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-ink-2);
+  font-size: var(--c-fs-s);
+}
+
+html[data-skin="console"] .c-assistant-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--c-line-2);
+  border-radius: var(--c-r-ctl);
+}
+
+/* A change that loses something wears the error line. */
+html[data-skin="console"] .c-assistant-proposal[data-destructive] {
+  border-color: var(--c-err);
+}
+
+html[data-skin="console"] .c-assistant-proposal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html[data-skin="console"] .c-assistant-detail {
+  max-height: 200px;
+  margin: 0;
+  overflow: auto;
+  font-family: var(--c-font-mono);
+  font-size: var(--c-fs-xs);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+html[data-skin="console"] .c-assistant-decide {
+  display: flex;
+  gap: 10px;
+}
+
+html[data-skin="console"] .c-assistant-note {
+  margin: 0;
+  color: var(--c-ink-2);
+}
+
+html[data-skin="console"] .c-assistant-compose {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+@media (max-width: 759px) {
+  html[data-skin="console"] .c-assistant {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

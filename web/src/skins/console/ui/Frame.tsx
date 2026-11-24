@@ -112,6 +112,8 @@ export function TopBar({ model, scope, onSearch }: Readonly<{ model: ShellModel;
       </button>
       <IconButton className="c-search-icon" icon="search" label="Search" onClick={onSearch} tone="band" />
       <Refreshed model={model} />
+      {/* The Owner's assistant opens over any page (ADR-0096). */}
+      {model.assistant && <IconButton data-action={model.assistant.open.id} icon="bolt" label={model.assistant.open.label} onClick={model.assistant.open.run} tone="band" />}
       {model.demo && <span className="c-demo">Demo</span>}
       <button aria-label={model.openProfile.label} className="c-account" data-action={model.openProfile.id} data-tip={model.viewer.displayName} onClick={model.openProfile.run} type="button">
         <Avatar name={model.viewer.displayName} photoUrl={model.viewer.photoUrl} size="md" />

@@ -304,6 +304,31 @@ export const demoApi: SpawnpointApi = {
     return store.assistantAnswer(gameId, worldId, answerId);
   },
 
+  async listConversations() {
+    await demoLatency();
+    return store.listConversations();
+  },
+
+  async startConversation(model: AssistantModel, message: string) {
+    await demoLatency();
+    return store.startConversation(model, message);
+  },
+
+  async loadConversation(conversationId: string) {
+    await demoLatency();
+    return store.conversation(conversationId);
+  },
+
+  async sendMessage(conversationId: string, model: AssistantModel, message: string) {
+    await demoLatency();
+    return store.sendMessage(conversationId, model, message);
+  },
+
+  async decideProposal(conversationId: string, proposalId: string, decision: "apply" | "reject") {
+    await demoLatency();
+    return store.decideProposal(conversationId, proposalId, decision);
+  },
+
   async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery) {
     await demoLatency();
     return store.releaseModPage(gameId, presetId, release, query);

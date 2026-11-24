@@ -6,6 +6,7 @@ import { tabTraverse, traverse } from "../../routing";
 import { useSnackbarQueue, type SnackbarQueue } from "../../components/ui/Snackbar";
 import { ScopeSwitcher } from "./Scope";
 import { Dialog } from "./ui/Dialog";
+import { AssistantPanel } from "./AssistantPanel";
 import { Flashbar, type FlashItem } from "./ui/Flashbar";
 import { BottomBar, Rail, TopBar } from "./ui/Frame";
 import { MOTION } from "./ui/motion";
@@ -214,6 +215,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
         <BottomBar model={model} />
         <Flashbar items={flashItems(model, queue, worldId)} />
         {palette && <Palette model={model} onClose={() => setPalette(false)} />}
+        {model.assistant?.shown && <AssistantPanel model={model.assistant} />}
         {keys && (
           <Dialog cancel={action("shortcuts.close", "Close", () => setKeys(false))} title="Keyboard shortcuts">
             <dl className="c-keys">

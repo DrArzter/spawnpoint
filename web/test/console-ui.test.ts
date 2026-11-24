@@ -250,8 +250,9 @@ test("a row's primary link is a real anchor whose hit area is the row, and inner
   assert.match(table, /\.c-table tr \{\s*position: relative;/, "the row is the containing block");
   assert.match(table, /\.c-table :is\(button, select, label, input, \[data-tip\], \.c-copy, a\.c-btn\)[^{]*\{\s*position: relative;\s*z-index: 1;/, "controls stay above the row link");
   const tracks = readFileSync(new URL("../src/skins/console/styles/tracklist.css", import.meta.url), "utf8");
-  assert.match(tracks, /\.c-tracklist-row a\.c-track-title::after \{\s*position: absolute;\s*inset: 0;/);
-  assert.match(tracks, /\.c-tracklist-row :is\(button, select, label, input, \[data-tip\], \.c-copy, a\.c-btn, a:not\(\.c-track-title\)\) \{\s*position: relative;\s*z-index: 1;/);
+  // A track title is the row's link or, opening its row in place, its button (ADR-0096).
+  assert.match(tracks, /\.c-tracklist-row :is\(a, button\)\.c-track-title::after \{\s*position: absolute;\s*inset: 0;/);
+  assert.match(tracks, /\.c-tracklist-row :is\(button:not\(\.c-track-title\), select, label, input, \[data-tip\], \.c-copy, a\.c-btn, a:not\(\.c-track-title\)\) \{\s*position: relative;\s*z-index: 1;/);
 });
 
 test("TrackList: one grid of shared tracks, the header once, rows as table rows", () => {
@@ -477,4 +478,14 @@ test("A8 and A9 reach the counts and the rows: tiles and card counts tick, and a
   assert.doesNotMatch(markup, /<tr class="c-arrived"><td[^>]*>Rostik/);
   const list = html(createElement(TrackList<Row>, { label: "Ops", rows: tableRows, rowKey: (row) => row.id, arrivals: new Set(["a"]), tracks: [{ id: "n", header: "Name", width: "1fr", render: (row) => row.name }] }));
   assert.match(list, /class="c-tracklist-row c-arrived" data-from="1024" data-layout="one-line" role="row"><span class="c-track" data-rail="" role="cell">Rostik/);
+});
+
+test("a prose text area wraps in the body font and is spell-checked; a file's stays mono and unchecked", () => {
+  assert.match(html(createElement(TextArea, { "aria-label": "Message", prose: true, value: "", onChange: noop })), /class="c-textarea c-textarea-prose"[^>]*spellCheck="true"|class="c-textarea c-textarea-prose"[^>]*spellcheck="true"/i);
+  assert.match(html(createElement(TextArea, { "aria-label": "File", value: "", onChange: noop })), /class="c-textarea c-mono"/);
+});
+
+test("a track title that opens its row in place is a button, marked when its row is open", () => {
+  const markup = html(createElement(TrackTitle, { title: "Why the lag?", action: action("assistant.open.c1", "Why the lag?", noop), current: true }));
+  assert.match(markup, /<button aria-current="true" class="c-track-title" data-action="assistant\.open\.c1" type="button">Why the lag\?<\/button>/);
 });

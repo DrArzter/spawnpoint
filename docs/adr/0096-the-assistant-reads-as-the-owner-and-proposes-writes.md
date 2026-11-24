@@ -38,4 +38,6 @@ it. The owners chose to confirm each change.
 - The assistant can do what the Owner can, and changes nothing without the Owner's click.
 - Each model call carries the whole catalogue (about 11,000 tokens). Prompt caching would cut that cost; it is left
   until a real call shows Bedrock accepts it for these models.
-- The panel's AI panel (both skins) is the next change.
+- The panel opens the assistant from its top bar on any page, for an Owner while the deployment offers it: a wide
+  side panel in the console skin and a wide drawer in the terminal skin. It lists the conversations, shows each read
+  and each proposal with Apply and Reject, and asks with Haiku or Sonnet.

@@ -1,3 +1,6 @@
+import type { ConsoleEntry, ConsoleStatus } from "../../../contract/console.ts";
+
+export type { ConsoleEntry, ConsoleStatus };
 /*
  * The console gateway (ADR-0063): what an operator may type, and what the
  * host's answer means. Pure, so the rules are tested without AWS.
@@ -45,7 +48,6 @@ export function encodeConsoleCommand(command: string): string {
   return Buffer.from(command, "utf8").toString("base64");
 }
 
-export type ConsoleStatus = "pending" | "succeeded" | "failed" | "unavailable" | "timed_out";
 
 export type ConsoleInvocation = Readonly<{
   status: string;
@@ -83,19 +85,6 @@ export function consoleResult(invocation: ConsoleInvocation): Readonly<{ status:
   }
 }
 
-export type ConsoleEntry = Readonly<{
-  id: string;
-  at: string;
-  identityId: string;
-  /** Null once the person who ran the command is deleted (ADR-0071). */
-  displayName: string | null;
-  /** The MCP client that sent the command for the person, by its registered name; null from the panel. */
-  agent: string | null;
-  worldId: string;
-  command: string;
-  status: ConsoleStatus;
-  output: string | null;
-}>;
 
 /** A console record from the access table, as the API answers it. */
 export function consoleEntryFromItem(item: Readonly<Record<string, unknown>>): ConsoleEntry {

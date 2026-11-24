@@ -5,6 +5,9 @@
 import { ENDED, NESTED_STATES, stepOfState, workflowOfMachine, type OperationStep, type WorkflowName } from "./operation-steps.ts";
 import type { HostLogLine } from "./host-log.ts";
 import { operationWorldId } from "./world-session.ts";
+import type { CaughtError, ChildProgress, OperationProgress } from "../../../contract/operations.ts";
+
+export type { CaughtError, ChildProgress, OperationProgress };
 
 export type ExecutionStatus = "RUNNING" | "SUCCEEDED" | "FAILED" | "TIMED_OUT" | "ABORTED" | "PENDING_REDRIVE";
 
@@ -37,26 +40,7 @@ export type ExecutionPort = Readonly<{
   historyPage: (executionArn: string, nextToken: string | undefined) => Promise<HistoryPage>;
 }>;
 
-export type ChildProgress = Readonly<{ type: "start" | "stop"; step: OperationStep }>;
-export type CaughtError = Readonly<{ error: string; cause: string; step: OperationStep | null }>;
 
-export type OperationProgress = Readonly<{
-  id: string;
-  type: "start" | "stop" | "promote" | "world";
-  status: "running" | "succeeded" | "failed" | "timed_out" | "aborted";
-  startedAt: string;
-  stoppedAt: string | null;
-  elapsedSeconds: number;
-  expectedSeconds?: number;
-  expectedSamples?: number;
-  step: OperationStep | null;
-  child: ChildProgress | null;
-  result: string | null;
-  failure: Readonly<{ error: string; cause: string }> | null;
-  caught: CaughtError | null;
-  /** The host's own lines of a start, oldest first; present only when the API could look for them. */
-  hostLog?: readonly HostLogLine[];
-}>;
 
 /** The host a start runs on, and when its start ran. */
 export type HostRun = Readonly<{ instanceId: string; startedAt: Date; endedAt: Date | null }>;

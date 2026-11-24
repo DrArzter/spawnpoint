@@ -1,5 +1,11 @@
 import type { LoginProviderId } from "../lib/signin";
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../model";
+import type { ConsoleEntry } from "../../../contract/console";
+import type { HostMetricPoint, HostMetricSeries, MetricRange } from "../../../contract/metrics";
+import type { HostLogLine, OperationProgress, OperationStep } from "../../../contract/operations";
+
+// Shapes the API and the panel share live in ../contract (review X2).
+export type { ConsoleEntry, HostLogLine, HostMetricPoint, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
 
 export type PromotionResult = { result: "requested"; operationId: string } | { result: "switched" };
 
@@ -273,11 +279,6 @@ export type SavedWhitelist = WorldWhitelist & Readonly<{ applied: "reloading" | 
 /** A link the browser opens once; it expires, and is never kept. */
 export type FileLink = Readonly<{ url: string; expiresIn: number }>;
 
-export type MetricRange = "6h" | "24h" | "7d";
-/** `interpolated`: a reading drawn between two real ones, memory only; it is a line, never a stat. */
-export type HostMetricPoint = Readonly<{ at: string; value: number | null; interpolated?: true }>;
-/** `pendingFrom`: while the session runs, the first slot the newest readings have not reached; an empty slot from there on is not reported yet, not off. */
-export type HostMetricSeries = Readonly<{ id: string; label: string; unit: string; points: readonly HostMetricPoint[]; pendingFrom?: string }>;
 export type HostMetrics = Readonly<{ range: MetricRange; startedAt: string; endedAt: string; periodSeconds: number; series: readonly HostMetricSeries[]; pendingFrom?: string }>;
 
 export type AuthState =
@@ -293,39 +294,10 @@ export type SessionOperation = "start" | "stop";
 export type StopPlayersPolicy = "refuse" | "disconnect";
 
 /** One step of a running workflow: the key is stable, the label is the server's plain words. */
-export type OperationStep = Readonly<{ key: string; label: string }>;
 
 /** One line of the host's own output while a start ran, already filtered and redacted by the API. */
-export type HostLogLine = Readonly<{
-  at: string;
-  kind: "step" | "result" | "container" | "error" | "warning" | "game";
-  text: string;
-}>;
 
 /** How far one world operation has come, and why it ended badly (`GET .../operations/{id}`). */
-export type OperationProgress = Readonly<{
-  id: string;
-  type: "start" | "stop" | "promote" | "world";
-  status: "running" | "succeeded" | "failed" | "timed_out" | "aborted";
-  startedAt: string;
-  stoppedAt: string | null;
-  elapsedSeconds: number;
-  /** The usual duration, as `Operation.expectedSeconds`. */
-  expectedSeconds?: number;
-  expectedSamples?: number;
-  /** Only while running. */
-  step: OperationStep | null;
-  /** The nested start or stop workflow's step, only while running. */
-  child: Readonly<{ type: "start" | "stop"; step: OperationStep }> | null;
-  /** The workflow's status on success: "promoted", "rolled_back", "already_active". */
-  result: string | null;
-  /** The workflow's own error name and cause, once it failed, timed out or was aborted. */
-  failure: Readonly<{ error: string; cause: string }> | null;
-  /** A task error the workflow caught, such as before a rollback. */
-  caught: Readonly<{ error: string; cause: string; step: OperationStep | null }> | null;
-  /** The host's lines of a start or promotion, oldest first; absent when the API could not read them. */
-  hostLog?: readonly HostLogLine[];
-}>;
 export type LoginOptions = Readonly<{
   providers: readonly LoginProviderId[];
   /** Providers through which an anonymous visitor may create a credential. */
@@ -369,19 +341,6 @@ export type IssuedAccessInvitation = Readonly<{
 }>;
 
 /** One console command and the game's answer, recorded against who ran it (ADR-0063). */
-export type ConsoleEntry = Readonly<{
-  id: string;
-  at: string;
-  identityId: string;
-  /** Null once the person who sent it was deleted. */
-  displayName: string | null;
-  /** The MCP client that sent the command for the person; absent or null from the panel. */
-  agent?: string | null;
-  worldId: string;
-  command: string;
-  status: "pending" | "succeeded" | "failed" | "unavailable" | "timed_out";
-  output: string | null;
-}>;
 
 /**
  * Everything the panel asks of a backend. The live transport and the demo both

@@ -1,3 +1,7 @@
+import type { SettingDefinition, SettingValue } from "../../contract/settings";
+
+/** One setting a world of this game may set, as its game module defines it (contract/settings.ts). */
+export type { SettingDefinition, SettingValue };
 export type Page = "worlds" | "releases" | "access" | "profile";
 export type AccessTab = "users" | "roles" | "notifications";
 export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unknown";
@@ -68,15 +72,7 @@ export type World = {
    */
   gameSettings?: WorldGameSettings | null;
 };
-export type SettingValue = string | number | boolean;
 export type WorldGameSettings = { values: Readonly<Record<string, SettingValue>>; updatedAt: string | null };
-/** One setting a world of this game may set, as its game module defines it. */
-export type SettingDefinition = { id: string; label: string; hint?: string } & (
-  | { type: "choice"; default: string; choices: readonly { value: string; label: string }[] }
-  | { type: "integer"; default: number; min: number; max: number }
-  | { type: "boolean"; default: boolean }
-  | { type: "text"; default: string; maxLength: number; pattern: string }
-);
 /** A session record as the API sends it: never the lease or the fence. */
 export type WorldSession = {
   serverId: string;

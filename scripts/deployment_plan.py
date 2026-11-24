@@ -49,6 +49,12 @@ WORKFLOW_ROOTS = {
     "workflows/world-lifecycle.asl.json.tftpl": TF_ACCESS_API,
 }
 
+# Files outside lambdas/ and web/ that their bundles import. A change to one
+# changes what the bundle ships, so it deploys that bundle too. The deployment
+# plan test reads both source trees and fails on an import no prefix covers.
+BUNDLED_BY_LAMBDAS = ("contract/", "server/games/", "server/scripts/host-output.json")
+BUNDLED_BY_WEB = ("contract/",)
+
 RELEASE_SCRIPTS = {
     "scripts/aws-release-builder.sh",
     "scripts/aws-preset-catalog-builder.sh",
@@ -162,8 +168,8 @@ def select_path(path: str, selected: Selection) -> None:
     # Test fixtures never reach Terraform or the host either.
     if path.startswith("server/tests/"):
         return
-    selected.web |= path.startswith("web/") or path == "scripts/deploy-web.sh"
-    selected.lambdas |= path.startswith("lambdas/") or path == "scripts/deploy-lambdas.sh"
+    selected.web |= path.startswith("web/") or path == "scripts/deploy-web.sh" or path.startswith(BUNDLED_BY_WEB)
+    selected.lambdas |= path.startswith("lambdas/") or path == "scripts/deploy-lambdas.sh" or path.startswith(BUNDLED_BY_LAMBDAS)
     if select_terraform_path(path, selected) or select_workflow_path(path, selected):
         return
     select_other_path(path, selected)

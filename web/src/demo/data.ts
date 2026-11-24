@@ -256,8 +256,8 @@ export function initialState(): DemoState {
     },
     console: {
       "minecraft/minecraft-rostik-12345678": [
-        { id: "console-2", at: "2026-09-14T18:41:12.000Z", identityId: "identity-alex", displayName: "Alex", worldId: "minecraft-rostik-12345678", command: "time set day", status: "succeeded", output: "Set the time to 1000" },
-        { id: "console-1", at: "2026-09-14T18:40:03.000Z", identityId: "identity-owner", displayName: "DrArzter", worldId: "minecraft-rostik-12345678", command: "list", status: "succeeded", output: "There are 3 of a max of 20 players online: Alex, Mira, Kira" },
+        { id: "console-2", at: "2026-09-14T18:41:12.000Z", identityId: "identity-alex", displayName: "Alex", agent: null, worldId: "minecraft-rostik-12345678", command: "time set day", status: "succeeded", output: "Set the time to 1000" },
+        { id: "console-1", at: "2026-09-14T18:40:03.000Z", identityId: "identity-owner", displayName: "DrArzter", agent: null, worldId: "minecraft-rostik-12345678", command: "list", status: "succeeded", output: "There are 3 of a max of 20 players online: Alex, Mira, Kira" },
       ],
     },
     whitelists: {

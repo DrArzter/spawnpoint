@@ -1,8 +1,10 @@
+import type { OperationStep } from "../../../contract/operations.ts";
+
+export type { OperationStep };
 // What a running workflow is doing, in words. Each workflow state maps to one
 // stable step key; operation-steps.test.ts holds every state of every workflow
 // file to an entry here, so a new state cannot ship without a step.
 
-export type OperationStep = Readonly<{ key: string; label: string }>;
 
 /** The workflows an operation can pass through, by state machine name. */
 export type WorkflowName = "promote" | "start" | "stop" | "start-host" | "stop-host" | "world";

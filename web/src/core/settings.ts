@@ -1,4 +1,7 @@
 import type { Game, SettingDefinition, SettingValue, World } from "../model";
+import { settingValueValid } from "../../../contract/settings";
+
+export { settingValueValid };
 
 /*
  * A world's game settings (ADR-0064), as the panel reads and checks them. The
@@ -15,14 +18,6 @@ export function settingsAvailable(game: Game, world: World): boolean {
   return settingDefinitions(game).length > 0 && world.gameSettings != null;
 }
 
-export function settingValueValid(setting: SettingDefinition, value: unknown): value is SettingValue {
-  switch (setting.type) {
-    case "choice": return typeof value === "string" && setting.choices.some((choice) => choice.value === value);
-    case "integer": return typeof value === "number" && Number.isInteger(value) && value >= setting.min && value <= setting.max;
-    case "boolean": return typeof value === "boolean";
-    case "text": return typeof value === "string" && value.length >= 1 && value.length <= setting.maxLength && new RegExp(setting.pattern).test(value);
-  }
-}
 
 /** The value in effect: what the world set, else the game's default. */
 export function effectiveValue(setting: SettingDefinition, world: World): SettingValue {

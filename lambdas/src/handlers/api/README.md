@@ -34,7 +34,7 @@ throws `InvalidBodyError`, and the dispatcher answers 400 `invalid_json`.
 `../../access/keys.ts` owns every access-table key and index value, and
 `../../access/identity-creation.ts` the one new-identity transaction.
 `identity-store.ts` owns account observation and identity lookup;
-`access-store.ts` owns the access table connection. Login credentials and login
+`access-store.ts` implements the access table's port (`access/table.ts`, ADR-0091); handlers call `accessTable`, never the SDK. Login credentials and login
 sessions are separate adapters. Domain decisions remain in `access/`,
 `domain/`, and `control-plane/`; do not move them into route declarations.
 

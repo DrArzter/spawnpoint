@@ -14,7 +14,7 @@ import { welcomeCommand } from "./commands/welcome.ts";
 import { callbacks, mainMenuKeyboard } from "./keyboards/main-menu.ts";
 import { authMiddleware } from "./middleware/auth.ts";
 import { observeContacts } from "./middleware/contact.ts";
-import type { AccessStore } from "./services/access.ts";
+import type { AccessStore } from "./services/access-store.ts";
 import { env } from "./services/aws.ts";
 import { render } from "./ui/render.ts";
 

@@ -1,11 +1,10 @@
 import { type Identity, type Role, roleOf } from "../../access/domain.ts";
-import { GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Caller, type Response, response, errorResponse } from "./http.ts";
 import { observe, resolveIdentity, bootstrapOwner, identityAccounts } from "./identity-store.ts";
 import { providerPhoto } from "../../access/avatar.ts";
 import { avatarLink, copyProviderAvatar } from "./avatars.ts";
 import { requestAccountAccess } from "../../access/account-writes.ts";
-import { document, tableName, type Item } from "./access-store.ts";
+import { accessTable, tableName, type Item } from "./access-store.ts";
 import type { AccountProfile, ActiveSession, SessionIdentity, SessionRole, VisitorSession } from "../../../../contract/access.ts";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -15,7 +14,7 @@ export async function session(account: Caller, capabilities: readonly string[]):
   const identity = await resolveIdentity(account, observed) ?? await bootstrapOwner(account);
   if (identity !== null) {
     const role = roleOf(identity);
-    const bootstrap = await document.send(new GetCommand({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } }));
+    const bootstrap = await accessTable.get({ TableName: tableName, Key: { pk: "SYSTEM", sk: "BOOTSTRAP" } });
     // The Owner's Telegram id is personal data that no member needs once the claim is made.
     const profile = accountProfile(account, observed);
     // The identity's own avatar (ADR-0084), copied once from a provider photo when it has none.
@@ -65,7 +64,7 @@ function accountProfile(account: Caller, observed: Item): Mutable<AccountProfile
 export async function requestAccess(account: Caller): Promise<Response> {
   const now = new Date().toISOString();
   try {
-    await document.send(new UpdateCommand(requestAccountAccess(tableName, account.provider, account.subject, now, true)));
+    await accessTable.update(requestAccountAccess(tableName, account.provider, account.subject, now, true));
   } catch {
     if (await resolveIdentity(account) !== null) return errorResponse(409, "already_approved");
     throw new Error("access candidate is unavailable");

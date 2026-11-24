@@ -11,7 +11,7 @@ import { METRIC_RANGE_NAMES } from "../../control-plane/metric-ranges.ts";
 import { deployedBackups } from "./backups-wiring.ts";
 import { deployedReleases } from "./releases-wiring.ts";
 import { deployedWorlds } from "./worlds-wiring.ts";
-import { sessionSigningSecret } from "./secrets.ts";
+import { sessionSigningSecret } from "./aws-secrets.ts";
 import { identityById } from "./identity-store.ts";
 
 type McpRequest = Readonly<{ jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown }>;

@@ -1,6 +1,6 @@
 import type { Context, NextFunction } from "grammy";
 
-import type { AccessStore, TelegramContact } from "../services/access.ts";
+import type { AccessStore, TelegramContact } from "../services/access-store.ts";
 
 export function telegramContact(ctx: Context): TelegramContact | null {
   if (ctx.chat?.type !== "private" || ctx.from === undefined) return null;

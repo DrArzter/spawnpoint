@@ -56,7 +56,7 @@ test("scopes are allow-listed and de-duplicated", () => {
 
 test("a refresh token of a deleted identity mints nothing", async (t) => {
   const { accessTable } = await import("./access-table.ts");
-  const { document, ssm } = await import("../src/handlers/api/clients.ts");
+  const { document, ssm } = await import("../src/handlers/api/aws-clients.ts");
   const { oauthToken } = await import("../src/handlers/api/oauth.ts");
   t.mock.method(ssm, "send", async () => ({ Parameter: { Value: secret } }));
   const identityId = "00000000-0000-4000-8000-0000000000b1";

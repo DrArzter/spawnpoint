@@ -7,7 +7,7 @@
 import { webhookCallback } from "grammy";
 
 import { buildBot } from "./bot.ts";
-import { accessStore } from "./services/access.ts";
+import { accessStore } from "./services/access-store.ts";
 import { env, parameter } from "./services/aws.ts";
 
 async function build() {

@@ -3,7 +3,7 @@ import type { Context } from "grammy";
 import { replies } from "../../domain/telegram-bot.ts";
 import { visitorMenuKeyboard } from "../keyboards/main-menu.ts";
 import { telegramContact } from "../middleware/contact.ts";
-import type { AccessStore } from "../services/access.ts";
+import type { AccessStore } from "../services/access-store.ts";
 import { render, type RenderMode } from "../ui/render.ts";
 
 export async function requestAccessCommand(

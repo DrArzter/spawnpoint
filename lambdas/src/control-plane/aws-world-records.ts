@@ -30,7 +30,8 @@ export function releaseHolders(bucket: string): ReleaseHolders {
   return new ReleaseHolders(new ReleaseRefs(document), resolveFromWorldRecords(new S3WorldReader(s3, bucket)));
 }
 
-function worldRepository(): S3WorldRepository {
+/** The world records in the release bucket, with their release holders (ADR-0080). */
+export function worldRepository(): S3WorldRepository {
   const bucket = requiredEnv("RELEASE_BUCKET");
   return new S3WorldRepository(s3, bucket, releaseHolders(bucket));
 }

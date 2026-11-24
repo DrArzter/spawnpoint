@@ -36,7 +36,7 @@ test("the MCP resource challenges an unauthenticated client with its metadata UR
 
 test("an OAuth access token of a deleted identity is refused", async (t) => {
   const { accessTable } = await import("./access-table.ts");
-  const { document, ssm } = await import("../src/handlers/api/clients.ts");
+  const { document, ssm } = await import("../src/handlers/api/aws-clients.ts");
   const { issueOAuthAccessToken } = await import("../src/access/oauth.ts");
   const secret = "test-secret-that-is-long-enough";
   t.mock.method(ssm, "send", async () => ({ Parameter: { Value: secret } }));

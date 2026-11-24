@@ -1,7 +1,7 @@
 import { publicRoute, type Route } from "./routing.ts";
 import { loginProviders, authenticate, telegramProvider, googleProvider, loginProviderDisabled, passwordProvider } from "./login-providers.ts";
 import { googleLoginEnabled, passwordLoginEnabled, passwordRegistrationEnabled } from "./auth-config.ts";
-import { emailDeliveryProvider } from "./mail.ts";
+import { emailDeliveryProvider } from "./aws-mail.ts";
 import { registerPassword } from "./passwords.ts";
 import { verifyEmail, resendEmailVerification, requestPasswordReset, resetPassword } from "./email-actions.ts";
 import { refreshLoginSession, logoutLoginSession } from "./login-sessions.ts";

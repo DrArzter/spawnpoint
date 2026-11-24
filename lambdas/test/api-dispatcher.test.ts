@@ -142,7 +142,7 @@ test("after deletion a cookie session is refused 401 and a bearer token 403", as
   process.env.BOT_TOKEN_PARAMETER ??= "/spawnpoint/bot/token";
   process.env.SESSION_SIGNING_SECRET_PARAMETER ??= "/spawnpoint/auth/session-signing-secret";
   const { accessTable } = await import("./access-table.ts");
-  const { document, ssm } = await import("../src/handlers/api/clients.ts");
+  const { document, ssm } = await import("../src/handlers/api/aws-clients.ts");
   const { caller } = await import("../src/handlers/api/login-sessions.ts");
   const { resolveIdentity } = await import("../src/handlers/api/identity-store.ts");
   const { deleteIdentity } = await import("../src/handlers/api/identity-deletion.ts");

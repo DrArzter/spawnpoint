@@ -1,26 +1,15 @@
-import { DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   type AvatarSource, CONTENT_TYPE, PROVIDER_PHOTO_LIMIT, UPLOAD_LIMIT, avatarKey, fetchablePhoto, identityPrefix, imageType, providerSource,
 } from "../../access/avatar.ts";
 import { type Identity } from "../../access/domain.ts";
 import { profileKey } from "../../access/keys.ts";
-import { document, tableName } from "./access-store.ts";
+import { accessTable, tableName } from "./access-store.ts";
 import { isConditionFailure } from "./conditions.ts";
+import { avatarObjects } from "./s3-avatars.ts";
 import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
 
 // Identity avatars (ADR-0084): copied once from a sign-in provider, or uploaded
 // by the person; served through presigned links; deleted with the identity.
-
-const s3 = new S3Client({});
-
-// Read when used, so modules that only import this one start without it.
-function avatarBucketName(): string {
-  const bucket = process.env.AVATAR_BUCKET;
-  if (!bucket) throw new Error("missing environment variable: AVATAR_BUCKET");
-  return bucket;
-}
 
 const LINK_SECONDS = 2 * 60 * 60;
 const FETCH_TIMEOUT_MS = 2500;
@@ -34,14 +23,14 @@ export function avatarLink(key: string | null | undefined, now = new Date()): Pr
   if (typeof key !== "string" || key === "") return Promise.resolve(null);
   const hour = new Date(now);
   hour.setUTCMinutes(0, 0, 0);
-  return getSignedUrl(s3, new GetObjectCommand({ Bucket: avatarBucketName(), Key: key }), { expiresIn: LINK_SECONDS, signingDate: hour });
+  return avatarObjects.link(key, LINK_SECONDS, hour);
 }
 
 async function store(identityId: string, bytes: Uint8Array): Promise<string | null> {
   const type = imageType(bytes);
   if (type === null) return null;
   const key = avatarKey(identityId, bytes, type);
-  await s3.send(new PutObjectCommand({ Bucket: avatarBucketName(), Key: key, Body: bytes, ContentType: CONTENT_TYPE[type], CacheControl: "private, max-age=3600" }));
+  await avatarObjects.put(key, bytes, CONTENT_TYPE[type]);
   return key;
 }
 
@@ -85,18 +74,17 @@ export async function copyProviderAvatar(identity: Identity, photo: Readonly<{ u
 }
 
 async function record(identityId: string, key: string, source: AvatarSource, condition = "attribute_exists(pk)"): Promise<void> {
-  await document.send(new UpdateCommand({
+  await accessTable.update({
     TableName: tableName, Key: profileKey(identityId),
     UpdateExpression: "SET avatar_key = :key, avatar_source = :source, avatar_updated_at = :now REMOVE avatar_removed",
     ConditionExpression: condition,
     ExpressionAttributeValues: { ":key": key, ":source": source, ":now": new Date().toISOString() },
-  }));
+  });
 }
 
 async function deleteOthers(identityId: string, keep: string | null): Promise<number> {
-  const listed = await s3.send(new ListObjectsV2Command({ Bucket: avatarBucketName(), Prefix: identityPrefix(identityId) }));
-  const stale = (listed.Contents ?? []).flatMap((object) => object.Key !== undefined && object.Key !== keep ? [{ Key: object.Key }] : []);
-  if (stale.length > 0) await s3.send(new DeleteObjectsCommand({ Bucket: avatarBucketName(), Delete: { Objects: stale, Quiet: true } }));
+  const stale = (await avatarObjects.keys(identityPrefix(identityId))).filter((key) => key !== keep);
+  await avatarObjects.remove(stale);
   return stale.length;
 }
 
@@ -119,12 +107,12 @@ export async function uploadAvatar(identity: Identity, body: string | undefined)
 }
 
 export async function removeAvatar(identity: Identity): Promise<Response> {
-  await document.send(new UpdateCommand({
+  await accessTable.update({
     TableName: tableName, Key: profileKey(identity.id),
     UpdateExpression: "SET avatar_removed = :now REMOVE avatar_key, avatar_source, avatar_updated_at",
     ConditionExpression: "attribute_exists(pk)",
     ExpressionAttributeValues: { ":now": new Date().toISOString() },
-  }));
+  });
   await deleteOthers(identity.id, null);
   return response(200, { photoUrl: null });
 }

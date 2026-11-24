@@ -1,10 +1,10 @@
 import { type EmailActionPurpose, type EmailAction, renderEmailAction, issueEmailAction, emailActionTokenHash } from "../../access/email-actions.ts";
 import { type PasswordCredential, passwordProviderId, passwordPrincipal } from "../../access/password-login-provider.ts";
-import { TransactWriteCommand, GetCommand, type TransactWriteCommandInput, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { type TableTransactItem } from "../../access/table.ts";
 import { normalizeEmail, validatePassword, hashPassword } from "../../access/password-credential.ts";
 import { accessInvitationTokenHash, accessInvitationUsable } from "../../access/access-invitations.ts";
-import { type Item, document, tableName } from "./access-store.ts";
-import { emailSender, emailDeliveryProvider } from "./mail.ts";
+import { accessTable, type Item, tableName } from "./access-store.ts";
+import { emailSender, emailDeliveryProvider } from "./aws-mail.ts";
 import { panelUrl } from "./origins.ts";
 import { credentialKey, passwordCredentials, credentialFromItem } from "./credentials.ts";
 import { type Response, response, type Event, parseJsonObject, errorResponse } from "./http.ts";
@@ -53,7 +53,7 @@ async function replaceEmailAction(
 ): Promise<EmailAction> {
   const action = issueEmailAction(purpose);
   const nonceField = purpose === "verify_email" ? "email_verification_nonce" : "password_reset_nonce";
-  await document.send(new TransactWriteCommand({ TransactItems: [
+  await accessTable.transact({ TransactItems: [
     { Update: {
       TableName: tableName,
       Key: credentialKey(credential.email),
@@ -66,7 +66,7 @@ async function replaceEmailAction(
       Item: emailActionItem(purpose, action, credential, identityId),
       ConditionExpression: "attribute_not_exists(pk)",
     } },
-  ] }));
+  ] });
   return action;
 }
 
@@ -84,17 +84,17 @@ export async function resendEmailVerification(event: Event): Promise<Response> {
   if (invitationToken !== undefined) {
     const tokenHash = accessInvitationTokenHash(invitationToken);
     if (tokenHash === null) return errorResponse(400, "invalid_or_expired_invitation");
-    const invitation = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true }));
+    const invitation = await accessTable.get({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true });
     if (!accessInvitationUsable(invitation.Item)) return errorResponse(400, "invalid_or_expired_invitation");
     if (invitation.Item?.delivery_email !== email) return errorResponse(403, "invited_email_mismatch");
   }
   const credential = await passwordCredentials.find(email);
   if (credential === null || credential.emailVerified) return response(202, { result: "accepted" });
-  const account = await document.send(new GetCommand({
+  const account = await accessTable.get({
     TableName: tableName,
     Key: accountItemKey(passwordProviderId, credential.subject),
     ConsistentRead: true,
-  }));
+  });
   const action = await replaceEmailAction(
     "verify_email",
     credential,
@@ -117,12 +117,12 @@ async function readEmailAction(event: Event, purpose: EmailActionPurpose): Promi
   const parsed = parseJsonObject(event);
   const tokenHash = emailActionTokenHash(typeof parsed.token === "string" ? parsed.token : "");
   if (tokenHash === null) return errorResponse(400, "invalid_or_expired_email_action");
-  const result = await document.send(new GetCommand({ TableName: tableName, Key: emailActionKey(tokenHash), ConsistentRead: true }));
+  const result = await accessTable.get({ TableName: tableName, Key: emailActionKey(tokenHash), ConsistentRead: true });
   const item = actionFromItem(result.Item, purpose, Math.floor(Date.now() / 1000));
   return item === null ? errorResponse(400, "invalid_or_expired_email_action") : { tokenHash, item };
 }
 
-type TransactionItem = NonNullable<TransactWriteCommandInput["TransactItems"]>[number];
+type TransactionItem = TableTransactItem;
 
 function consumeEmailActionUpdate(tokenHash: string, item: Item, now: string): TransactionItem {
   return { Update: {
@@ -144,12 +144,12 @@ export async function verifyEmail(event: Event): Promise<Response> {
   const { item, tokenHash } = found;
   const email = String(item.email);
   const subject = String(item.subject);
-  const credentialResult = await document.send(new GetCommand({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true }));
+  const credentialResult = await accessTable.get({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true });
   const credential = credentialResult.Item === undefined ? null : credentialFromItem(credentialResult.Item);
   if (credential?.subject !== subject) return errorResponse(400, "invalid_or_expired_email_action");
   const now = new Date().toISOString();
   try {
-    await document.send(new TransactWriteCommand({ TransactItems: [
+    await accessTable.transact({ TransactItems: [
       { Update: {
         TableName: tableName,
         Key: credentialKey(email),
@@ -158,7 +158,7 @@ export async function verifyEmail(event: Event): Promise<Response> {
         ExpressionAttributeValues: { ":verified": true, ":now": now, ":subject": subject, ":nonce": item.nonce },
       } },
       consumeEmailActionUpdate(tokenHash, item, now),
-    ] }));
+    ] });
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
       return errorResponse(400, "invalid_or_expired_email_action");
@@ -185,24 +185,24 @@ export async function revokePasswordLoginSessions(subject: string): Promise<void
   const items: Record<string, unknown>[] = [];
   let cursor: Record<string, unknown> | undefined;
   do {
-    const page = await document.send(new QueryCommand({ // NOSONAR paginated: the next token comes from the previous page
+    const page = await accessTable.query({ // NOSONAR paginated: the next token comes from the previous page
       TableName: tableName,
       IndexName: accessIndexName,
       KeyConditionExpression: "gsi1pk = :account",
       ExpressionAttributeValues: { ":account": sessionAccountIndex(passwordProviderId, subject) },
       ExclusiveStartKey: cursor,
-    }));
+    });
     items.push(...(page.Items ?? []));
     cursor = page.LastEvaluatedKey;
   } while (cursor !== undefined);
   const now = new Date().toISOString();
-  await Promise.all(items.filter((item) => item.entity_type === "LOGIN_SESSION").map((item) => document.send(new UpdateCommand({
+  await Promise.all(items.filter((item) => item.entity_type === "LOGIN_SESSION").map((item) => accessTable.update({
     TableName: tableName,
     Key: { pk: item.pk, sk: item.sk },
     UpdateExpression: "SET #status = :revoked, revoked_at = :now",
     ExpressionAttributeNames: { "#status": "status" },
     ExpressionAttributeValues: { ":revoked": "REVOKED", ":now": now },
-  }))));
+  })));
 }
 
 export async function resetPassword(event: Event): Promise<Response> {
@@ -217,7 +217,7 @@ export async function resetPassword(event: Event): Promise<Response> {
   const passwordHash = await hashPassword(parsed!.password as string);
   const now = new Date().toISOString();
   try {
-    await document.send(new TransactWriteCommand({ TransactItems: [
+    await accessTable.transact({ TransactItems: [
       { Update: {
         TableName: tableName,
         Key: credentialKey(email),
@@ -229,7 +229,7 @@ export async function resetPassword(event: Event): Promise<Response> {
         },
       } },
       consumeEmailActionUpdate(tokenHash, item, now),
-    ] }));
+    ] });
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
       return errorResponse(400, "invalid_or_expired_email_action");

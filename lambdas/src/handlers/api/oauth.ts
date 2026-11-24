@@ -1,12 +1,11 @@
 import { requestBody } from "../../access/request-body.ts";
-import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { normalizeScopes, oauthScopes, issueAuthorizationRequest, verifyAuthorizationRequest, issueOpaqueCredential, oauthAuthorizationCodeLifetimeSeconds, type OAuthScope, oauthRefreshTokenLifetimeSeconds, issueOAuthAccessToken, oauthAccessTokenLifetimeSeconds, credentialHash, verifyPkce } from "../../access/oauth.ts";
 import { type Identity } from "../../access/domain.ts";
 import { apiUrl, panelUrl } from "./origins.ts";
 import { type Event, type Response, type JsonObject, InvalidBodyError, parseJsonObject, response, responseWithHeaders } from "./http.ts";
-import { document, tableName } from "./access-store.ts";
-import { sessionSigningSecret } from "./secrets.ts";
+import { accessTable, tableName } from "./access-store.ts";
+import { sessionSigningSecret } from "./aws-secrets.ts";
 import { identityById } from "./identity-store.ts";
 import { oauthClientKey, oauthCredentialKey } from "../../access/keys.ts";
 
@@ -51,7 +50,7 @@ function validRedirectUri(value: string): boolean {
 
 export async function oauthClient(clientId: string): Promise<OAuthClient | null> {
   if (!/^[A-Za-z0-9._~-]{8,200}$/.test(clientId)) return null;
-  const item = (await document.send(new GetCommand({ TableName: tableName, Key: oauthClientKey(clientId), ConsistentRead: true }))).Item;
+  const item = (await accessTable.get({ TableName: tableName, Key: oauthClientKey(clientId), ConsistentRead: true })).Item;
   if (item === undefined || item.status !== "ACTIVE" || typeof item.client_name !== "string" || !Array.isArray(item.redirect_uris)) return null;
   const redirectUris = item.redirect_uris.filter((uri): uri is string => typeof uri === "string");
   return { id: clientId, name: item.client_name, redirectUris };
@@ -68,10 +67,10 @@ export async function registerOAuthClient(event: Event): Promise<Response> {
     return oauthError(400, "invalid_client_metadata", "Spawnpoint accepts public PKCE clients only.");
   }
   const clientId = `sp_${randomUUID()}`;
-  await document.send(new PutCommand({ TableName: tableName, Item: {
+  await accessTable.put({ TableName: tableName, Item: {
     ...oauthClientKey(clientId), status: "ACTIVE", client_name: name, redirect_uris: redirectUris,
     token_endpoint_auth_method: "none", created_at: new Date().toISOString(),
-  }, ConditionExpression: "attribute_not_exists(pk)" }));
+  }, ConditionExpression: "attribute_not_exists(pk)" });
   return response(201, {
     client_id: clientId,
     client_id_issued_at: Math.floor(Date.now() / 1000),
@@ -120,13 +119,13 @@ export async function completeOAuthAuthorization(identity: Identity, event: Even
   }
   const code = issueOpaqueCredential();
   const now = Math.floor(Date.now() / 1000);
-  await document.send(new PutCommand({ TableName: tableName, Item: {
+  await accessTable.put({ TableName: tableName, Item: {
     ...oauthCredentialKey("CODE", code.hash), status: "ACTIVE", identity_id: identity.id,
     client_id: request.clientId, redirect_uri: request.redirectUri, resource: request.resource,
     scope: request.scopes.join(" "), code_challenge: request.codeChallenge,
     created_at: new Date(now * 1000).toISOString(), expires_at: now + oauthAuthorizationCodeLifetimeSeconds,
     ttl: now + oauthAuthorizationCodeLifetimeSeconds,
-  }, ConditionExpression: "attribute_not_exists(pk)" }));
+  }, ConditionExpression: "attribute_not_exists(pk)" });
   return response(200, { redirect_to: oauthRedirect(request.redirectUri, { code: code.token, state: request.state, iss: oauthIssuer }) });
 }
 
@@ -145,12 +144,12 @@ async function issueOAuthTokens(subject: { identityId: string; clientId: string;
   const secret = await sessionSigningSecret();
   const refresh = issueOpaqueCredential();
   const now = Math.floor(Date.now() / 1000);
-  await document.send(new PutCommand({ TableName: tableName, Item: {
+  await accessTable.put({ TableName: tableName, Item: {
     ...oauthCredentialKey("REFRESH", refresh.hash), status: "ACTIVE", identity_id: subject.identityId,
     client_id: subject.clientId, resource: subject.resource, scope: subject.scopes.join(" "),
     created_at: new Date(now * 1000).toISOString(), expires_at: now + oauthRefreshTokenLifetimeSeconds,
     ttl: now + oauthRefreshTokenLifetimeSeconds,
-  }, ConditionExpression: "attribute_not_exists(pk)" }));
+  }, ConditionExpression: "attribute_not_exists(pk)" });
   return responseWithHeaders(200, {
     access_token: issueOAuthAccessToken({
       identityId: subject.identityId, clientId: subject.clientId, audience: subject.resource, scopes: subject.scopes,
@@ -162,9 +161,9 @@ async function issueOAuthTokens(subject: { identityId: string; clientId: string;
 
 async function exchangeAuthorizationCode(params: URLSearchParams): Promise<Response> {
   const code = params.get("code") ?? "";
-  const item = (await document.send(new GetCommand({
+  const item = (await accessTable.get({
     TableName: tableName, Key: oauthCredentialKey("CODE", credentialHash(code)), ConsistentRead: true,
-  }))).Item;
+  })).Item;
   const now = Math.floor(Date.now() / 1000);
   if (
     item?.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
@@ -175,13 +174,13 @@ async function exchangeAuthorizationCode(params: URLSearchParams): Promise<Respo
   const scopes = normalizeScopes(item.scope);
   if (scopes === null) return oauthError(400, "invalid_grant");
   try {
-    await document.send(new UpdateCommand({
+    await accessTable.update({
       TableName: tableName, Key: oauthCredentialKey("CODE", credentialHash(code)),
       UpdateExpression: "SET #status = :used, used_at = :now",
       ConditionExpression: "#status = :active AND expires_at > :epoch",
       ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: { ":used": "USED", ":active": "ACTIVE", ":now": new Date().toISOString(), ":epoch": now },
-    }));
+    });
   } catch { return oauthError(400, "invalid_grant"); }
   return issueOAuthTokens({ identityId: item.identity_id, clientId: item.client_id, resource: item.resource, scopes });
 }
@@ -190,9 +189,9 @@ async function rotateRefreshToken(params: URLSearchParams): Promise<Response> {
   const token = params.get("refresh_token") ?? "";
   const hash = credentialHash(token);
   const requestedResource = params.get("resource");
-  const item = (await document.send(new GetCommand({
+  const item = (await accessTable.get({
     TableName: tableName, Key: oauthCredentialKey("REFRESH", hash), ConsistentRead: true,
-  }))).Item;
+  })).Item;
   const now = Math.floor(Date.now() / 1000);
   if (
     item?.status !== "ACTIVE" || typeof item.expires_at !== "number" || item.expires_at <= now ||
@@ -202,13 +201,13 @@ async function rotateRefreshToken(params: URLSearchParams): Promise<Response> {
   const scopes = normalizeScopes(item.scope);
   if (scopes === null) return oauthError(400, "invalid_grant");
   try {
-    await document.send(new UpdateCommand({
+    await accessTable.update({
       TableName: tableName, Key: oauthCredentialKey("REFRESH", hash),
       UpdateExpression: "SET #status = :rotated, rotated_at = :now",
       ConditionExpression: "#status = :active AND expires_at > :epoch",
       ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: { ":rotated": "ROTATED", ":active": "ACTIVE", ":now": new Date().toISOString(), ":epoch": now },
-    }));
+    });
   } catch { return oauthError(400, "invalid_grant"); }
   return issueOAuthTokens({ identityId: item.identity_id, clientId: item.client_id, resource: item.resource, scopes });
 }
@@ -226,16 +225,16 @@ export async function revokeOAuthToken(event: Event): Promise<Response> {
   const token = params.get("token") ?? "";
   const clientId = params.get("client_id") ?? "";
   const key = oauthCredentialKey("REFRESH", credentialHash(token));
-  const item = (await document.send(new GetCommand({ TableName: tableName, Key: key, ConsistentRead: true }))).Item;
+  const item = (await accessTable.get({ TableName: tableName, Key: key, ConsistentRead: true })).Item;
   if (item?.client_id === clientId && item.status === "ACTIVE") {
     try {
-      await document.send(new UpdateCommand({
+      await accessTable.update({
         TableName: tableName, Key: key,
         UpdateExpression: "SET #status = :revoked, revoked_at = :now",
         ConditionExpression: "#status = :active AND client_id = :client",
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: { ":revoked": "REVOKED", ":active": "ACTIVE", ":client": clientId, ":now": new Date().toISOString() },
-      }));
+      });
     } catch { /* Revocation is deliberately idempotent and enumeration-safe. */ }
   }
   return responseWithHeaders(200, null, { "cache-control": "no-store" });

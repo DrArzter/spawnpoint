@@ -5,7 +5,7 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 process.env.AWS_REGION ??= "eu-central-1";
 process.env.ACCESS_TABLE_NAME ??= "spawnpoint-access-test";
 
-const { accessStore } = await import("../src/bot/services/access.ts");
+const { accessStore } = await import("../src/bot/services/access-store.ts");
 
 function stubProfile(t: test.TestContext, profile: Record<string, unknown> | undefined, roles: Record<string, Record<string, unknown>> = {}): void {
   t.mock.method(DynamoDBDocumentClient.prototype, "send", async (command: { input: { Key: { pk: string } } }) => {

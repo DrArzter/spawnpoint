@@ -16,7 +16,7 @@ import { SESv2Client } from "@aws-sdk/client-sesv2";
 import type { EmailSender } from "../email/email-sender.ts";
 import { configuredEmailSender } from "../email/email-delivery.ts";
 import { env, parameter } from "./services/aws.ts";
-import { claimInvitationDelivery, completeInvitationDelivery, subscribedNotificationTargets, subscribedTelegramChatIds } from "./services/subscribers.ts";
+import { claimInvitationDelivery, completeInvitationDelivery, subscribedNotificationTargets, subscribedTelegramChatIds } from "./services/subscribers-store.ts";
 
 const knownGames = { ids: gameModules.map((module) => module.id), legacy: LEGACY_GAME_ID };
 

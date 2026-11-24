@@ -7,6 +7,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 server_scripts="${repository_root}/server/scripts"
 # shellcheck source=scripts/_config-source.sh
@@ -72,7 +75,7 @@ profile_directory="${config_checkout}/profiles/${PROFILE_ID}"
   exit 1
 }
 
-game="$(jq -r '.game // "minecraft"' "${profile_directory}/profile.json")"
+game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' "${profile_directory}/profile.json")"
 if [[ "${game}" == "minecraft" ]]; then
   [[ -n "${CF_API_KEY:-}" && "${CF_API_KEY}" != "REQUIRED_BY_CALLER" ]] || {
     printf 'error: CF_API_KEY is required for a minecraft profile\n' >&2

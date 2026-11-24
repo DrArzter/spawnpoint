@@ -11,6 +11,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_legacy-game.sh"
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
@@ -118,7 +121,7 @@ mods_count="$(jq -r '.server.mods | length' "${manifest}")"
 overrides_count="$(jq -r '(.server.overrides // []) | length' "${manifest}")"
 client_kind="$(jq -r '.client.kind // empty' "${manifest}")"
 client_mods_count="$(jq -r 'if .client.kind == "mod-set" then .client.mods | length else [(.client.addons // [])[] | select(.side == "client")] | length end' "${manifest}")"
-game="$(jq -r '.game // "minecraft"' "${manifest}")"
+game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' "${manifest}")"
 preset_id="$(jq -r '.source_profile.id' "${manifest}")"
 release_prefix="releases/${game}/${preset_id}/${release}"
 pack_key="${release_prefix}/client.zip"
@@ -468,7 +471,7 @@ print_objects_result() {
 # pack legitimately differ there (see server/releases/README.md).
 canonical_manifest() {
   local manifest_file="$1"
-  jq -S '{game: (.game // "minecraft"), release, minecraft_version, loader, runtime, server, client}' "${manifest_file}"
+  jq -S --arg legacy_game "${LEGACY_GAME_ID}" '{game: (.game // $legacy_game), release, minecraft_version, loader, runtime, server, client}' "${manifest_file}"
 }
 
 if head_release_object "${manifest_key}" >/dev/null 2>&1; then

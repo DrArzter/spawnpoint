@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { notificationSubscriptionKey, parseExecutionEvent, renderNotification, type ExecutionEvent } from "../src/domain/notifications.ts";
 
+const games = { ids: ["minecraft", "factorio", "zomboid"], legacy: "minecraft" };
+
 const ARN_PREFIX = "arn:aws:states:eu-central-1:123456789012:stateMachine:";
 
 function event(
@@ -151,8 +153,8 @@ test("with two worlds of one game running, each message names its world", () => 
   assert.match(renderNotification(event("spawnpoint-start-server-v2", "SUCCEEDED", { input, output: { connectionAddress: "minecraft-rostik-1a2b3c4d.spawnpoint.example:25565" } })) ?? "", /^\[READY\] Rostik is up: /);
   assert.match(renderNotification(event("spawnpoint-start-server-v2", "FAILED", { input })) ?? "", /Start of Rostik failed/);
   assert.match(renderNotification(event("spawnpoint-idle-watchdog-v2", "SUCCEEDED", { input, output: { status: "stopped_idle" } })) ?? "", /^\[STOPPED\] Rostik: nobody online/);
-  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input })), "minecraft.started", "a world's own record is not a game");
-  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input: { ...input, gameId: undefined } })), "minecraft.started", "a key that is not a game falls back to the legacy rule");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input }), games), "minecraft.started", "a world's own record is not a game");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input: { ...input, gameId: undefined } }), games), "minecraft.started", "a key that is not a game falls back to the legacy rule");
 });
 
 test("a stop a player cancelled, or one for a session already gone, is not a failed backup", () => {
@@ -176,17 +178,17 @@ test("unknown machines and malformed details are silence, not crashes", () => {
 });
 
 test("ordinary lifecycle messages map to per-game subscriptions", () => {
-  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server", "RUNNING")), "minecraft.started");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server", "RUNNING"), games), "minecraft.started");
   assert.equal(
-    notificationSubscriptionKey(event("spawnpoint-start-server", "SUCCEEDED", { input: { gameId: "factorio", worldId: "factorio" } })),
+    notificationSubscriptionKey(event("spawnpoint-start-server", "SUCCEEDED", { input: { gameId: "factorio", worldId: "factorio" } }), games),
     "factorio.started",
   );
   assert.equal(
-    notificationSubscriptionKey(event("spawnpoint-idle-watchdog", "SUCCEEDED", { input: { worldId: "factorio" }, output: { status: "stopped_idle" } })),
+    notificationSubscriptionKey(event("spawnpoint-idle-watchdog", "SUCCEEDED", { input: { worldId: "factorio" }, output: { status: "stopped_idle" } }), games),
     "factorio.stopped",
   );
-  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server", "FAILED")), null, "failures remain operational alerts");
-  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input: { serverId: "zomboid", worldId: "zomboid-muldraugh-1a2b3c4d" } })), "zomboid.started", "a V2 input names its game as the server id");
-  assert.equal(notificationSubscriptionKey(event("spawnpoint-idle-watchdog-v2", "SUCCEEDED", { input: { serverId: "factorio", worldId: "factorio-base-1a2b3c4d" }, output: { status: "stopped_idle" } })), "factorio.stopped");
-  assert.equal(notificationSubscriptionKey(event("spawnpoint-promote-release", "SUCCEEDED")), null, "release messages are not personal lifecycle subscriptions");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server", "FAILED"), games), null, "failures remain operational alerts");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-start-server-v2", "SUCCEEDED", { input: { serverId: "zomboid", worldId: "zomboid-muldraugh-1a2b3c4d" } }), games), "zomboid.started", "a V2 input names its game as the server id");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-idle-watchdog-v2", "SUCCEEDED", { input: { serverId: "factorio", worldId: "factorio-base-1a2b3c4d" }, output: { status: "stopped_idle" } }), games), "factorio.stopped");
+  assert.equal(notificationSubscriptionKey(event("spawnpoint-promote-release", "SUCCEEDED"), games), null, "release messages are not personal lifecycle subscriptions");
 });

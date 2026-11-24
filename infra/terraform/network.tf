@@ -58,14 +58,22 @@ locals {
   # Worlds that reach players without the overlay. The gate-versus-auth
   # invariant (ADR-0033) is enforced on the host too, but a port opened here
   # would outlive a refused start, so it is checked where the port is made.
+  # A world that names no game belongs to the module whose manifest sets
+  # legacy_default (ADR-0089).
+  legacy_game = one([
+    for manifest in fileset("${path.module}/../../server/games", "*/game.json") :
+    jsondecode(file("${path.module}/../../server/games/${manifest}")).id
+    if try(jsondecode(file("${path.module}/../../server/games/${manifest}")).legacy_default, false)
+  ])
+
   public_worlds = [
     for world in local.world_catalog.worlds : {
       id   = world.id
-      game = try(world.game, "minecraft")
+      game = try(world.game, local.legacy_game)
       auth = try(world.auth, "")
       # The port is the game's manifest's (ADR-0088), not a copy kept in step by hand.
-      port     = jsondecode(file("${path.module}/../../server/games/${try(world.game, "minecraft")}/game.json")).connect.port
-      protocol = jsondecode(file("${path.module}/../../server/games/${try(world.game, "minecraft")}/game.json")).connect.protocol
+      port     = jsondecode(file("${path.module}/../../server/games/${try(world.game, local.legacy_game)}/game.json")).connect.port
+      protocol = jsondecode(file("${path.module}/../../server/games/${try(world.game, local.legacy_game)}/game.json")).connect.protocol
     }
     if try(world.connectivity, "zerotier") != "zerotier"
   ]

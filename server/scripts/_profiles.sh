@@ -4,7 +4,7 @@
 # operator's own configuration repository — one per game, because each game's
 # authoring contract differs: minecraft pins a loader and CurseForge URLs,
 # factorio pins an engine version and portal versions. A profile names its game
-# in a `game` field, and absence means minecraft, so every existing profile and
+# in a `game` field, and absence means the legacy game (ADR-0089), so every existing profile and
 # every release cut from one keeps its exact pre-axis behaviour.
 #
 # The facts come from the game's manifest (server/games/<id>/game.json,
@@ -14,8 +14,11 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the PROFILE_* variables are this library's interface, read by its sourcers
 
+# shellcheck source=../games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_legacy-game.sh"
+
 profile_game() {
-  jq -r '.game // "minecraft"' "$1"
+  jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' "$1"
 }
 
 profile_game_facts() {

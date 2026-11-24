@@ -2,6 +2,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
 connection_host="${SPAWNPOINT_CONNECTION_HOST:-172.29.23.24}"
@@ -10,7 +13,7 @@ connection_host="${SPAWNPOINT_CONNECTION_HOST:-172.29.23.24}"
 # from the same catalog the host uses keeps the two answers identical.
 connect_port_for_world() {
   local world="$1" game
-  game="$(jq -r --arg id "${world}" '.worlds[] | select(.id == $id) | .game // "minecraft"' \
+  game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" --arg id "${world}" '.worlds[] | select(.id == $id) | .game // $legacy_game' \
     "$(dirname -- "${BASH_SOURCE[0]}")/../server/worlds/catalog.json")"
   [[ -n "${game}" ]] || {
     printf 'error: unknown world: %s\n' "${world}" >&2

@@ -28,6 +28,10 @@ export type GameModule = Readonly<{
   footprint: Footprint;
   /** The game keeps a whitelist the host can write from a world's record (ADR-0066). */
   whitelist: boolean;
+  /** This module owns the records written before games were an axis, which name no game (ADR-0089). */
+  legacyDefault: boolean;
+  /** Presets of this game build releases: its manifest has release facts (ADR-0034). */
+  buildsReleases: boolean;
   /** The game settings a world may carry (ADR-0064), as the module's settings.json states them. */
   settings: readonly Readonly<Record<string, unknown>>[];
 }>;
@@ -68,6 +72,8 @@ function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
       cores: field(footprint.cores, isNumber, `${id}.footprint.cores`),
     },
     whitelist: field(capabilities.whitelist, isBoolean, `${id}.capabilities.whitelist`),
+    legacyDefault: manifest.legacy_default === true,
+    buildsReleases: typeof manifest.release === "object" && manifest.release !== null,
     settings: settings?.settings ?? [],
   };
 }
@@ -84,3 +90,12 @@ export const gameModules: readonly GameModule[] = [
 export function findGameModule(id: string): GameModule | undefined {
   return gameModules.find((module) => module.id === id);
 }
+
+function onlyLegacyDefault(modules: readonly GameModule[]): string {
+  const owners = modules.filter((module) => module.legacyDefault);
+  if (owners.length !== 1) throw new Error("exactly one game manifest must set legacy_default");
+  return owners[0]!.id;
+}
+
+/** The game a record belongs to when it names none (ADR-0089). */
+export const LEGACY_GAME_ID: string = onlyLegacyDefault(gameModules);

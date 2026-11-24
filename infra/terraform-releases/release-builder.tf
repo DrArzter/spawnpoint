@@ -61,6 +61,12 @@ data "archive_file" "release_builder_source" {
     filename = "server/scripts/_profiles.sh"
   }
 
+  # A record that names no game belongs to the manifest that sets legacy_default (ADR-0089).
+  source {
+    content  = file("${path.module}/../../server/games/_legacy-game.sh")
+    filename = "server/games/_legacy-game.sh"
+  }
+
   # _profiles.sh reads a game's release facts from its manifest (ADR-0088).
   dynamic "source" {
     for_each = fileset("${path.module}/../../server/games", "*/game.json")

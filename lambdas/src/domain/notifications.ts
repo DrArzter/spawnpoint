@@ -66,18 +66,22 @@ const CHILD_NAME = /-(idle|cap)-\d+$|-(re)?stop$|-rollback(-stop)?$|-start$/;
 
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
+/** The games this deployment knows, as their modules declare them (ADR-0088, ADR-0089). */
+export type KnownGames = Readonly<{ ids: readonly string[]; legacy: string }>;
+
 // A V2 input names its game as the lifecycle's server id; a V1 input, the
-// legacy shape, named the world, and only Factorio's world was its game.
-function eventGame(event: ExecutionEvent): string {
+// legacy shape, named the world: a world named after a game was that game's
+// own, and any other belonged to the legacy game.
+function eventGame(event: ExecutionEvent, games: KnownGames): string {
   const named = str(event.input, "gameId") ?? str(event.input, "serverId");
   if (named !== null && GAME_ID.test(named)) return named;
   const worldId = str(event.input, "worldId") ?? str(event.input, "world");
-  return worldId === "factorio" ? "factorio" : "minecraft";
+  return worldId !== null && games.ids.includes(worldId) ? worldId : games.legacy;
 }
 
-export function notificationSubscriptionKey(event: ExecutionEvent): NotificationSubscriptionKey | null {
+export function notificationSubscriptionKey(event: ExecutionEvent, games: KnownGames): NotificationSubscriptionKey | null {
   if (CHILD_NAME.test(event.name)) return null;
-  const game = eventGame(event);
+  const game = eventGame(event, games);
   if (event.machine === "spawnpoint-start-server" && (event.status === "RUNNING" || event.status === "SUCCEEDED")) {
     return `${game}.started`;
   }

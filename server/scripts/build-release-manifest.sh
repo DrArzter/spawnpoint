@@ -2,6 +2,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_legacy-game.sh"
+
 usage() {
   cat >&2 <<'EOF'
 usage: build-release-manifest.sh <release> <minecraft-version> <loader-version> <mods-directory> <output-manifest>
@@ -43,9 +46,9 @@ output_manifest="$(realpath -m -- "$5")"
 created_by="${RELEASE_CREATED_BY:-local-operator}"
 changelog="${RELEASE_CHANGELOG:-Baseline release}"
 # The game decides the mod file extension and loader.type; the version
-# argument carries that game's version. Absent means minecraft, so every
-# existing caller keeps its exact pre-axis behaviour.
-release_game="${RELEASE_GAME:-minecraft}"
+# argument carries that game's version. Absent means the legacy game
+# (ADR-0089), so every existing caller keeps its exact pre-axis behaviour.
+release_game="${RELEASE_GAME:-${LEGACY_GAME_ID}}"
 case "${release_game}" in
   minecraft)
     mod_extension="jar"

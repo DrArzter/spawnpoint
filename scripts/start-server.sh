@@ -2,13 +2,16 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
 # The V2 server id is the world's game, read from the same catalog the host
 # uses so the two answers cannot drift apart.
 game_for_world() {
   local world="$1" game
-  game="$(jq -r --arg id "${world}" '.worlds[] | select(.id == $id) | .game // "minecraft"' \
+  game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" --arg id "${world}" '.worlds[] | select(.id == $id) | .game // $legacy_game' \
     "$(dirname -- "${BASH_SOURCE[0]}")/../server/worlds/catalog.json")"
   [[ -n "${game}" ]] || {
     printf 'error: unknown world: %s\n' "${world}" >&2

@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 
+import { LEGACY_GAME_ID } from "../control-plane/game-modules.ts";
 import { isSha256, manifestPackObject, objectKey, OBJECT_LAYOUT, type ManifestPack } from "../control-plane/release-objects.ts";
 import { holderKey, type ClaimOptions, type FileClaim, type ObjectMode, type ReleaseRef, type ReleaseRefs } from "../control-plane/release-refs.ts";
 
@@ -165,7 +166,7 @@ function byCodeUnit(a: string, b: string): number {
 /** What the immutability gate compares (`canonical_manifest` in upload-release.sh). */
 export function gateProjection(manifest: Manifest): string {
   const { game, release, minecraft_version, loader, runtime, server, client } = manifest;
-  return JSON.stringify(sorted({ game: game ?? "minecraft", release, minecraft_version, loader, runtime, server, client }));
+  return JSON.stringify(sorted({ game: game ?? LEGACY_GAME_ID, release, minecraft_version, loader, runtime, server, client }));
 }
 
 async function regularFile(path: string): Promise<boolean> {

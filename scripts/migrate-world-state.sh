@@ -6,6 +6,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=_hold-release.sh
 source "${REPOSITORY_ROOT}/scripts/_hold-release.sh"
@@ -40,7 +43,7 @@ entry="$(jq -ce --arg id "${world_id}" '.worlds[] | select(.id == $id)' "${catal
   printf 'error: legacy world is not in the host catalog: %s\n' "${world_id}" >&2
   exit 1
 }
-game="$(jq -r '.game // "minecraft"' <<<"${entry}")"
+game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' <<<"${entry}")"
 display_name="$(jq -r '.display_name' <<<"${entry}")"
 preset_id="${preset_id:-$(jq -r '.profile_id' <<<"${entry}")}"
 [[ "${game}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ && "${preset_id}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || {

@@ -227,14 +227,14 @@ for hook in $(bash -c "source '${GAMES}/_dispatch.sh'; printf '%s\n' \"\${GAME_R
 done
 # A module that lacks a required hook is refused with a message, not exit 127.
 mkdir -p "${fixture}/contract/games/broken"
-cp "${GAMES}/_dispatch.sh" "${fixture}/contract/games/_dispatch.sh"
+cp "${GAMES}/_dispatch.sh" "${GAMES}/_legacy-game.sh" "${fixture}/contract/games/"
 cat >"${fixture}/contract/games/broken/game.sh" <<'BROKEN'
 GAME_COMPOSE_SERVICE="broken"
 game_query_players_raw() { :; }
 game_parse_player_count() { :; }
 BROKEN
 status=0
-message="$(bash -c "source '${fixture}/contract/games/_dispatch.sh'; load_game broken" 2>&1)" || status=$?
+message="$(LEGACY_GAME_ID=broken bash -c "source '${fixture}/contract/games/_dispatch.sh'; load_game broken" 2>&1)" || status=$?
 [[ "${status}" == "1" ]]
 [[ "${message}" == "error: game broken does not implement required hooks: game_save game_save_paths game_save_sentinel game_archive_sentinel_regex game_tick_time_ms" ]]
 expect_failure "a world naming a game with no module" \
@@ -956,5 +956,16 @@ for module in "${GAMES}"/*/game.sh; do
     [[ "${claims}" == "${defines}" ]] || { printf 'FAIL: %s claims whitelist=%s but defines its hooks: %s\n' "${game}" "${claims}" "${defines}" >&2; exit 1; }
   )
 done
+
+# Records that name no game belong to one module, named by its manifest
+# (ADR-0089); no script spells that game out as a fallback.
+[[ "$(jq -s '[.[] | select(.legacy_default == true)] | length' "${GAMES}"/*/game.json)" == "1" ]] ||
+  { printf 'FAIL: exactly one game manifest must set legacy_default\n' >&2; exit 1; }
+[[ "$(bash -c "source '${GAMES}/_legacy-game.sh'; printf '%s' \"\${LEGACY_GAME_ID}\"")" == "$(jq -r 'select(.legacy_default == true) | .id' "${GAMES}"/*/game.json)" ]]
+if grep -nE '// "(minecraft|factorio|zomboid|valheim|palworld)"|:-(minecraft|factorio|zomboid|valheim|palworld)\}' \
+  "${GAMES}/_dispatch.sh" "${SCRIPTS}"/*.sh "${REPOSITORY_ROOT}"/scripts/*.sh; then
+  printf 'FAIL: a script names a game as the fallback for a record that names none; use LEGACY_GAME_ID\n' >&2
+  exit 1
+fi
 
 printf 'game-adapter-test: ok\n'

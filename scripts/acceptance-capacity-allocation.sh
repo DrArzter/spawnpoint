@@ -23,6 +23,9 @@
 
 set -Eeuo pipefail
 
+# shellcheck source=../server/games/_legacy-game.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 profile="${AWS_PROFILE:-spawnpoint}"
 region="${AWS_REGION:-eu-central-1}"
@@ -62,7 +65,7 @@ record_event() {
 
 game_for_world() {
   local world_id="$1"
-  jq -r --arg id "${world_id}" '.worlds[] | select(.id == $id) | .game // "minecraft"' "${script_dir}/../server/worlds/catalog.json"
+  jq -r --arg legacy_game "${LEGACY_GAME_ID}" --arg id "${world_id}" '.worlds[] | select(.id == $id) | .game // $legacy_game' "${script_dir}/../server/worlds/catalog.json"
 }
 
 state_machine_arn() {

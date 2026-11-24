@@ -9,6 +9,8 @@ set -Eeuo pipefail
 
 # shellcheck source=../server/games/_legacy-game.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_legacy-game.sh"
+# shellcheck source=../server/games/_manifest.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../server/games/_manifest.sh"
 
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 server_scripts="${repository_root}/server/scripts"
@@ -76,9 +78,9 @@ profile_directory="${config_checkout}/profiles/${PROFILE_ID}"
 }
 
 game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' "${profile_directory}/profile.json")"
-if [[ "${game}" == "minecraft" ]]; then
+if [[ "$(game_fact "${game}" '.release.requires_curseforge_key // false')" == true ]]; then
   [[ -n "${CF_API_KEY:-}" && "${CF_API_KEY}" != "REQUIRED_BY_CALLER" ]] || {
-    printf 'error: CF_API_KEY is required for a minecraft profile\n' >&2
+    printf 'error: CF_API_KEY is required for a %s profile\n' "${game}" >&2
     exit 1
   }
 fi

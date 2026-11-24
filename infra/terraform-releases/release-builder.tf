@@ -67,9 +67,18 @@ data "archive_file" "release_builder_source" {
     filename = "server/games/_legacy-game.sh"
   }
 
-  # _profiles.sh reads a game's release facts from its manifest (ADR-0088).
+  source {
+    content  = file("${path.module}/../../server/games/_manifest.sh")
+    filename = "server/games/_manifest.sh"
+  }
+
+  # _profiles.sh reads a game's release facts from its manifest, and
+  # upload-release.sh its players' install notes (ADR-0088).
   dynamic "source" {
-    for_each = fileset("${path.module}/../../server/games", "*/game.json")
+    for_each = setunion(
+      fileset("${path.module}/../../server/games", "*/game.json"),
+      fileset("${path.module}/../../server/games", "*/pack-notes.txt"),
+    )
     content {
       content  = file("${path.module}/../../server/games/${source.value}")
       filename = "server/games/${source.value}"

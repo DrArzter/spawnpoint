@@ -4,6 +4,8 @@ set -Eeuo pipefail
 
 # shellcheck source=../games/_legacy-game.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_legacy-game.sh"
+# shellcheck source=../games/_manifest.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_manifest.sh"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_common.sh
@@ -46,14 +48,17 @@ fi
 mkdir -p -- "${target_parent}"
 [[ ! -L "${target_dir}" ]] || die "target mod directory must not be a symlink: ${target_dir}"
 
-if ! jq -e --arg legacy_game "${LEGACY_GAME_ID}" '
+# The release's game states which loaders and runtime its releases may carry (ADR-0088).
+release_game="$(jq -r --arg legacy_game "${LEGACY_GAME_ID}" '.game // $legacy_game' "${manifest}")"
+release_rules="$(game_fact "${release_game}" '.release // {loader_types: [], runtime_image_required: false}')" ||
+  die "release names an unknown game: ${release_game}"
+if ! jq -e --argjson rules "${release_rules}" '
   .schema_version == 1 and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
   (.minecraft_version | type == "string" and length > 0) and
-  (((.game // $legacy_game) == "minecraft" and (.loader.type | IN("vanilla", "forge", "neoforge", "fabric", "quilt"))) or
-   ((.game // $legacy_game) == "factorio" and .loader.type == "factorio")) and
+  (.loader.type | IN($rules.loader_types[])) and
   (.loader.version | type == "string" and length > 0) and
-  (if (.game // $legacy_game) == "factorio"
+  (if $rules.runtime_image_required
     then (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$"))
     else ((has("runtime") | not) or
       (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))

@@ -4,6 +4,8 @@ set -Eeuo pipefail
 
 # shellcheck source=../games/_legacy-game.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_legacy-game.sh"
+# shellcheck source=../games/_manifest.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_manifest.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -49,31 +51,18 @@ changelog="${RELEASE_CHANGELOG:-Baseline release}"
 # argument carries that game's version. Absent means the legacy game
 # (ADR-0089), so every existing caller keeps its exact pre-axis behaviour.
 release_game="${RELEASE_GAME:-${LEGACY_GAME_ID}}"
-case "${release_game}" in
-  minecraft)
-    mod_extension="jar"
-    loader_type="${RELEASE_LOADER_TYPE:-forge}"
-    case "${loader_type}" in
-      vanilla | forge | neoforge | fabric | quilt) ;;
-      *)
-        printf 'error: unsupported Minecraft loader type: %s\n' "${loader_type}" >&2
-        exit 1
-        ;;
-    esac
-    ;;
-  factorio)
-    mod_extension="zip"
-    loader_type="factorio"
-    ;;
-  zomboid)
-    mod_extension="zip"
-    loader_type="workshop"
-    ;;
-  *)
-    printf 'error: unknown RELEASE_GAME: %s\n' "${release_game}" >&2
-    exit 1
-    ;;
-esac
+release_manifest="$(game_manifest_file "${release_game}" 2>/dev/null)" &&
+  jq -e '.release | type == "object"' "${release_manifest}" >/dev/null || {
+  printf 'error: unknown RELEASE_GAME: %s\n' "${release_game}" >&2
+  exit 1
+}
+mod_extension="$(jq -r '.release.mod_extension' "${release_manifest}")"
+loader_type="${RELEASE_LOADER_TYPE:-$(jq -r '.release.default_loader_type' "${release_manifest}")}"
+jq -e --arg loader "${loader_type}" '.release.loader_types | index($loader) != null' "${release_manifest}" >/dev/null || {
+  printf 'error: unsupported %s loader type: %s\n' "${release_game}" "${loader_type}" >&2
+  exit 1
+}
+runtime_image_required="$(jq -r '.release.runtime_image_required' "${release_manifest}")"
 profile_id="${RELEASE_PROFILE_ID:-}"
 profile_repository="${RELEASE_PROFILE_REPOSITORY:-}"
 profile_commit="${RELEASE_PROFILE_COMMIT:-}"
@@ -124,8 +113,8 @@ if [[ -n "${runtime_image}" && ! "${runtime_image}" =~ ^[A-Za-z0-9._/-]+(:[A-Za-
   printf 'error: runtime image must be a digest-addressed container reference\n' >&2
   exit 1
 fi
-if [[ "${release_game}" == "factorio" && -z "${runtime_image}" ]]; then
-  printf 'error: factorio releases require RELEASE_RUNTIME_IMAGE\n' >&2
+if [[ "${runtime_image_required}" == true && -z "${runtime_image}" ]]; then
+  printf 'error: %s releases require RELEASE_RUNTIME_IMAGE\n' "${release_game}" >&2
   exit 1
 fi
 if [[ -n "${overrides_dir}" ]]; then

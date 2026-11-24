@@ -22,6 +22,17 @@
     "loader_versioned": false,
     "mod_extension": "zip",
     "resolver": "factorio-portal",
-    "runtime_image_required": true
+    "runtime_image_required": true,
+    "loader_types": [
+      "factorio"
+    ],
+    "default_loader_type": "factorio",
+    "bare_loader_types": [],
+    "resolvers": [
+      "factorio-portal"
+    ],
+    "side_lists": false,
+    "addons": false,
+    "requires_curseforge_key": false
   }
 }

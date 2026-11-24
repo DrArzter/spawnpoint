@@ -13,6 +13,8 @@ set -Eeuo pipefail
 
 # shellcheck source=../games/_legacy-game.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_legacy-game.sh"
+# shellcheck source=../games/_manifest.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../games/_manifest.sh"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_common.sh
@@ -46,13 +48,15 @@ source_dir="$(realpath -e -- "${RELEASE_SOURCE_DIR:-$(dirname -- "${manifest}")}
 [[ -f "${manifest}" && ! -L "${manifest}" ]] || die "manifest must be a regular non-symlink file: ${manifest}"
 [[ -d "${source_dir}/mods" && ! -L "${source_dir}/mods" ]] || die "release mods directory is missing or is a symlink: ${source_dir}/mods"
 
+# The release's game states whether its releases carry a runtime image (ADR-0088).
+upload_runtime_required="$(game_fact "$(jq -r '.game // empty' "${manifest}")" '.release.runtime_image_required // false' 2>/dev/null || printf 'false')"
 # The same shape rules reconcile-release.sh enforces before trusting a manifest.
-jq -e '
+jq -e --argjson runtime_required "${upload_runtime_required}" '
   .schema_version == 1 and
   (.game | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
   (.release | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
   (.source_profile.id | type == "string" and test("^[a-z0-9][a-z0-9-]{0,31}$")) and
-  (if .game == "factorio"
+  (if $runtime_required
     then (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$"))
     else ((has("runtime") | not) or
       (.runtime.image | type == "string" and test("^[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$")))
@@ -195,50 +199,16 @@ upload_release_object() {
 # byte-reproducible (embedded mtimes), and release immutability is already
 # enforced by the manifest gate.
 write_install_notes() {
-  local target="$1" game_version loader_type loader_version
-  game_version="$(jq -r '.minecraft_version' "${manifest}")"
-  case "${game}" in
-    minecraft)
-      loader_type="$(jq -r '.loader.type' "${manifest}")"
-      loader_version="$(jq -r '.loader.version' "${manifest}")"
-      cat >"${target}" <<EOF
-Spawnpoint pack, release ${release} (Minecraft ${game_version}, ${loader_type} ${loader_version}).
-
-1. Delete your mods folder ENTIRELY. Do not merge, do not pick files.
-2. Unzip this archive in its place.
-
-Wholesale replacement is what prevents duplicate-mod crashes: nothing old survives.
-EOF
-      ;;
-    factorio)
-      cat >"${target}" <<EOF
-Spawnpoint pack, release ${release} (Factorio ${game_version}).
-
-Usually you do not need this: joining the server offers the mods it runs. Use the pack when that
-offer does not arrive, or when your game cannot reach the mod portal.
-
-1. Close Factorio.
-2. Delete every .zip in your mods folder. Leave mod-list.json alone; the game rewrites it.
-3. Copy the .zip files from this archive into that folder:
-     Windows  %APPDATA%\Factorio\mods
-     Linux    ~/.factorio/mods
-     macOS    ~/Library/Application Support/factorio/mods
-
-Two versions of one mod stop the game from loading, which is why step 2 is a deletion and not a merge.
-EOF
-      ;;
-    zomboid)
-      cat >"${target}" <<EOF
-Spawnpoint pack, release ${release} (Project Zomboid build ${game_version}).
-
-Vanilla releases contain no client-side files. Workshop-backed presets will
-publish their exact client installation contract here when that resolver lands.
-EOF
-      ;;
-    *)
-      die "no install notes for game: ${game}"
-      ;;
-  esac
+  local target="$1" notes text
+  # The game's own words for its players (ADR-0088): a template in its module.
+  notes="${SCRIPT_DIR}/../games/${game}/pack-notes.txt"
+  [[ -f "${notes}" && ! -L "${notes}" ]] || die "no install notes for game: ${game}"
+  text="$(<"${notes}")"
+  text="${text//\{\{release\}\}/${release}}"
+  text="${text//\{\{game_version\}\}/$(jq -r '.minecraft_version' "${manifest}")}"
+  text="${text//\{\{loader_type\}\}/$(jq -r '.loader.type' "${manifest}")}"
+  text="${text//\{\{loader_version\}\}/$(jq -r '.loader.version' "${manifest}")}"
+  printf '%s\n' "${text}" >"${target}"
 }
 
 # The files of the client pack, with the install notes, in <directory>. Both

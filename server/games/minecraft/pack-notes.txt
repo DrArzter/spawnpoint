@@ -1,0 +1,6 @@
+Spawnpoint pack, release {{release}} (Minecraft {{game_version}}, {{loader_type}} {{loader_version}}).
+
+1. Delete your mods folder ENTIRELY. Do not merge, do not pick files.
+2. Unzip this archive in its place.
+
+Wholesale replacement is what prevents duplicate-mod crashes: nothing old survives.

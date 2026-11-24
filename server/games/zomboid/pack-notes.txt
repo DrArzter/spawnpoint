@@ -1,0 +1,4 @@
+Spawnpoint pack, release {{release}} (Project Zomboid build {{game_version}}).
+
+Vanilla releases contain no client-side files. Workshop-backed presets will
+publish their exact client installation contract here when that resolver lands.

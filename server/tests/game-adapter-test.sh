@@ -945,8 +945,15 @@ for module in "${GAMES}"/*/game.sh; do
     (.footprint.cores | type == "number" and . > 0) and
     (.capabilities.whitelist | type == "boolean") and
     (.release == null or (.release | (.version_field | type == "string") and (.loader_versioned | type == "boolean")
-      and (.runtime_image_required | type == "boolean")))
+      and (.runtime_image_required | type == "boolean")
+      and (.loader_types | type == "array" and length > 0) and (.default_loader_type as $d | .loader_types | index($d) != null)
+      and (.bare_loader_types | type == "array") and (.resolvers | type == "array")
+      and (.side_lists | type == "boolean") and (.addons | type == "boolean") and (.requires_curseforge_key | type == "boolean")))
   ' "${manifest}" >/dev/null || { printf 'FAIL: %s has no valid game.json\n' "${game}" >&2; exit 1; }
+  # A game that builds releases gives its players install notes for the pack.
+  if [[ "$(jq '.release != null' "${manifest}")" == true ]]; then
+    [[ -f "${GAMES}/${game}/pack-notes.txt" ]] || { printf 'FAIL: %s builds releases but has no pack-notes.txt\n' "${game}" >&2; exit 1; }
+  fi
   (
     # shellcheck source=/dev/null
     source "${module}"

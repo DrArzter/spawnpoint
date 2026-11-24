@@ -57,6 +57,10 @@
 #   game_prepare_runtime       optional: derive runtime inputs from a verified release manifest
 #   game_prepare_installed_runtime optional: restore those inputs for later lifecycle commands
 #   game_prepare_session       optional: last-mile files before the container starts
+#   game_legacy_mods_directory optional: where a world without its own generation
+#                              layout keeps its mods; default games/<id>/data/mods
+#   game_apply_release_overrides optional: apply a release manifest's managed server
+#                              overrides to the world's data (takes the manifest)
 #   game_render_whitelist      optional: write the world's whitelist into the data dir
 #                              (data dir, names); with game_reload_whitelist it
 #                              enables apply-whitelist.sh
@@ -97,6 +101,8 @@ GAME_OPTIONAL_HOOKS=(
   game_prepare_runtime
   game_prepare_installed_runtime
   game_prepare_session
+  game_legacy_mods_directory
+  game_apply_release_overrides
   game_render_whitelist
   game_reload_whitelist
 )

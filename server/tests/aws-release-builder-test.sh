@@ -194,7 +194,7 @@ while IFS= read -r entry; do
       printf 'error: %s reaches for %s, which the release bundle does not package\n' "${entry}" "${reference}" >&2
       exit 1
     }
-  done < <(grep -oE '\$\{(SERVER_SCRIPTS|server_scripts|repository_root)\}/[a-z0-9/_-]+\.sh|_[a-z0-9_]+\.sh|games/[a-z0-9-]+/[a-z0-9-]+\.sh' \
+  done < <(grep -oE '\$\{(SERVER_SCRIPTS|server_scripts|repository_root)\}/[a-z0-9/_-]+\.sh|games/_[a-z0-9_-]+\.sh|_[a-z0-9_]+\.sh|games/[a-z0-9-]+/[a-z0-9-]+\.sh' \
     "${repository_root}/${entry}" | sed -E 's#^\$\{(SERVER_SCRIPTS|server_scripts)\}/#server/scripts/#; s#^\$\{repository_root\}/##' | sort -u)
 done <<<"${packaged}"
 

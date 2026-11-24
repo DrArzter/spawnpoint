@@ -24,6 +24,24 @@
     "loader_versioned": true,
     "mod_extension": "jar",
     "resolver": "curseforge-files",
-    "runtime_image_required": false
+    "runtime_image_required": false,
+    "loader_types": [
+      "vanilla",
+      "forge",
+      "neoforge",
+      "fabric",
+      "quilt"
+    ],
+    "default_loader_type": "forge",
+    "bare_loader_types": [
+      "vanilla"
+    ],
+    "resolvers": [
+      "curseforge-files",
+      "curseforge-modpack"
+    ],
+    "side_lists": true,
+    "addons": true,
+    "requires_curseforge_key": true
   }
 }

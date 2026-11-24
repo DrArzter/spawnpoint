@@ -10,14 +10,15 @@ function stoppedLifecycle(serverId: string): WorldSession {
 
 /** A game with no presets and no session running, as the demo seeds Factorio and Zomboid. */
 function stoppedGame(id: string, code: string, displayName: string, worlds: Mutable<World>[]): Mutable<Game> {
-  return { id, code, displayName, lifecycle: stoppedLifecycle(id), presets: [], worlds };
+  return { id, code, displayName, lifecycle: stoppedLifecycle(id), settings: [], whitelist: false, presets: [], worlds };
 }
 
 // The demo mutates its own control plane, so every record it holds is mutable
 // while the app keeps reading the real read-only domain types.
 export type Mutable<T> = {
-  -readonly [K in keyof T]: T[K] extends readonly (infer U)[] ? Mutable<U>[] : T[K] extends object | null ? (T[K] extends null ? T[K] : Mutable<T[K]>) : T[K];
+  -readonly [K in keyof T]: MutableValue<T[K]>;
 };
+type MutableValue<V> = V extends readonly (infer U)[] ? MutableValue<U>[] : V extends object ? Mutable<V> : V;
 
 /** What an operation does and when, so a read at any time says which step it is in. */
 export type OperationPlan = {
@@ -95,7 +96,7 @@ export const PERMISSION_CATALOGUE: readonly AccessPermission[] = [
 
 // server/games/minecraft/settings.json as the API serves it (ADR-0064); a test
 // holds the two together.
-export const MINECRAFT_SETTINGS: readonly SettingDefinition[] = [
+export const MINECRAFT_SETTINGS: readonly Mutable<SettingDefinition>[] = [
   { id: "difficulty", label: "Difficulty", type: "choice", default: "normal", choices: [{ value: "peaceful", label: "Peaceful" }, { value: "easy", label: "Easy" }, { value: "normal", label: "Normal" }, { value: "hard", label: "Hard" }] },
   { id: "game_mode", label: "Game mode", type: "choice", default: "survival", hint: "Players who join for the first time get it. Players already in the world keep theirs.", choices: [{ value: "survival", label: "Survival" }, { value: "creative", label: "Creative" }, { value: "adventure", label: "Adventure" }, { value: "spectator", label: "Spectator" }] },
   { id: "max_players", label: "Player limit", type: "integer", default: 20, min: 1, max: 100 },
@@ -115,7 +116,7 @@ export function initialState(): DemoState {
       // Vanilla stay configured, so the demo still shows the one shared host.
       deployment: { placement: "fleet", launchEnabled: true, dnsAvailable: false },
       operations: [],
-      hosts: [{ id: "host-game", name: "Shared game host", state: "running", provenance: "configured", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1a", launchedAt: "2026-09-14T18:32:00.000Z", publicIp: "203.0.113.42" }],
+      hosts: [{ id: "host-game", name: "Shared game host", state: "running", provenance: "configured", instanceType: "m7i-flex.large", availabilityZone: "eu-central-1a", launchedAt: "2026-09-14T18:32:00.000Z" }],
       games: [
         {
           id: "minecraft",
@@ -126,9 +127,9 @@ export function initialState(): DemoState {
           lifecycle: { serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", readyAtEpochSeconds: Math.floor(Date.now() / 1000) - 11_520, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: { playersOnline: 3, consecutiveEmpty: 0, lastObservedAtEpochSeconds: Math.floor(Date.now() / 1000) - 45, freshUntilEpochSeconds: Math.floor(Date.now() / 1000) + 2_055 } },
           presets: [
             { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3", buildAvailable: true },
-            { id: "skyblock", displayName: "Skyblock", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "2b8e04f7a1c63d95e0847bf21a5d3906c7e4128b", profileDigest: "9c1e57a30b8d426fa9e271c04b5f83da6017e94b2c85fd30a7b16e2f48c0d95a", releases: [], buildStatus: "failed", latestRelease: null, buildAvailable: true, build: { release: "1.0", attempt: 1, state: "failed", requestedAt: "2026-09-14T18:00:00Z" } },
+            { id: "skyblock", displayName: "Skyblock", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "2b8e04f7a1c63d95e0847bf21a5d3906c7e4128b", profileDigest: "9c1e57a30b8d426fa9e271c04b5f83da6017e94b2c85fd30a7b16e2f48c0d95a", releases: [], buildStatus: "failed", latestRelease: null, buildAvailable: true, build: { release: "1.0", attempt: 1, state: "failed", requestedAt: "2026-09-14T18:00:00Z", profileDigest: "9c1e57a30b8d426fa9e271c04b5f83da6017e94b2c85fd30a7b16e2f48c0d95a" } },
             // The config was edited, the build of the new revision failed, and the release a world runs is still published (ADR-0042).
-            { id: "prominence", displayName: "Prominence II", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "185db5e3c94a07d2f6b81e4c5a90d37f2e61b8c4", profileDigest: "34cc6e0b92d7a15f38c40e9b7d2a61f85c03e9d47b1a6f28c5e03d97a4b8162f", releases: ["39127124115.1"], olderReleases: ["39127124115.1"], buildStatus: "failed", latestRelease: "39127124115.1", buildAvailable: true, build: { release: "45023300711.1", attempt: 1, state: "failed", requestedAt: "2026-11-22T09:00:00Z" } },
+            { id: "prominence", displayName: "Prominence II", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "185db5e3c94a07d2f6b81e4c5a90d37f2e61b8c4", profileDigest: "34cc6e0b92d7a15f38c40e9b7d2a61f85c03e9d47b1a6f28c5e03d97a4b8162f", releases: ["39127124115.1"], olderReleases: ["39127124115.1"], buildStatus: "failed", latestRelease: "39127124115.1", buildAvailable: true, build: { release: "45023300711.1", attempt: 1, state: "failed", requestedAt: "2026-11-22T09:00:00Z", profileDigest: "34cc6e0b92d7a15f38c40e9b7d2a61f85c03e9d47b1a6f28c5e03d97a4b8162f" } },
           ],
           worlds: [
             {
@@ -139,6 +140,8 @@ export function initialState(): DemoState {
               worldLifecycleAvailable: true,
               connectivity: "zerotier",
               placement: "configured",
+              auth: null,
+              session: null,
               materialization: "existing",
               preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
               wipes: [
@@ -157,6 +160,8 @@ export function initialState(): DemoState {
               worldLifecycleAvailable: false,
               connectivity: "zerotier",
               placement: "configured",
+              auth: null,
+              session: null,
               materialization: "existing",
               preset: null,
               wipes: [],
@@ -173,6 +178,7 @@ export function initialState(): DemoState {
               worldLifecycleAvailable: true,
               connectivity: "raw",
               placement: "fleet",
+              auth: "game",
               materialization: "existing",
               preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
               wipes: [{ id: "gen-5e1c9a07d3b84f26a0c71e95b8f2d430", number: 1, state: "current", createdAt: "2026-10-02T12:00:00.000Z", closedAt: null, originRelease: "1.2" }],
@@ -192,6 +198,7 @@ export function initialState(): DemoState {
               worldLifecycleAvailable: true,
               connectivity: "raw",
               placement: "fleet",
+              auth: "game",
               materialization: "existing",
               preset: { id: "industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3" },
               wipes: [{ id: "gen-8d41f0b6a2c75e39b1046fd8c3e97a52", number: 1, state: "current", createdAt: "2026-11-21T12:00:00.000Z", closedAt: null, originRelease: "1.2" }],
@@ -203,15 +210,15 @@ export function initialState(): DemoState {
           ],
         },
         stoppedGame("factorio", "FA", "Factorio", [
-            { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
+            { id: "factorio", displayName: "Factorio vanilla", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: null, materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
             // A world that can start, so the demo can show a running Factorio host.
-            { id: "factorio-megabase", displayName: "Megabase", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "available", generationId: null, activeRelease: "2.0.55", desiredRelease: "2.0.55" } },
-            { id: "factorio-archive", displayName: "Archived rail world", profileId: "factorio-rail", sessionControlAvailable: false, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "archived", preset: null, wipes: [], connectionAddress: null, release: { state: "available", generationId: null, activeRelease: "1.0", desiredRelease: "1.0" } },
+            { id: "factorio-megabase", displayName: "Megabase", profileId: "factorio-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: null, materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "available", generationId: null, activeRelease: "2.0.55", desiredRelease: "2.0.55" } },
+            { id: "factorio-archive", displayName: "Archived rail world", profileId: "factorio-rail", sessionControlAvailable: false, worldLifecycleAvailable: true, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: null, materialization: "archived", preset: null, wipes: [], connectionAddress: null, release: { state: "available", generationId: null, activeRelease: "1.0", desiredRelease: "1.0" } },
         ]),
         stoppedGame("zomboid", "PZ", "Project Zomboid", [
-            { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "not_created", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
+            { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: null, materialization: "not_created", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
             // A world that can start, so the demo can show a running Zomboid host.
-            { id: "zomboid-muldraugh", displayName: "Muldraugh", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "available", generationId: null, activeRelease: "42.13.1", desiredRelease: "42.13.1" } },
+            { id: "zomboid-muldraugh", displayName: "Muldraugh", profileId: "zomboid-vanilla", sessionControlAvailable: true, worldLifecycleAvailable: true, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: null, materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "available", generationId: null, activeRelease: "42.13.1", desiredRelease: "42.13.1" } },
         ]),
       ],
     },

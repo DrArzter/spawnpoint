@@ -1,6 +1,6 @@
 import { DeleteObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 
-import { backupInventory, byCodeUnit, resumeArchiveKey, type BackupEntry } from "../control-plane/backups.ts";
+import { backupInventory, byCodeUnit, resumeArchiveKey, type ListedBackup } from "../control-plane/backups.ts";
 import { S3ReleaseStateReader } from "../control-plane/s3-release-state-store.ts";
 import { S3WorldReader } from "../control-plane/s3-world-repository.ts";
 import type { WorldRecord } from "../control-plane/world-registry.ts";
@@ -55,7 +55,7 @@ export function resumeKey(record: WorldRecord, keys: readonly string[]): string 
  */
 export function protectedKeys(
   record: WorldRecord,
-  entries: readonly BackupEntry[],
+  entries: readonly ListedBackup[],
   keys: readonly string[] = entries.map((entry) => entry.key),
   prePromotion: readonly string[] = [],
 ): ReadonlySet<string> {
@@ -75,7 +75,7 @@ export function protectedKeys(
 export function archivesToRemove(record: WorldRecord, objects: readonly ArchiveObject[], prePromotion: readonly string[] = []): readonly string[] {
   const entries = backupInventory(objects, Number.POSITIVE_INFINITY).entries;
   const keep = protectedKeys(record, entries, objects.map((object) => object.key), prePromotion);
-  const byGeneration = new Map<string, BackupEntry[]>();
+  const byGeneration = new Map<string, ListedBackup[]>();
   for (const entry of entries) {
     const generation = entry.generationId ?? "none";
     byGeneration.set(generation, [...(byGeneration.get(generation) ?? []), entry]);

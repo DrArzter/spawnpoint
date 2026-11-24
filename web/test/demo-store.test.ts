@@ -61,7 +61,7 @@ test("two fleet worlds of a game start one after the other, each on a host of it
   assert.deepEqual(snapshot.operations, []);
   assert.equal(stateOf(snapshot, CREATIVE), "running");
   assert.equal(stateOf(snapshot, skyline), "running");
-  assert.ok(snapshot.hosts.filter((host) => host.provenance === "launched").every((host) => host.state === "running" && host.publicIp));
+  assert.ok(snapshot.hosts.filter((host) => host.provenance === "launched").every((host) => host.state === "running" && host.launchedAt !== null));
   assert.notEqual(store.worldMetrics(GAME, skyline, "6h"), null);
   assert.ok(store.worldMetrics(GAME, skyline, "6h")?.series.some((series) => series.id === "memory"), "the demo draws memory beside CPU");
   const running = store.worldMetrics(GAME, skyline, "6h")!;

@@ -8,7 +8,7 @@ import { closeSessionHost, openSessionHost, pruneSessionHistory, type SessionHos
 import { createSessionHistoryCoordinator, type SessionHistoryStore } from "../src/lifecycle/session-history.ts";
 import { createSessionHostReader, sessionHostsFromExecutions } from "../src/control-plane/aws-session-history.ts";
 import { joinSampledSeries, mergeWorldMetrics, worldHostRuns, type HostRun } from "../src/control-plane/world-metrics.ts";
-import type { HostMetrics } from "../src/control-plane/read-model.ts";
+import type { HostMetricsWindow } from "../src/control-plane/read-model.ts";
 
 const T0 = Date.UTC(2026, 10, 21, 12, 0);
 const iso = (minutes: number) => new Date(T0 + minutes * 60_000).toISOString();
@@ -172,7 +172,7 @@ const SLOTS = 24;
 const PERIOD = 300;
 const grid = Array.from({ length: SLOTS }, (_, index) => iso(index * 5));
 
-function host(values: Readonly<{ cpu?: (number | null)[]; memory?: (number | null)[] }>): HostMetrics {
+function host(values: Readonly<{ cpu?: (number | null)[]; memory?: (number | null)[] }>): HostMetricsWindow {
   const series = (id: string, label: string, unit: string, list: (number | null)[] | undefined) => ({
     id, label, unit, points: grid.map((slot, index) => ({ at: slot, value: list?.[index] ?? null })),
   });
@@ -183,7 +183,7 @@ function host(values: Readonly<{ cpu?: (number | null)[]; memory?: (number | nul
 }
 const fill = (from: number, to: number, value: number): (number | null)[] => Array.from({ length: SLOTS }, (_, index) => index >= from && index < to ? value : null);
 const run = (hostId: string, from: number, to: number | null): HostRun => ({ hostId, startedAtMs: T0 + from * 5 * 60_000, endedAtMs: to === null ? null : T0 + to * 5 * 60_000 });
-const valuesOf = (metrics: HostMetrics | null, id: string) => metrics?.series.find((series) => series.id === id)?.points.map((point) => point.value);
+const valuesOf = (metrics: HostMetricsWindow | null, id: string) => metrics?.series.find((series) => series.id === id)?.points.map((point) => point.value);
 
 test("each slot takes the reading of the host that ran the world then; two hosts are never added", () => {
   const merged = mergeWorldMetrics(

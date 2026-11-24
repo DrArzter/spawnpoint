@@ -5,6 +5,8 @@ They are plain TypeScript: no `node:` module, no AWS SDK, no DOM and no React, s
 `lambdas/test/contract-purity.test.ts` enforces that. Imports between files here carry the `.ts` extension.
 
 - `operations.ts`: how far a world operation has come, its steps and the host's own lines.
-- `metrics.ts`: the metric ranges and the shape of a metric series.
+- `control-plane.ts`: the control-plane snapshot: games, worlds, presets, hosts and running operations.
+- `backups.ts`: a world's backup inventory.
+- `metrics.ts`: the metric ranges and a host's or a world's metrics.
 - `console.ts`: one console command as the API answers it.
 - `settings.ts`: a game setting's definition and the rule that a value is valid for it.

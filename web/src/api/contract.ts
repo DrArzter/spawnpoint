@@ -1,11 +1,12 @@
 import type { LoginProviderId } from "../lib/signin";
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../model";
 import type { ConsoleEntry } from "../../../contract/console";
-import type { HostMetricPoint, HostMetricSeries, MetricRange } from "../../../contract/metrics";
+import type { HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange } from "../../../contract/metrics";
+import type { BackupEntry, BackupInventory } from "../../../contract/backups";
 import type { HostLogLine, OperationProgress, OperationStep } from "../../../contract/operations";
 
 // Shapes the API and the panel share live in ../contract (review X2).
-export type { ConsoleEntry, HostLogLine, HostMetricPoint, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
+export type { BackupEntry, BackupInventory, ConsoleEntry, HostLogLine, HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
 
 export type PromotionResult = { result: "requested"; operationId: string } | { result: "switched" };
 
@@ -196,20 +197,6 @@ export type InvitationSummary = Readonly<{
   createdAt: string;
 }>;
 
-export type BackupEntry = {
-  key: string;
-  archiveName: string;
-  checksum: string;
-  generationId: string | null;
-  sizeBytes: number;
-  storedAt: string;
-  /** The release a restore puts this backup on: the release it ran (ADR-0052). Null where it cannot be read. */
-  release: string | null;
-  /** recorded: written on the archive; ran: the wipe's record of what it ran; origin: the release the wipe began with. */
-  releaseSource: "recorded" | "ran" | "origin" | null;
-};
-
-export type BackupInventory = { entries: BackupEntry[]; unverified: number; truncated: boolean };
 
 /** Where a release's build fetched a mod. Releases built before it was recorded carry none. */
 export type ModSource = "curseforge" | "modrinth" | "github";
@@ -279,7 +266,6 @@ export type SavedWhitelist = WorldWhitelist & Readonly<{ applied: "reloading" | 
 /** A link the browser opens once; it expires, and is never kept. */
 export type FileLink = Readonly<{ url: string; expiresIn: number }>;
 
-export type HostMetrics = Readonly<{ range: MetricRange; startedAt: string; endedAt: string; periodSeconds: number; series: readonly HostMetricSeries[]; pendingFrom?: string }>;
 
 export type AuthState =
   | { status: "loading" }

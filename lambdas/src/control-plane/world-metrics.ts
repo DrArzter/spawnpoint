@@ -1,5 +1,5 @@
 import type { SessionHost } from "../domain/session-history.ts";
-import type { HostMetricPoint, HostMetrics, HostMetricSeries } from "./read-model.ts";
+import type { HostMetricPoint, HostMetricsWindow, HostMetricSeries } from "./read-model.ts";
 
 /*
  * A world's metrics across the hosts it used (ADR-0015). Every host is read
@@ -64,7 +64,7 @@ function overlapMs(run: HostRun, slotStart: number, slotEnd: number): number {
 
 function ownedSeries(
   id: string,
-  perHost: Readonly<Record<string, HostMetrics>>,
+  perHost: Readonly<Record<string, HostMetricsWindow>>,
   runs: readonly HostRun[],
   slots: readonly string[],
   periodMs: number,
@@ -142,7 +142,7 @@ function pendingSlot(points: readonly HostMetricPoint[], liveRun: HostRun | unde
  * running session's run; while there is one, the slots the newest readings have
  * not reached are marked pending (EC2 basic monitoring reports minutes late).
  */
-export function mergeWorldMetrics(perHost: Readonly<Record<string, HostMetrics>>, runs: readonly HostRun[]): HostMetrics | null {
+export function mergeWorldMetrics(perHost: Readonly<Record<string, HostMetricsWindow>>, runs: readonly HostRun[]): HostMetricsWindow | null {
   const template = Object.values(perHost)[0];
   const firstSeries = template?.series[0];
   if (template === undefined || firstSeries === undefined) return null;

@@ -37,7 +37,7 @@ import { createOperationProgressReader, createHostLogReader } from "./aws-operat
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput, buildStopInput, type StopPlayersPolicy } from "../domain/telegram-bot.ts";
-import type { ControlPlaneSources, HostMetricPoint, HostMetrics, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
+import type { ControlPlaneSources, HostMetricPoint, HostMetricsWindow, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
 import { expectationFromRuns, type FinishedRun } from "./operation-eta.ts";
 import type { ConsoleInvocation } from "./console.ts";
@@ -246,7 +246,7 @@ function hostMetricsFrom(
   results: ReadonlyMap<string | undefined, MetricDataResult>,
   suffix: string,
   window: Readonly<{ start: Date; end: Date; period: number }>,
-): HostMetrics {
+): HostMetricsWindow {
   const slots = metricSlots(window.start, window.end, window.period);
   return {
     startedAt: window.start.toISOString(),
@@ -264,7 +264,7 @@ function hostMetricsFrom(
   };
 }
 
-async function readHostMetrics(instanceId: string, hours: number): Promise<HostMetrics> {
+async function readHostMetrics(instanceId: string, hours: number): Promise<HostMetricsWindow> {
   return (await readHostsMetrics([instanceId], hours))[instanceId]!;
 }
 
@@ -272,7 +272,7 @@ async function readHostMetrics(instanceId: string, hours: number): Promise<HostM
 // fit; a world has far fewer sessions than that inside a week.
 const MAX_METRIC_HOSTS = 100;
 
-async function readHostsMetrics(instanceIds: readonly string[], hours: number): Promise<Readonly<Record<string, HostMetrics>>> {
+async function readHostsMetrics(instanceIds: readonly string[], hours: number): Promise<Readonly<Record<string, HostMetricsWindow>>> {
   const hostIds = [...new Set(instanceIds)].slice(-MAX_METRIC_HOSTS);
   const end = new Date();
   const start = new Date(end.getTime() - hours * 3_600_000);

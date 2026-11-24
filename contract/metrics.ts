@@ -22,3 +22,14 @@ export type HostMetricSeries = Readonly<{
    */
   pendingFrom?: string;
 }>;
+
+/** What GET .../metrics sends for a host or a world. */
+export type HostMetrics = Readonly<{
+  range: MetricRange;
+  startedAt: string;
+  endedAt: string;
+  periodSeconds: number;
+  series: readonly HostMetricSeries[];
+  /** The host series' `pendingFrom`, for the strip. */
+  pendingFrom?: string;
+}>;

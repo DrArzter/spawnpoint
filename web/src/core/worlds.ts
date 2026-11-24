@@ -29,7 +29,7 @@ export function releaseSummary(world: World): string {
 }
 
 export function sessionActionForWorld(world: World, game: Game, sharedSession: SharedHostSession, fleet = false): SessionAction {
-  if (fleet) return fleetSessionOf(game, world)?.activeSessionId ? "stop" : "start";
+  if (fleet) return fleetSessionOf(world)?.activeSessionId ? "stop" : "start";
   return worldOwnsSharedSession(sharedSession, game, world) && sharedSession.state !== "stopped" ? "stop" : "start";
 }
 
@@ -45,7 +45,7 @@ function unavailableReason(world: World): string {
 // A fleet world is refused for its own session's state, never for another
 // world's: each runs on a host launched for it (ADR-0062).
 function fleetRefusal(world: World, game: Game): string | null {
-  const observed = fleetSessionOf(game, world)?.observedState;
+  const observed = fleetSessionOf(world)?.observedState;
   if (world.connectivity === "zerotier") return "Fleet hosts do not join ZeroTier. Choose a public connection while this world is stopped.";
   if (observed === "starting" || observed === "stopping" || observed === "unknown") return `This world is ${observed}.`;
   return null;
@@ -311,7 +311,7 @@ export function worldPlayers(game: Game, world: World, sharedSession: SharedHost
 // other clock, as the snapshot names no fleet world's host. A configured world
 // falls back to the shared host's launch.
 export function worldLaunchedAt(game: Game, world: World, sharedSession: SharedHostSession, snapshot: ControlPlaneSnapshot | null): string | null {
-  const own = world.placement === "fleet" ? fleetSessionOf(game, world) : game.lifecycle;
+  const own = world.placement === "fleet" ? fleetSessionOf(world) : game.lifecycle;
   const readyAt = own?.activeWorldId === world.id && own.observedState === "ready" ? own.readyAtEpochSeconds : null;
   if (readyAt != null) return new Date(readyAt * 1000).toISOString();
   if (world.placement === "fleet" || !worldOwnsSharedSession(sharedSession, game, world) || sharedSession.state === "stopped") return null;
@@ -371,7 +371,7 @@ type Host = ControlPlaneSnapshot["hosts"][number];
 
 function sessionHint(fleet: boolean, game: Game, world: World, reason: SessionReason): string {
   if (!fleet) return reason.text;
-  return fleetSessionOf(game, world)?.activeSessionId ? "This world runs its own session on a fleet host." : "This world has no active session.";
+  return fleetSessionOf(world)?.activeSessionId ? "This world runs its own session on a fleet host." : "This world has no active session.";
 }
 
 function hostDetail(host: Host | undefined): Detail {

@@ -16,7 +16,7 @@ import { effectiveValue, settingDefinitions, settingValueValid } from "./setting
  * a fleet-capable deployment are decided once.
  */
 
-type Deployment = ControlPlaneSnapshot["deployment"];
+type Deployment = ControlPlaneSnapshot["deployment"] | undefined;
 
 // A fleet host never joins ZeroTier (ADR-0033); the persistent host serves
 // any connection (ADR-0085). A public world needs a DNS zone only for DNS.

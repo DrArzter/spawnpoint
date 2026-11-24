@@ -7,15 +7,16 @@ import { catalogWithPresets, displayAddress, gameCatalog, type CatalogGame, worl
 import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
-import { gameSettingDefinitions, type SettingDefinition, type SettingValue } from "./game-settings.ts";
-import type { HostMetricPoint, HostMetricSeries } from "../../../contract/metrics.ts";
+import { gameSettingDefinitions } from "./game-settings.ts";
+import type { HostMetricPoint, HostMetrics, HostMetricSeries } from "../../../contract/metrics.ts";
+import type { ControlPlaneSnapshot, HostState, OperationType, ReleasePointer, WorldSession } from "../../../contract/control-plane.ts";
 
 export type { HostMetricPoint, HostMetricSeries };
 
 export type HostObservation = Readonly<{
   id: string;
   name: string;
-  state: "pending" | "running" | "stopping" | "stopped" | "unknown";
+  state: HostState;
   providerRef: string;
   instanceType: string | null;
   availabilityZone: string | null;
@@ -27,18 +28,12 @@ export type HostObservation = Readonly<{
   provenance?: "configured" | "launched";
 }>;
 
-export type ReleasePointerObservation = Readonly<{
-  state: "available" | "unconfigured" | "unavailable";
-  generationId: string | null;
-  desiredRelease: string | null;
-  activeRelease: string | null;
-  /** How many releases this wipe has run; a wipe that never started has none (ADR-0078). Absent when the pointer is not read. */
-  runCount?: number;
-}>;
+/** A wipe's release pointer as the API sends it (contract/control-plane.ts). */
+export type ReleasePointerObservation = ReleasePointer;
 
 export type OperationObservation = Readonly<{
   id: string;
-  type: "start" | "stop" | "promote" | "world";
+  type: OperationType;
   status: "running";
   startedAt: string;
   providerRef: string;
@@ -49,14 +44,8 @@ export type OperationObservation = Readonly<{
   expectedSamples?: number;
 }>;
 
-export type HostMetrics = Readonly<{
-  startedAt: string;
-  endedAt: string;
-  periodSeconds: number;
-  series: readonly HostMetricSeries[];
-  /** The host series' `pendingFrom`, for the strip. */
-  pendingFrom?: string;
-}>;
+/** A host's metrics over a window; the handler adds the range it was asked for (contract/metrics.ts). */
+export type HostMetricsWindow = Omit<HostMetrics, "range">;
 
 export type ControlPlaneSources = Readonly<{
   readObservedAt?: () => Promise<Date | null>;
@@ -74,102 +63,19 @@ export type ControlPlaneSources = Readonly<{
   readReleaseState?: ReleaseStateReader;
   /** The build's plan.json beside the manifest; null when the release has none. */
   readReleasePlan?: (gameId: string, presetId: string, version: string) => Promise<unknown>;
-  readHostMetrics?: (instanceId: string, hours: number) => Promise<HostMetrics>;
+  readHostMetrics?: (instanceId: string, hours: number) => Promise<HostMetricsWindow>;
   /** The same window for several hosts at once, by host id. */
-  readHostsMetrics?: (hostIds: readonly string[], hours: number) => Promise<Readonly<Record<string, HostMetrics>>>;
+  readHostsMetrics?: (hostIds: readonly string[], hours: number) => Promise<Readonly<Record<string, HostMetricsWindow>>>;
   /** The hosts a world's sessions ran on since a time, from the stored history and, before it, the workflows. */
   readWorldSessionHosts?: (worldId: string, sinceMs: number) => Promise<readonly SessionHost[]>;
   listWorldRecords?: () => Promise<readonly WorldRecord[]>;
 }>;
 
-export type ControlPlaneSnapshot = Readonly<{
-  observedAt: string;
-  games: ReadonlyArray<Readonly<{
-    id: string;
-    code: string;
-    displayName: string;
-    /** The game's session record, without the lease or the fence. */
-    lifecycle: WorldSessionView | null;
-    /** What a world of this game may set (ADR-0064); empty when the game defines nothing. */
-    settings: readonly SettingDefinition[];
-    /** The game keeps a whitelist a world's record can hold (ADR-0066). */
-    whitelist: boolean;
-    presets: ReadonlyArray<Readonly<{
-      id: string;
-      displayName: string;
-      repository: string;
-      commit: string;
-      profileDigest: string;
-      releases: readonly string[];
-      buildStatus: "unbuilt" | "building" | "ready" | "failed";
-      latestRelease: string | null;
-      olderReleases?: readonly string[];
-      buildAvailable?: PresetObservation["buildAvailable"];
-      build?: PresetObservation["build"];
-    }>>;
-    worlds: ReadonlyArray<Readonly<{
-      id: string;
-      displayName: string;
-      profileId: string;
-      sessionControlAvailable: boolean;
-      connectionAddress: string | null;
-      connectivity: string;
-      placement: "configured" | "fleet";
-      auth: "game" | "external" | null;
-      materialization: "existing" | "not_created" | "archived";
-      worldLifecycleAvailable: boolean;
-      preset: CatalogGame["worlds"][number]["preset"] | null;
-      wipes: ReadonlyArray<Readonly<{
-        id: string;
-        number: number;
-        state: "current" | "closed";
-        createdAt: string;
-        closedAt: string | null;
-        originRelease: string;
-      }>>;
-      release: ReleasePointerObservation;
-      /** This world's session, wherever it lives (ADR-0062); null when it has none. */
-      session: WorldSessionView | null;
-      /** The game settings this world sets; null when it has no record to keep them in. */
-      gameSettings: Readonly<{ values: Readonly<Record<string, SettingValue>>; updatedAt: string | null }> | null;
-    }>>;
-  }>>;
-  hosts: ReadonlyArray<Readonly<{
-    id: string;
-    name: string;
-    state: HostObservation["state"];
-    providerRef?: string;
-    instanceType?: string | null;
-    availabilityZone?: string | null;
-    launchedAt?: string | null;
-  }>>;
-  operations: ReadonlyArray<Readonly<{
-    id: string;
-    type: OperationObservation["type"];
-    status: "running";
-    startedAt: string;
-    worldId: string | null;
-    providerRef?: string;
-    expectedSeconds?: number;
-    expectedSamples?: number;
-  }>>;
-}>;
+/** The snapshot as the read model builds it; the handler adds the deployment (contract/control-plane.ts). */
+export type ControlPlaneObservation = Omit<ControlPlaneSnapshot, "deployment">;
 
-type IdleView = NonNullable<LifecycleRecord["idle"]> & Readonly<{ freshUntilEpochSeconds: number | null }>;
-
-/** What a viewer may know of a world's session: never the lease or the fence. */
-export type WorldSessionView = Readonly<{
-  serverId: string;
-  desiredState: LifecycleRecord["desiredState"];
-  observedState: LifecycleRecord["observedState"];
-  activeSessionId: string | null;
-  activeWorldId: string | null;
-  /** The watchdog's last reading, and until when it says who is online. */
-  idle: IdleView | null;
-  /** When the session became ready; absent for a record that predates the field. */
-  readyAtEpochSeconds?: number | null;
-  updatedAtEpochSeconds: number;
-}>;
+/** What a viewer may know of a world's session: never the lease or the fence (contract/control-plane.ts). */
+export type WorldSessionView = WorldSession;
 
 function sessionView(serverId: string, record: LifecycleRecord | null): WorldSessionView | null {
   if (record === null) return null;
@@ -179,8 +85,11 @@ function sessionView(serverId: string, record: LifecycleRecord | null): WorldSes
     observedState: record.observedState,
     activeSessionId: record.activeSessionId,
     activeWorldId: record.activeWorldId ?? null,
+    // Named field by field: the watchdog's execution and command ids are its own.
     idle: record.idle === null ? null : {
-      ...record.idle,
+      playersOnline: record.idle.playersOnline,
+      consecutiveEmpty: record.idle.consecutiveEmpty,
+      lastObservedAtEpochSeconds: record.idle.lastObservedAtEpochSeconds,
       freshUntilEpochSeconds: record.idle.lastObservedAtEpochSeconds === null ? null : record.idle.lastObservedAtEpochSeconds + PLAYER_READING_FRESH_SECONDS,
     },
     readyAtEpochSeconds: record.readyAtEpochSeconds ?? null,
@@ -212,7 +121,7 @@ export async function readControlPlaneSnapshot(
   }>,
   catalog: readonly CatalogGame[] = gameCatalog,
   now: () => Date = () => new Date(),
-): Promise<ControlPlaneSnapshot> {
+): Promise<ControlPlaneObservation> {
   const connectionHost = options.connectionHost ?? null;
   const [presets, worldRecords] = await Promise.all([
     sources.listPresets?.() ?? Promise.resolve([]),

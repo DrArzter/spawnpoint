@@ -4,9 +4,10 @@
 
 import { releaseRunAt, type ReleaseState, type WorldRef } from "./release-state.ts";
 import type { WorldGeneration, WorldRecord } from "./world-registry.ts";
+import type { BackupReleaseSource } from "../../../contract/backups.ts";
 
 /** recorded: the host wrote the active release on the archive. ran: the wipe's own record of what it ran. origin: what the wipe started with. */
-export type BackupReleaseSource = "recorded" | "ran" | "origin";
+export type { BackupReleaseSource };
 export type BackupRelease = Readonly<{ release: string; source: BackupReleaseSource }>;
 
 /** The metadata the host wrote on an archive (upload-world-backup.sh). */

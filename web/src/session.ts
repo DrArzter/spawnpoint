@@ -14,19 +14,18 @@ export type SharedHostSession = Readonly<{
  * waits for the other. Configured worlds share the one configured host, below.
  */
 
-/** A fleet world's session: its own record, or its game's while that still names it. */
-export function fleetSessionOf(game: Game, world: World): WorldSession | null {
-  if (world.session !== undefined) return world.session;
-  return game.lifecycle?.activeWorldId === world.id ? game.lifecycle : null;
+/** A fleet world's session, as the API located it: its own record, or its game's while that still names it. */
+export function fleetSessionOf(world: World): WorldSession | null {
+  return world.session;
 }
 
 export function fleetWorldState(game: Game, world: World): ServerState {
-  const observed = fleetSessionOf(game, world)?.observedState;
+  const observed = fleetSessionOf(world)?.observedState;
   return observed === "ready" ? "running" : observed ?? "stopped";
 }
 
 export function fleetPlayersOnline(game: Game, world: World, nowEpochSeconds = epochSeconds()): number | null {
-  return currentReading(fleetSessionOf(game, world), nowEpochSeconds);
+  return currentReading(fleetSessionOf(world), nowEpochSeconds);
 }
 
 /** This world's own state: a fleet world by its record, a configured one only while it holds the shared session. */
@@ -37,7 +36,7 @@ export function worldState(game: Game, world: World, shared: SharedHostSession):
 
 /** The session this world holds now, if any: its own record for a fleet world, its game's for a configured one. */
 export function worldSessionId(game: Game, world: World): string | null {
-  const session = world.placement === "fleet" ? fleetSessionOf(game, world) : game.lifecycle;
+  const session = world.placement === "fleet" ? fleetSessionOf(world) : game.lifecycle;
   return session?.activeWorldId === world.id ? session.activeSessionId : null;
 }
 

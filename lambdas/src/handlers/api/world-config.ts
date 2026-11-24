@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-import type { ConfigFile, ConfigFileContent, ConfigFileList, SavedConfigFile } from "../../../../contract/config-files.ts";
+import type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../../contract/config-files.ts";
+import { byCodeUnit } from "../../control-plane/backups.ts";
 import { type Identity } from "../../access/domain.ts";
 import { findGameModule } from "../../control-plane/game-modules.ts";
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
@@ -53,6 +54,20 @@ function releaseFilesOf(manifest: unknown, rules: ConfigFileRules): Readonly<{ f
   return { files, worldData };
 }
 
+function editable(path: string, bytes: number, found: Context): boolean {
+  return textExtension(path, found.rules) && bytes <= found.rules.maxBytes && !insideWorldData(path, found.worldData);
+}
+
+function effectiveSha(path: string, found: Context, current: WorldConfigFiles): string | null {
+  return current[path]?.sha256 ?? found.releaseFiles.get(path)?.sha256 ?? null;
+}
+
+/** Where the next start takes a file from. */
+function sourceOf(hasEdit: boolean, inRelease: boolean): ConfigFileSource {
+  if (!hasEdit) return "release";
+  return inRelease ? "world" : "world_only";
+}
+
 export function worldConfigFeature({ sources, worlds, files, now }: WorldConfigDependencies) {
   async function context(gameId: string, worldId: string): Promise<Context | Response> {
     const rules = findGameModule(gameId)?.configFileRules ?? null;
@@ -67,12 +82,11 @@ export function worldConfigFeature({ sources, worlds, files, now }: WorldConfigD
     return { rules, record, release: { gameId, presetId: record.preset.id, release: version, objects: manifestUsesObjects(manifest) }, releaseFiles, worldData };
   }
 
-  function editable(path: string, bytes: number, found: Context): boolean {
-    return textExtension(path, found.rules) && bytes <= found.rules.maxBytes && !insideWorldData(path, found.worldData);
-  }
-
-  function effectiveSha(path: string, found: Context, current: WorldConfigFiles): string | null {
-    return current[path]?.sha256 ?? found.releaseFiles.get(path)?.sha256 ?? null;
+  // The bytes the next start writes: the world's version, else the release's.
+  async function stored(worldId: string, worldSha: string | null, released: ReleaseConfigFile | null, release: Release | null): Promise<Uint8Array | null> {
+    if (worldSha !== null) return files.readWorldFile(worldId, worldSha);
+    if (release === null || released === null) return null;
+    return files.readReleaseFile(release, released);
   }
 
   return {
@@ -80,14 +94,14 @@ export function worldConfigFeature({ sources, worlds, files, now }: WorldConfigD
       const found = await context(gameId, worldId);
       if ("statusCode" in found) return found;
       const own = found.record.configFiles ?? {};
-      const paths = [...new Set([...found.releaseFiles.keys(), ...Object.keys(own)])].sort();
+      const paths = [...new Set([...found.releaseFiles.keys(), ...Object.keys(own)])].sort(byCodeUnit);
       const list: ConfigFile[] = paths.map((path) => {
         const released = found.releaseFiles.get(path) ?? null;
         const edit = own[path] ?? null;
         const bytes = edit?.bytes ?? released?.bytes ?? 0;
         return {
           path,
-          source: edit === null ? "release" : released === null ? "world_only" : "world",
+          source: sourceOf(edit !== null, released !== null),
           bytes,
           editable: editable(path, bytes, found),
           releaseSha256: released?.sha256 ?? null,
@@ -109,14 +123,12 @@ export function worldConfigFeature({ sources, worlds, files, now }: WorldConfigD
       const released = found.releaseFiles.get(path) ?? null;
       if (edit === null && released === null) return errorResponse(404, "unknown_config_file");
       if (!editable(path, edit?.bytes ?? released!.bytes, found)) return errorResponse(409, "config_file_not_editable");
-      const bytes = edit !== null
-        ? await files.readWorldFile(worldId, edit.sha256)
-        : found.release === null ? null : await files.readReleaseFile(found.release, released!);
+      const bytes = await stored(worldId, edit?.sha256 ?? null, released, found.release);
       if (bytes === null) return errorResponse(404, "unknown_config_file");
       const text = configText(bytes, found.rules);
       if (!text.ok) return errorResponse(409, "config_file_not_editable");
       const body: ConfigFileContent = {
-        path, source: edit === null ? "release" : released === null ? "world_only" : "world", text: text.text,
+        path, source: sourceOf(edit !== null, released !== null), text: text.text,
         sha256: edit?.sha256 ?? released!.sha256, releaseSha256: released?.sha256 ?? null,
       };
       return response(200, body);

@@ -823,11 +823,17 @@ export function updateWhitelist(gameId: string, worldId: string, names: readonly
 
 // A world's config files (ADR-0093): the release's files, and what the world
 // edited or added; the next start writes the world's version over the release's.
+/** Where the next start takes a file from, as the API says it. */
+function configSource(edited: boolean, inRelease: boolean): "release" | "world" | "world_only" {
+  if (!edited) return "release";
+  return inRelease ? "world" : "world_only";
+}
+
 function digest(text: string): string {
   let out = "";
   for (let seed = 1; seed <= 8; seed += 1) {
     let value = (0x811c9dc5 * seed) >>> 0;
-    for (let index = 0; index < text.length; index += 1) value = Math.imul(value ^ text.charCodeAt(index), 0x01000193) >>> 0;
+    for (let index = 0; index < text.length; index += 1) value = Math.imul(value ^ (text.codePointAt(index) ?? 0), 0x01000193) >>> 0;
     out += value.toString(16).padStart(8, "0");
   }
   return out;
@@ -877,17 +883,17 @@ export function configFile(gameId: string, worldId: string, path: string): Confi
   const edit = configEdits(gameId, worldId)[path];
   const released = rules.files.find((file) => file.path === path);
   if (!released && !edit) refuse(404, "unknown_config_file");
-  if (released && released.editable === false) refuse(409, "config_file_not_editable");
+  if (released?.editable === false) refuse(409, "config_file_not_editable");
   const releaseSha256 = released ? digest(released.text + released.path) : null;
   const text = edit?.text ?? released!.text;
-  return { path, source: edit ? (released ? "world" : "world_only") : "release", text, sha256: digest(text), releaseSha256 };
+  return { path, source: configSource(Boolean(edit), Boolean(released)), text, sha256: digest(text), releaseSha256 };
 }
 
 export function saveConfigFile(gameId: string, worldId: string, path: string, text: string, expectedSha256: string | null): SavedConfigFile {
   settle();
   const rules = configTarget(gameId, worldId);
   const released = rules.files.find((file) => file.path === path);
-  if (released && released.editable === false) refuse(409, "config_file_not_editable");
+  if (released?.editable === false) refuse(409, "config_file_not_editable");
   if (!released && !rules.roots.some((root) => path.startsWith(`${root}/`))) refuse(400, "invalid_config_path");
   if (text.length > rules.maxBytes) refuse(413, "config_file_too_large");
   const edits = configEdits(gameId, worldId);
@@ -895,7 +901,7 @@ export function saveConfigFile(gameId: string, worldId: string, path: string, te
   if ((current === null ? null : digest(current)) !== expectedSha256) refuse(409, "config_file_changed");
   const releaseSha256 = released ? digest(released.text + released.path) : null;
   // The release's own text removes the edit.
-  if (released && text === released.text) delete edits[path];
+  if (released?.text === text) delete edits[path];
   else edits[path] = { text, base: releaseSha256, updatedAt: iso(), updatedBy: "DrArzter" };
   return { path, sha256: digest(text), updatedAt: iso() };
 }

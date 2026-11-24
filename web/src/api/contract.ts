@@ -15,7 +15,7 @@ export type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermissio
 /** A signed-in session; `demo` is set by a transport whose data is not real, so the panel can say so. */
 export type ActiveSession = ServedSession & Readonly<{ demo?: boolean }>;
 /** A world's own config files (contract/config-files.ts). */
-export type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile };
+export type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../contract/config-files";
 export type { BackupEntry, BackupInventory, ConsoleEntry, HostLogLine, HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
 
 export type PromotionResult = { result: "requested"; operationId: string } | { result: "switched" };

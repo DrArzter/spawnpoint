@@ -13,8 +13,9 @@ import { Table, type Column } from "../ui/Table";
 
 /** What a world's own version of a file is: edited from the release's, or added. */
 function changeLabel(row: ConfigFileRow): string {
-  const who = [row.updatedBy ? `by ${row.updatedBy}` : null, row.updatedAt ? shortDateTime(row.updatedAt) : null].filter(Boolean).join(" ");
-  return `${row.added ? "Added in this world" : "Edited in this world"}${who ? ` ${who}` : ""}`;
+  const by = row.updatedBy ? `by ${row.updatedBy}` : null;
+  const when = row.updatedAt ? shortDateTime(row.updatedAt) : null;
+  return [row.added ? "Added in this world" : "Edited in this world", by, when].filter(Boolean).join(" ");
 }
 
 const columns: readonly Column<ConfigFileRow>[] = [

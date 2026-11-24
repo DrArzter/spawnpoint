@@ -3,6 +3,12 @@ import type { ConfigEditorModel, ConfigFileRow, ConfigFilesModel } from "../../c
 import { formatBytes } from "../../lib/format";
 import { Col, Drawer, Empty, Field, FilterRow, Indicator, LoadError, NoMatches, Notice, Overflow, Panel, Skeleton, SkeletonGroup, Table, TextArea, Verb } from "./ui";
 
+/** What a world's own version of a file is, and who made it. */
+function changeLabel(row: Readonly<{ added: boolean; updatedBy: string | null }>): string {
+  const what = row.added ? "Added in this world" : "Edited in this world";
+  return row.updatedBy ? `${what} by ${row.updatedBy}` : what;
+}
+
 // A world's config files (ADR-0093): the files to choose from, and the one
 // file open to edit in a drawer. The world reads its own version at its next start.
 export function ConfigPanel({ model }: Readonly<{ model: ConfigFilesModel }>) {
@@ -22,7 +28,7 @@ function Files({ model }: Readonly<{ model: ConfigFilesModel }>) {
     { id: "file", label: "File", truncate: true, render: (row) => <code className="t-clip" title={row.path}>{row.path}</code> },
     { id: "state", label: "State", width: "90px", render: (row) => (
       <span className="t-inline">
-        {row.edited && <Indicator glyph={row.added ? "+" : "~"} label={`${row.added ? "Added in this world" : "Edited in this world"}${row.updatedBy ? ` by ${row.updatedBy}` : ""}`} />}
+        {row.edited && <Indicator glyph={row.added ? "+" : "~"} label={changeLabel(row)} />}
         {row.releaseChanged && <Indicator kind="warning" label="The release changed this file after the edit" />}
       </span>
     ) },

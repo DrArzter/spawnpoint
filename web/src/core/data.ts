@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConfigFileContent, ConfigFileList, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConfigFile, ConfigFileContent, ConfigFileList, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { ApiError, failureKind } from "../api/contract";
 import { useApi, useSignInConfig } from "../api/context";
 import type { StatusKind } from "./status";
@@ -132,6 +132,31 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
 
 // --- config files (ADR-0093) --------------------------------------------------
 
+/** The rows of a world's config files, sorted by path; a file that is not text cannot be opened. */
+function configRows(files: readonly ConfigFile[], select: (path: string) => void): readonly ConfigFileRow[] {
+  return [...files].sort((a, b) => a.path.localeCompare(b.path)).map((file) => ({
+    path: file.path,
+    bytes: file.bytes,
+    edited: file.source !== "release",
+    added: file.source === "world_only",
+    releaseChanged: file.releaseChanged,
+    updatedAt: file.updatedAt,
+    updatedBy: file.updatedBy,
+    open: action(`config.open.${file.path}`, "Edit", () => select(file.path), {
+      icon: "edit",
+      disabled: !file.editable,
+      hint: file.editable ? `Edit ${file.path}` : `${formatBytes(file.bytes)}: not text, or too large to edit here`,
+    }),
+  }));
+}
+
+/** The open file's state as the editor shows it: its text lives in the model, a failure offers a retry. */
+function editorContent(content: LoadState<ConfigFileContent>, reload: () => void): ConfigEditorModel["content"] {
+  if (content.status === "ready") return { status: "ready", value: null };
+  if (content.status === "loading") return content;
+  return { status: "error", error: content.error, kind: content.kind, retry: action("config.retry", "Try again", reload) };
+}
+
 /**
  * A world's config files, read only while its tab is open. One file opens at a
  * time. A save names the digest the editor loaded, so a change made meanwhile
@@ -165,28 +190,13 @@ export function useConfigFiles(gameId: string, world: World, open: boolean, noti
   const close = () => { setPath(null); setDraft(null); setStale(false); };
   const row = state.status === "ready" && path !== null ? state.value.files.find((file) => file.path === path) : undefined;
 
-  const rows: readonly ConfigFileRow[] = state.status === "ready"
-    ? [...state.value.files].sort((a, b) => a.path.localeCompare(b.path)).map((file) => ({
-      path: file.path,
-      bytes: file.bytes,
-      edited: file.source !== "release",
-      added: file.source === "world_only",
-      releaseChanged: file.releaseChanged,
-      updatedAt: file.updatedAt,
-      updatedBy: file.updatedBy,
-      open: action(`config.open.${file.path}`, "Edit", () => { setPath(file.path); setDraft(null); setStale(false); }, {
-        icon: "edit",
-        disabled: !file.editable,
-        hint: file.editable ? `Edit ${file.path}` : `${formatBytes(file.bytes)}: not text, or too large to edit here`,
-      }),
-    }))
+  const rows = state.status === "ready"
+    ? configRows(state.value.files, (file) => { setPath(file); setDraft(null); setStale(false); })
     : [];
 
   const text = draft ?? (content.status === "ready" ? content.value.text : "");
   const dirty = content.status === "ready" && draft !== null && draft !== content.value.text;
-  const shown: ConfigEditorModel["content"] = content.status === "ready" ? { status: "ready", value: null }
-    : content.status === "loading" ? content
-      : { status: "error", error: content.error, kind: content.kind, retry: action("config.retry", "Try again", reloadContent) };
+  const shown = editorContent(content, reloadContent);
   const editor: ConfigEditorModel | null = path === null ? null : {
     path,
     content: shown,

@@ -5,5 +5,8 @@ import { parameter } from "./http.ts";
 export const operationsRoutes: Readonly<Record<string, Route>> = {
   // The authority that reads a world's operations in GET /control-plane.
   "GET /games/{gameId}/worlds/{worldId}/operations/{operationId}": permissionRoute("status.read", (_identity, event) =>
-    operationProgress(parameter(event, "gameId"), parameter(event, "worldId"), parameter(event, "operationId")))
+    operationProgress(parameter(event, "gameId"), parameter(event, "worldId"), parameter(event, "operationId")), {
+    name: "get_operation_progress", title: "Get operation progress", effect: "read",
+    description: "Read how far a world's start, stop or other operation has come: its steps and the host's own lines.",
+  }),
 };

@@ -15,6 +15,11 @@ MCP have separate route groups: nineteen, in the order `route-table.ts`
 composes them.
 
 `route-table.ts` composes those groups and rejects duplicate route keys.
+
+Each route also declares its tool beside it (ADR-0095): the facts an agent
+needs to call it, or why it is no tool. `tool-catalogue.ts` derives the tools
+from the route table, and MCP and the assistant read them from there, so a new
+feature reaches both by declaring its tool once.
 `capabilities.ts` derives advertised capabilities from the composed routes;
 the session route receives a callback rather than importing the composition
 root. Keep dependencies directed: feature handlers never import route groups,

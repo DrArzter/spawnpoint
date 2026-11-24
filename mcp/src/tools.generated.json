@@ -1,195 +1,11 @@
 [
   {
-    "name": "get_profile",
-    "title": "Get Spawnpoint profile",
-    "description": "Read the connected Spawnpoint identity and role.",
-    "readOnly": true,
-    "destructive": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {},
-      "required": [],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_control_plane",
-    "title": "Get Spawnpoint control plane",
-    "description": "List games, worlds, sessions, hosts, releases, permissions, and their current state. Call this before a world action.",
-    "readOnly": true,
-    "destructive": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {},
-      "required": [],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_host_metrics",
-    "title": "Get host metrics",
-    "description": "Read recent metrics for one host shown by get_control_plane. Name it by hostId.",
-    "readOnly": true,
-    "destructive": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "hostId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Host ID from get_control_plane"
-        },
-        "instanceId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The old name of hostId: give hostId instead"
-        },
-        "range": {
-          "type": "string",
-          "enum": [
-            "6h",
-            "24h",
-            "7d"
-          ],
-          "default": "24h"
-        }
-      },
-      "required": [],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "list_world_backups",
-    "title": "List world backups",
-    "description": "List recoverable backups for one Spawnpoint world.",
-    "readOnly": true,
-    "destructive": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "gameId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Game ID from get_control_plane, for example minecraft"
-        },
-        "worldId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "World ID from get_control_plane"
-        }
-      },
-      "required": [
-        "gameId",
-        "worldId"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_world_pack",
-    "title": "Get world client pack",
-    "description": "Create a temporary download link for the client pack used by the world's active release.",
-    "readOnly": true,
-    "destructive": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "gameId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Game ID from get_control_plane, for example minecraft"
-        },
-        "worldId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "World ID from get_control_plane"
-        }
-      },
-      "required": [
-        "gameId",
-        "worldId"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_release",
-    "title": "Get release",
-    "description": "Read one release: its loader, runtime, source preset, server mods and, when players install a different set, the players' mods, each with its SHA-256 digest.",
-    "readOnly": true,
-    "destructive": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "gameId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Game ID from get_control_plane, for example minecraft"
-        },
-        "presetId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Preset ID from get_control_plane"
-        },
-        "version": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Release version from get_control_plane, for example 1.2"
-        }
-      },
-      "required": [
-        "gameId",
-        "presetId",
-        "version"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_release_mod_link",
-    "title": "Get release mod link",
-    "description": "Create a download link, valid for fifteen minutes, for one mod of a release, server or players', named by its SHA-256 digest from get_release.",
-    "readOnly": true,
-    "destructive": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "gameId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Game ID from get_control_plane, for example minecraft"
-        },
-        "presetId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Preset ID from get_control_plane"
-        },
-        "version": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Release version from get_control_plane, for example 1.2"
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$",
-          "description": "The mod's SHA-256 digest from get_release"
-        }
-      },
-      "required": [
-        "gameId",
-        "presetId",
-        "version",
-        "sha256"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
     "name": "get_backup_download_link",
     "title": "Get backup download link",
     "description": "Create a download link, valid for five minutes, for one backup archive of a world, named by its key from list_world_backups. Who asked is recorded.",
     "readOnly": true,
     "destructive": false,
+    "route": "POST /games/{gameId}/worlds/{worldId}/backups/download",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -218,44 +34,12 @@
     }
   },
   {
-    "name": "send_console_command",
-    "title": "Send console command",
-    "description": "Send one console command to a running world, as the connected person. Commands that stop the game outside its lifecycle are refused. The command is recorded with the person's and this client's names. Returns the command's id; read its answer with get_console_result.",
-    "readOnly": false,
-    "destructive": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "gameId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Game ID from get_control_plane, for example minecraft"
-        },
-        "worldId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "World ID from get_control_plane"
-        },
-        "command": {
-          "type": "string",
-          "minLength": 1,
-          "description": "One line, as typed in the game's console"
-        }
-      },
-      "required": [
-        "gameId",
-        "worldId",
-        "command"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
     "name": "get_console_result",
     "title": "Get console result",
     "description": "Read the answer to one console command by the id send_console_command returned. Its status stays pending until the game answers.",
     "readOnly": true,
     "destructive": false,
+    "route": "GET /games/{gameId}/worlds/{worldId}/console/{commandId}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -284,11 +68,78 @@
     }
   },
   {
-    "name": "read_world_log",
-    "title": "Read world log",
-    "description": "Ask a running world's host for the game's recent log, about its last 200 lines. Returns the read's id; read the lines with get_world_log_result. Addresses, ids and player names are replaced by tokens.",
+    "name": "get_control_plane",
+    "title": "Get Spawnpoint control plane",
+    "description": "List games, worlds, sessions, hosts, releases, permissions, and their current state. Call this before a world action.",
     "readOnly": true,
     "destructive": false,
+    "route": "GET /control-plane",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_host_metrics",
+    "title": "Get host metrics",
+    "description": "Read recent metrics for one host shown by get_control_plane. Name it by hostId.",
+    "readOnly": true,
+    "destructive": false,
+    "route": "GET /hosts/{instanceId}/metrics",
+    "pathNames": {
+      "instanceId": "hostId"
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Host ID from get_control_plane"
+        },
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The old name of hostId: give hostId instead"
+        },
+        "range": {
+          "type": "string",
+          "enum": [
+            "6h",
+            "24h",
+            "7d"
+          ],
+          "default": "24h",
+          "description": "How far back to read"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_profile",
+    "title": "Get Spawnpoint profile",
+    "description": "Read the connected Spawnpoint identity and role.",
+    "readOnly": true,
+    "destructive": false,
+    "route": "GET /me",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_release",
+    "title": "Get release",
+    "description": "Read one release: its loader, runtime, source preset, server mods and, when players install a different set, the players' mods, each with its SHA-256 digest.",
+    "readOnly": true,
+    "destructive": false,
+    "route": "GET /games/{gameId}/presets/{presetId}/releases/{version}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -297,15 +148,64 @@
           "minLength": 1,
           "description": "Game ID from get_control_plane, for example minecraft"
         },
-        "worldId": {
+        "presetId": {
           "type": "string",
           "minLength": 1,
-          "description": "World ID from get_control_plane"
+          "description": "Preset ID from get_control_plane"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Release version from get_control_plane, for example 1.2",
+          "pattern": "^\\d+\\.\\d+$"
         }
       },
       "required": [
         "gameId",
-        "worldId"
+        "presetId",
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_release_mod_link",
+    "title": "Get release mod link",
+    "description": "Create a download link, valid for fifteen minutes, for one mod of a release, server or players', named by its SHA-256 digest from get_release.",
+    "readOnly": true,
+    "destructive": false,
+    "route": "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "presetId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preset ID from get_control_plane"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Release version from get_control_plane, for example 1.2",
+          "pattern": "^\\d+\\.\\d+$"
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The mod's SHA-256 digest from get_release",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "gameId",
+        "presetId",
+        "version",
+        "sha256"
       ],
       "additionalProperties": false
     }
@@ -316,6 +216,7 @@
     "description": "Read the lines of one log read by the id read_world_log returned. Its status stays pending until the host answers.",
     "readOnly": true,
     "destructive": false,
+    "route": "GET /games/{gameId}/worlds/{worldId}/log/{readId}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -344,11 +245,130 @@
     }
   },
   {
+    "name": "get_world_pack",
+    "title": "Get world client pack",
+    "description": "Create a temporary download link for the client pack used by the world's active release.",
+    "readOnly": true,
+    "destructive": false,
+    "route": "GET /games/{gameId}/worlds/{worldId}/pack",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_world_backups",
+    "title": "List world backups",
+    "description": "List recoverable backups for one Spawnpoint world.",
+    "readOnly": true,
+    "destructive": false,
+    "route": "GET /games/{gameId}/worlds/{worldId}/backups",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_world_log",
+    "title": "Read world log",
+    "description": "Ask a running world's host for the game's recent log, about its last 200 lines. Returns the read's id; read the lines with get_world_log_result. Addresses, ids and player names are replaced by tokens.",
+    "readOnly": true,
+    "destructive": false,
+    "route": "POST /games/{gameId}/worlds/{worldId}/log",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "send_console_command",
+    "title": "Send console command",
+    "description": "Send one console command to a running world, as the connected person. Commands that stop the game outside its lifecycle are refused. The command is recorded with the person's and this client's names. Returns the command's id; read its answer with get_console_result.",
+    "readOnly": false,
+    "destructive": true,
+    "route": "POST /games/{gameId}/worlds/{worldId}/console",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One line, as typed in the game's console"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "command"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "start_world",
     "title": "Start world",
     "description": "Request that Spawnpoint start one world. The returned operation is asynchronous; poll get_control_plane for completion.",
     "readOnly": false,
     "destructive": false,
+    "route": "POST /games/{gameId}/worlds/{worldId}/start",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -376,6 +396,7 @@
     "description": "Request a verified backup and stop for one world. The returned operation is asynchronous; poll get_control_plane for completion.",
     "readOnly": false,
     "destructive": false,
+    "route": "POST /games/{gameId}/worlds/{worldId}/stop",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -388,6 +409,14 @@
           "type": "string",
           "minLength": 1,
           "description": "World ID from get_control_plane"
+        },
+        "players": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "disconnect"
+          ],
+          "description": "With players online: refuse to stop (the default), or disconnect them"
         }
       },
       "required": [

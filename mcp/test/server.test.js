@@ -78,13 +78,13 @@ test("download tools ask the API for a link: a mod by its digest, a backup by it
   await server.close();
 });
 
-test("the console tool sends one command, and the result tool picks that command's answer", async () => {
+test("the console tool sends one command, and the result tool reads that command's answer by its id", async () => {
   const calls = [];
   const api = { request: async (path, init) => {
     calls.push({ path, init });
-    return init?.method === "POST"
-      ? { entry: { id: "c2", status: "pending" } }
-      : { entries: [{ id: "c1", status: "succeeded" }, { id: "c2", status: "succeeded", output: "Saved the game" }] };
+    if (init?.method === "POST") return { entry: { id: "c2", status: "pending" } };
+    if (path.endsWith("/c9")) throw new Error("This command is not among the world's recent commands.");
+    return { entry: { id: "c2", status: "succeeded", output: "Saved the game" } };
   } };
   const server = createServer(api);
   const client = new Client({ name: "spawnpoint-test", version: "1.0.0" });
@@ -102,17 +102,20 @@ test("the console tool sends one command, and the result tool picks that command
   assert.equal(missing.isError, true);
   assert.deepEqual(calls, [
     { path, init: { method: "POST", body: JSON.stringify({ command: "save-all" }) } },
-    { path, init: undefined },
-    { path, init: undefined },
+    { path: `${path}/c2`, init: undefined },
+    { path: `${path}/c9`, init: undefined },
   ]);
 
   await client.close();
   await server.close();
 });
 
-test("the server handles exactly the tools the generated JSON names", async () => {
+test("every generated tool names the route the adapter calls, and a call fills it from the arguments", async () => {
   const { readFile } = await import("node:fs/promises");
-  const { toolCalls } = await import("../dist/server.js");
-  const declared = JSON.parse(await readFile(new URL("../src/tools.generated.json", import.meta.url), "utf8")).map((tool) => tool.name);
-  assert.deepEqual(Object.keys(toolCalls).sort(), [...declared].sort());
+  const { apiCall } = await import("../dist/server.js");
+  const declared = JSON.parse(await readFile(new URL("../src/tools.generated.json", import.meta.url), "utf8"));
+  for (const tool of declared) assert.match(tool.route, /^(GET|POST|PUT|DELETE) \//, tool.name);
+  const hosts = declared.find((tool) => tool.name === "get_host_metrics");
+  assert.deepEqual(apiCall(hosts, { hostId: "i-1", range: "6h" }), { path: "/hosts/i-1/metrics?range=6h" });
+  assert.deepEqual(apiCall(hosts, { instanceId: "i-1" }), { path: "/hosts/i-1/metrics" }, "the old name still works");
 });

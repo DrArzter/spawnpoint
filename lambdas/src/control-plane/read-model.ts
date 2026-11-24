@@ -69,6 +69,8 @@ export type ControlPlaneSources = Readonly<{
   /** The hosts a world's sessions ran on since a time, from the stored history and, before it, the workflows. */
   readWorldSessionHosts?: (worldId: string, sinceMs: number) => Promise<readonly SessionHost[]>;
   listWorldRecords?: () => Promise<readonly WorldRecord[]>;
+  /** Which host and slot a session holds (ADR-0054); null when no host reserves it. */
+  findSessionPlacement?: (sessionId: string) => Promise<Readonly<{ hostId: string; slot: number }> | null>;
 }>;
 
 /** The snapshot as the read model builds it; the handler adds the deployment (contract/control-plane.ts). */

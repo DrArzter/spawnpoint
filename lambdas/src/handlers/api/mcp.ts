@@ -10,7 +10,7 @@ import { hostMetrics } from "./metrics.ts";
 import { METRIC_RANGE_NAMES } from "../../control-plane/metric-ranges.ts";
 import { deployedBackups } from "./backups-wiring.ts";
 import { deployedReleases } from "./releases-wiring.ts";
-import { controlSession } from "./worlds.ts";
+import { deployedWorlds } from "./worlds-wiring.ts";
 import { sessionSigningSecret } from "./secrets.ts";
 import { identityById } from "./identity-store.ts";
 
@@ -116,11 +116,11 @@ const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
   },
   start_world: (identity, args) => {
     const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : controlSession(identity, "start", ...worldArgs);
+    return worldArgs === null ? null : deployedWorlds.controlSession(identity, "start", ...worldArgs);
   },
   stop_world: (identity, args) => {
     const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : controlSession(identity, "stop", ...worldArgs);
+    return worldArgs === null ? null : deployedWorlds.controlSession(identity, "stop", ...worldArgs);
   },
 };
 

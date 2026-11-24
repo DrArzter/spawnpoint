@@ -18,8 +18,7 @@ import { parsePresetCatalog, type PresetObservation } from "./preset-catalog.ts"
 import { presetBuildView, runningReleaseBuilds } from "./aws-release-builds.ts";
 import { gameCatalog } from "./catalog.ts";
 import { type ReleaseState } from "./release-state.ts";
-import { ReleaseHolders, resolveFromWorldRecords } from "./release-holders.ts";
-import { ReleaseRefs } from "./release-refs.ts";
+import { releaseHolders } from "./aws-world-records.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldReader, S3WorldRepository } from "./s3-world-repository.ts";
 import { switchBeforeFirstStart, type SwitchOutcome, type SwitchRequest } from "./release-switch.ts";
@@ -70,15 +69,6 @@ const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const readReleaseState = dynamoReleaseStateReader(document);
 
-// Holder first (ADR-0080): the stores below add a generation's holder before each write.
-function releaseHolders(bucket: string): ReleaseHolders {
-  return new ReleaseHolders(new ReleaseRefs(document), resolveFromWorldRecords(new S3WorldReader(s3, bucket)));
-}
-
-function worldRepository(): S3WorldRepository {
-  const bucket = requiredEnv("RELEASE_BUCKET");
-  return new S3WorldRepository(s3, bucket, releaseHolders(bucket));
-}
 const ssm = new SSMClient({});
 const logs = new CloudWatchLogsClient({});
 
@@ -422,6 +412,8 @@ async function hasGenerationBackup(worldId: string, generationId: string): Promi
   return (listing.KeyCount ?? listing.Contents?.length ?? 0) > 0;
 }
 
+export { operationMachines };
+
 export const awsControlPlaneSources: ControlPlaneSources = {
   listHosts,
   readLifecycle,
@@ -437,6 +429,7 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readOperationProgress: createOperationProgressReader({ sfn, hostLog: createHostLogReader({ ssm, logs }), machines: operationMachines, expectation: expectedDuration }),
   readWorldSessionHosts: createSessionHostReader({ sfn, document, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines }),
   listWorldRecords,
+  findSessionPlacement: (sessionId) => findSessionPlacement(sessionId),
 };
 
 async function readDynamicProjection() {
@@ -469,249 +462,10 @@ export function dashboardControlPlaneSources(): ControlPlaneSources {
   };
 }
 
-function preconditionFailed(error: unknown): boolean {
-  return error instanceof Error && (error.name === "PreconditionFailed" || error.name === "ConditionalRequestConflict");
-}
-
-/** Moves a never-started wipe to another release (ADR-0078). Holders, pointer, record: see `switchBeforeFirstStart`. */
-export async function switchReleaseBeforeFirstStart(request: SwitchRequest): Promise<SwitchOutcome> {
-  const bucket = requiredEnv("RELEASE_BUCKET");
-  const holders = releaseHolders(bucket);
-  return switchBeforeFirstStart({
-    holders,
-    pointers: new S3ReleaseStateStore(s3, bucket, holders),
-    worlds: new S3WorldRepository(s3, bucket, holders),
-    now: () => new Date(),
-  }, request);
-}
-
-export async function materializePresetWorld(
-  preset: PresetObservation,
-  identity: Readonly<{ worldId: string; displayName: string; release: string }>,
-  generationUuid: string,
-  createdAt: string,
-  access?: Readonly<{ placement?: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"] }>,
-): Promise<WorldRecord> {
-  const proposed = newWorldRecord(preset, identity, generationUuid, createdAt, access);
-  const releaseState: ReleaseState = {
-    worldId: proposed.worldId,
-    generationId: proposed.currentGeneration.id,
-    desiredRelease: proposed.currentGeneration.release,
-    activeRelease: null,
-    updatedAt: createdAt,
-    updatedBy: "world-creation",
-    source: "create-world",
-  };
-  const bucket = requiredEnv("RELEASE_BUCKET");
-  const holders = releaseHolders(bucket);
-  const releaseStates = new S3ReleaseStateStore(s3, bucket, holders);
-  const worlds = new S3WorldRepository(s3, bucket, holders);
-  try {
-    // The world record is not stored yet, so the pointer's holder takes the game and preset from the proposal.
-    await releaseStates.create(releaseState, { gameId: proposed.gameId, presetId: proposed.preset.id });
-  } catch (error) {
-    if (!preconditionFailed(error)) throw error;
-    const existing = await releaseStates.read({ worldId: proposed.worldId, generationId: proposed.currentGeneration.id });
-    if (existing?.state.desiredRelease !== proposed.currentGeneration.release) {
-      throw new Error("world_release_pointer_conflict");
-    }
-  }
-
-  try {
-    await worlds.create(proposed);
-    return proposed;
-  } catch (error) {
-    if (!preconditionFailed(error)) throw error;
-    const existing = (await worlds.read(proposed.worldId))?.record ?? null;
-    if (
-      existing?.worldId !== proposed.worldId || existing.gameId !== proposed.gameId ||
-      existing.displayName !== proposed.displayName || existing.preset.id !== proposed.preset.id ||
-      existing.preset.profileDigest !== proposed.preset.profileDigest ||
-      existing.currentGeneration.release !== proposed.currentGeneration.release
-    ) throw new Error("world_record_conflict");
-    return existing;
-  }
-}
-
-function machineArn(type: MachineType): string {
-  const machine = operationMachines().find((candidate) => candidate.type === type);
-  if (!machine) throw new Error(`missing ${type} state machine`);
-  return machine.arn;
-}
-
-// The world id reaches a shell command on the host through the machines'
-// States.Format, so its shape is checked here as well as by load_world there.
-const WORLD_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
-function requireWorldId(worldId: string): string {
-  if (!WORLD_ID.test(worldId)) throw new Error(`invalid world id: ${worldId}`);
-  return worldId;
-}
-
-function configuredPlacement(): "single" | "shared" | "fleet" {
-  const placement = process.env.SPAWNPOINT_PLACEMENT;
-  return placement === "shared" || placement === "fleet" ? placement : "single";
-}
-
-export async function startSessionExecution(args: Readonly<{
-  operationId: string;
-  instanceId: string;
-  requestedBy: string;
-  /** The lifecycle record's key: the game's, or a fleet world's own (ADR-0062). */
-  serverId: string;
-  gameId: string;
-  worldId: string;
-  worldName: string;
-  placement?: "single" | "shared" | "fleet";
-  /** A fleet world's warm choice (ADR-0048); left out, the machine places it cold. */
-  policy?: SessionPolicy;
-}>): Promise<string> {
-  const { operationId, instanceId, requestedBy, serverId, gameId, worldId, worldName, placement, policy } = args;
-  requireWorldId(worldId);
-  const started = await sfn.send(new StartExecutionCommand({
-    stateMachineArn: machineArn("start"), name: operationId,
-    input: JSON.stringify(buildLifecycleStartInput({
-      serverId, gameId, worldName, operationId, sessionId: `session-${randomUUID()}`, instanceId, worldId, requestedBy,
-      placement: placement ?? configuredPlacement(),
-      launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
-      appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
-      ...(policy === undefined ? {} : { policy }),
-    })),
-  }));
-  if (!started.executionArn) throw new Error("start execution did not return an ARN");
-  return started.executionArn;
-}
-
-export async function stopSessionExecution(
-  operationId: string,
-  instanceId: string,
-  requestedBy: string,
-  serverId: string,
-  sessionId: string,
-  worldId: string,
-  players: StopPlayersPolicy = "refuse",
-): Promise<string> {
-  requireWorldId(worldId);
-  const stopped = await sfn.send(new StartExecutionCommand({
-    stateMachineArn: machineArn("stop"), name: operationId,
-    input: JSON.stringify(buildLifecycleStopInput({ serverId, operationId, sessionId, instanceId, worldId, requestedBy, players })),
-  }));
-  if (!stopped.executionArn) throw new Error("stop execution did not return an ARN");
-  return stopped.executionArn;
-}
-
-/** Starts the promote-release machine for a fleet world (ADR-0078); the execution is the operation record. */
-export async function promotionExecution(args: Omit<Parameters<typeof buildPromotionInput>[0], "releaseBucket" | "launch" | "appCommit">): Promise<string> {
-  requireWorldId(args.worldId);
-  const started = await sfn.send(new StartExecutionCommand({
-    stateMachineArn: machineArn("promote"), name: args.operationId,
-    input: JSON.stringify(buildPromotionInput({
-      ...args,
-      releaseBucket: requiredEnv("RELEASE_BUCKET"),
-      launch: process.env.SPAWNPOINT_LAUNCH === "enabled" ? "enabled" : "disabled",
-      appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
-    })),
-  }));
-  if (!started.executionArn) throw new Error("promotion execution did not return an ARN");
-  return started.executionArn;
-}
-
-export async function worldLifecycleExecution(args: Readonly<{
-  operationId: string;
-  instanceId: string;
-  requestedBy: string;
-  serverId: string;
-  sessionId: string;
-  worldId: string;
-  action: "archive" | "regenerate" | "restore" | "purge";
-  backupKey: string | undefined;
-  release: string | undefined;
-  stopRequired: boolean;
-  targetGenerationId: string;
-}>): Promise<string> {
-  const { operationId, instanceId, requestedBy, serverId, sessionId, worldId, action, backupKey, release, stopRequired, targetGenerationId } = args;
-  requireWorldId(worldId);
-  const stop = buildStopInput({ operationId, instanceId, requestedBy, worldId });
-  const started = await sfn.send(new StartExecutionCommand({
-    stateMachineArn: machineArn("world"), name: operationId,
-    input: JSON.stringify({
-      serverId, operationId, sessionId, leaseTtlSeconds: 1800, instanceId, requestedBy, worldId, action, stopRequired, targetGenerationId,
-      stopTiming: stop.timing,
-      requestedAt: new Date().toISOString(),
-      generationUuid: randomUUID(),
-      backupKey: backupKey ?? "",
-      release: release ?? "",
-    }),
-  }));
-  if (!started.executionArn) throw new Error("world lifecycle execution did not return an ARN");
-  return started.executionArn;
-}
-
-export async function readWorldRecord(worldId: string): Promise<WorldRecord | null> {
-  return (await new S3WorldReader(s3, requiredEnv("RELEASE_BUCKET")).read(worldId))?.record ?? null;
-}
-
-/** A world's game settings (ADR-0064); a running world takes them at its next start. */
-export async function replaceWorldGameSettings(
-  gameId: string,
-  worldId: string,
-  gameSettings: WorldGameSettings,
-): Promise<"updated" | "missing" | "archived" | "conflict"> {
-  const worlds = worldRepository();
-  const stored = await worlds.read(worldId);
-  if (stored?.record.gameId !== gameId) return "missing";
-  if (stored.record.status !== "active") return "archived";
-  try {
-    await worlds.replace(withGameSettings(stored.record, gameSettings), stored.etag);
-    return "updated";
-  } catch (error) {
-    if (preconditionFailed(error)) return "conflict";
-    throw error;
-  }
-}
-
-/** A world's whitelist (ADR-0066). The world keeps it from now on, on every host it lands. */
-export async function replaceWorldWhitelist(
-  gameId: string,
-  worldId: string,
-  whitelist: WorldWhitelist,
-): Promise<"updated" | "missing" | "archived" | "conflict"> {
-  const worlds = worldRepository();
-  const stored = await worlds.read(worldId);
-  if (stored?.record.gameId !== gameId) return "missing";
-  if (stored.record.status !== "active") return "archived";
-  try {
-    await worlds.replace(withWhitelist(stored.record, whitelist), stored.etag);
-    return "updated";
-  } catch (error) {
-    if (preconditionFailed(error)) return "conflict";
-    throw error;
-  }
-}
-
-export async function replaceWorldAccess(
-  gameId: string,
-  worldId: string,
-  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean }>,
-): Promise<"updated" | "missing" | "conflict"> {
-  const worlds = worldRepository();
-  const stored = await worlds.read(worldId);
-  if (stored?.record.gameId !== gameId) return "missing";
-  if (stored.record.status !== "active") return "conflict";
-  const next = withWorldAccess(stored.record, access);
-  if (next.placement === stored.record.placement && next.connectivity === stored.record.connectivity && next.auth === stored.record.auth && next.warm === stored.record.warm) return "updated";
-  try {
-    await worlds.replace(next, stored.etag);
-    return "updated";
-  } catch (error) {
-    if (preconditionFailed(error)) return "conflict";
-    throw error;
-  }
-}
-
 // --- Where a session runs (ADR-0054) ------------------------------------------
 
 /** Which host and slot a session holds, from the host records beside the lifecycle. */
-export async function findSessionPlacement(sessionId: string): Promise<Readonly<{ hostId: string; slot: number }> | null> {
+async function findSessionPlacement(sessionId: string): Promise<Readonly<{ hostId: string; slot: number }> | null> {
   let exclusiveStartKey: Record<string, unknown> | undefined;
   do {
     const page = await document.send(new ScanCommand({

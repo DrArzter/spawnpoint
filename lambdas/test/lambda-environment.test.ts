@@ -71,9 +71,13 @@ const lambdas: readonly LambdaDefinition[] = [
     name: "control-plane projector",
     entry: "lambdas/src/handlers/control-plane-projector.ts",
     terraform: "infra/terraform-operations/control-plane-projector.tf",
-    // The shared AWS adapter contains lazy methods for the access API too.
-    // The projector imports only its dynamic-state and fenced-stop ports.
-    ignore: ["lambdas/src/control-plane/aws.ts", "lambdas/src/control-plane/aws-release-builds.ts"],
+    // The shared AWS adapters contain lazy methods for the access API too.
+    // The projector uses only its dynamic-state port and the machines' stop,
+    // which reads OPERATION_STATE_MACHINES alone.
+    ignore: [
+      "lambdas/src/control-plane/aws.ts", "lambdas/src/control-plane/aws-release-builds.ts",
+      "lambdas/src/control-plane/aws-session-machines.ts", "lambdas/src/control-plane/aws-world-records.ts",
+    ],
     required: ["CONTROL_PLANE_VIEW_TABLE", "LIFECYCLE_TABLE_NAME", "OPERATION_STATE_MACHINES"],
   },
 ];

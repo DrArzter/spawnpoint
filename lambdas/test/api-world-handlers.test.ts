@@ -10,7 +10,9 @@ import { type ControlPlaneSources, type HostObservation } from "../src/control-p
 import { type WorldRecord, worldRecordDocument } from "../src/control-plane/world-registry.ts";
 import { InvalidBodyError } from "../src/handlers/api/http.ts";
 import { FakeRefsTable } from "./fake-refs-table.ts";
-import { controlSession, controlWorldLifecycle, createWorld, updateWorldSettings, whitelistOf } from "../src/handlers/api/worlds.ts";
+import { deployedWorlds } from "../src/handlers/api/worlds-wiring.ts";
+
+const { controlSession, controlWorldLifecycle, createWorld, updateWorldSettings, whitelistOf } = deployedWorlds;
 
 process.env.OPERATION_STATE_MACHINES = JSON.stringify(["start", "stop", "world"].map((type) => ({ type, arn: `arn:aws:states:eu-central-1:123456789012:stateMachine:${type}` })));
 process.env.SPAWNPOINT_PLACEMENT = "single";

@@ -3,7 +3,8 @@ import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge
 import { Route53Client } from "@aws-sdk/client-route-53";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 
-import { awsControlPlaneSources, stopSessionExecution } from "../control-plane/aws.ts";
+import { awsControlPlaneSources } from "../control-plane/aws.ts";
+import { awsSessionMachines } from "../control-plane/aws-session-machines.ts";
 import { eventJournalItem, hostOwnsSession, recoveryTarget, type ControlPlaneEvent } from "../control-plane/dynamic-projection.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
 import { dnsLedgerRecords, parkDnsRecord, terminalHostInstanceId } from "../control-plane/dns-ledger.ts";
@@ -104,14 +105,14 @@ async function reconcileStoppedHost(
   if (!hostOwnsSession(placedHost.Item?.host, target.instanceId, target.sessionId)) return;
   const operationId = `reconcile-${target.serverId}-${eventId}`.slice(0, 80);
   try {
-    await stopSessionExecution(
+    await awsSessionMachines.stop({
       operationId,
-      target.instanceId,
-      "eventbridge:control-plane-reconciler",
-      target.serverId,
-      target.sessionId,
-      target.worldId,
-    );
+      instanceId: target.instanceId,
+      requestedBy: "eventbridge:control-plane-reconciler",
+      serverId: target.serverId,
+      sessionId: target.sessionId,
+      worldId: target.worldId,
+    });
   } catch (error) {
     if (!(error instanceof Error && error.name === "ExecutionAlreadyExists")) throw error;
   }

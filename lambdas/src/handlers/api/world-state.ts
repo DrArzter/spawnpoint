@@ -1,5 +1,6 @@
 import { type WorldPlacement, sessionLifecycleKey, locateWorldSession, type WorldSession, type WorldHost, worldHost } from "../../control-plane/world-session.ts";
-import { awsControlPlaneSources, findSessionPlacement, readWorldRecord } from "../../control-plane/aws.ts";
+import { awsControlPlaneSources } from "../../control-plane/aws.ts";
+import { awsWorldRecords } from "../../control-plane/aws-world-records.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 
 // The record a world's session lives on: a fleet world's own, or its game's
@@ -24,7 +25,7 @@ export async function locateWorldHost(
   session: WorldSession["record"],
   hosts: readonly Readonly<{ providerRef: string; provenance?: "configured" | "launched" }>[],
 ): Promise<WorldHost | null> {
-  const placed = session?.activeSessionId ? await findSessionPlacement(session.activeSessionId) : null;
+  const placed = session?.activeSessionId ? await (awsControlPlaneSources.findSessionPlacement?.(session.activeSessionId) ?? null) : null;
   const configured = hosts.filter((host) => host.provenance !== "launched").map((host) => host.providerRef);
   return worldHost(placement, session, placed, configured);
 }
@@ -33,5 +34,5 @@ export async function locateWorldHost(
 // catalog, or a world record.
 export async function knownWorld(gameId: string, worldId: string): Promise<boolean> {
   if (gameCatalog.find((game) => game.id === gameId)?.worlds.some((candidate) => candidate.id === worldId)) return true;
-  return (await readWorldRecord(worldId))?.gameId === gameId;
+  return (await awsWorldRecords.read(worldId))?.gameId === gameId;
 }

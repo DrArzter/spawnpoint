@@ -15,8 +15,9 @@ Run the Lambda tests, typecheck, build, and `git diff --check` after API changes
 
 Business code depends on ports; an adapter implements a port and says what it adapts in its file name (`aws-*`,
 `s3-*`, `dynamo-*`, `ses-*`, `*-store`, `*-port`). Only adapters import the AWS SDK. `domain/` imports only itself and
-`contract/`, nothing outside `handlers/` imports a handler, and the Lambda sources have no import cycle.
-`lambdas/test/module-boundaries.test.ts` enforces this; its legacy list of direct SDK callers may only get shorter.
+`contract/`, nothing outside `handlers/` imports a handler, and the Lambda sources have no import cycle. A Lambda's
+entry is its composition root: it may construct SDK clients and hand them to adapters, and it sends nothing itself
+(ADR-0092). `lambdas/test/module-boundaries.test.ts` enforces this.
 
 ## Data formats and names
 

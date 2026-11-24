@@ -1,4 +1,4 @@
-import { CloudWatchClient, PutMetricDataCommand } from "@aws-sdk/client-cloudwatch";
+import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
@@ -12,16 +12,17 @@ import {
   describeSweep, executeSweep, planSweep, sweepCandidates, sweepDryRun, sweepGraceDays, SWEEP_GRACE_DAYS_DEFAULT, type SweepOutcome, type SweepPlan, type SweepWriter,
 } from "../control-plane/release-sweep.ts";
 import { createSweepWriter } from "../control-plane/s3-release-sweep.ts";
+import { cloudWatchMetrics } from "../control-plane/aws-release-metrics.ts";
+import { METRIC_NAMESPACE, type Metric, type MetricSink } from "../control-plane/release-metrics.ts";
+
+export { METRIC_NAMESPACE, type Metric, type MetricSink };
 
 // ADR-0080's reconciler. It reads the sources, the table and the object
 // listing, logs what differs and puts metrics. It then plans the sweep. Only a
 // real run (RELEASE_SWEEP_DRY_RUN exactly "false") may write, and only through
 // the writer that `sweep.writer` builds; the read ports below cannot write.
 
-export const METRIC_NAMESPACE = "Spawnpoint/ReleaseReconciler";
 
-export type Metric = Readonly<{ name: string; value: number }>;
-export type MetricSink = Readonly<{ put(metrics: readonly Metric[]): Promise<void> }>;
 
 export type SweepConfig = Readonly<{
   dryRun: boolean;
@@ -125,16 +126,6 @@ export async function reconcile(event: unknown, deps: ReconcilerDeps): Promise<R
   }
 }
 
-export function cloudWatchMetrics(client: Pick<CloudWatchClient, "send">): MetricSink {
-  return {
-    async put(metrics) {
-      await client.send(new PutMetricDataCommand({
-        Namespace: METRIC_NAMESPACE,
-        MetricData: metrics.map((metric) => ({ MetricName: metric.name, Value: metric.value, Unit: "Count" })),
-      }));
-    },
-  };
-}
 
 export async function handler(event: unknown = {}): Promise<ReconcileResult> {
   const s3 = new S3Client({});

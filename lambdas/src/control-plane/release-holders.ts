@@ -1,4 +1,5 @@
-import { holderKey, type HolderRole, type ReleaseRefs } from "./release-refs.ts";
+import { holderKey, type HolderRole } from "./release-refs.ts";
+import { type ReleaseRefs } from "./dynamo-release-refs.ts";
 import type { ReleaseState } from "./release-state.ts";
 import type { WorldRecord } from "./world-registry.ts";
 

@@ -10,7 +10,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import { ReleaseHolders, parseHoldRequest } from "../src/control-plane/release-holders.ts";
-import { ReleaseRefs } from "../src/control-plane/release-refs.ts";
+import { ReleaseRefs } from "../src/control-plane/dynamo-release-refs.ts";
 
 const request = parseHoldRequest(process.argv.slice(2));
 if (typeof request === "string") {

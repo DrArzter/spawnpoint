@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PARKED_DNS_ADDRESS, parkDnsRecord } from "../src/control-plane/dns-ledger.ts";
+import { parkDnsRecord } from "../src/control-plane/aws-dns-ledger.ts";
+import { PARKED_DNS_ADDRESS } from "../src/control-plane/dns-ledger.ts";
 
 // ADR-0086: a stopped world's name answers a parked address; it never disappears.
 

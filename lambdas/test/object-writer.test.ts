@@ -11,7 +11,8 @@ import { s3ObjectPort } from "../src/builder/s3-object-port.ts";
 import { gateProjection, holdCatalog, manifestEntries, publishRelease, runPool, withObjectLayout, writeObjects, type Manifest, type ObjectInfo, type ObjectPort, type WriteOptions } from "../src/builder/object-writer.ts";
 import { runCommand } from "../src/builder/release-writer-cli.ts";
 import { fileItemPk, objectKey, releaseItemPk } from "../src/control-plane/release-objects.ts";
-import { holderKey, ReleaseRefs, type ReleaseRef } from "../src/control-plane/release-refs.ts";
+import { holderKey, type ReleaseRef } from "../src/control-plane/release-refs.ts";
+import { ReleaseRefs } from "../src/control-plane/dynamo-release-refs.ts";
 import { FakeRefsTable } from "./fake-refs-table.ts";
 
 const ref: ReleaseRef = { gameId: "minecraft", presetId: "industrial", release: "1.0" };

@@ -5,7 +5,7 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
 import { dynamoRetirementTable } from "../src/control-plane/dynamo-release-retirement.ts";
 import { fileItemPk, ITEM_META_SK, releaseItemPk } from "../src/control-plane/release-objects.ts";
-import { ReleaseRefs } from "../src/control-plane/release-refs.ts";
+import { ReleaseRefs } from "../src/control-plane/dynamo-release-refs.ts";
 import type { MarkInput } from "../src/control-plane/release-reconciler.ts";
 import {
   catalogWithoutRelease, inPool, manifestDigests, parseRetirementRequest, retireRelease, retirementConfirmation,

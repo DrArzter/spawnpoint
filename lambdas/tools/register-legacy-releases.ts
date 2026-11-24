@@ -19,7 +19,7 @@ import { ARCHIVE_KEY, s3BackupBucketReader } from "../src/control-plane/s3-relea
 import type { ArchiveSource } from "../src/control-plane/release-reconciler.ts";
 import { parsePresetCatalog } from "../src/control-plane/preset-catalog.ts";
 import { releaseItemPk } from "../src/control-plane/release-objects.ts";
-import { ReleaseRefs } from "../src/control-plane/release-refs.ts";
+import { ReleaseRefs } from "../src/control-plane/dynamo-release-refs.ts";
 import { parseLegacyReleaseState, parseReleaseState } from "../src/control-plane/release-state.ts";
 import { parseWorldRecord, type WorldRecord } from "../src/control-plane/world-registry.ts";
 

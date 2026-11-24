@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { fileItemPk, releaseItemPk } from "../src/control-plane/release-objects.ts";
-import { ReleaseRefs, holderKey, type FileClaim, type ObjectMode } from "../src/control-plane/release-refs.ts";
+import { holderKey, type FileClaim, type ObjectMode } from "../src/control-plane/release-refs.ts";
+import { ReleaseRefs } from "../src/control-plane/dynamo-release-refs.ts";
 import { FakeRefsTable } from "./fake-refs-table.ts";
 
 const ref = { gameId: "minecraft", presetId: "industrial", release: "1.2" };

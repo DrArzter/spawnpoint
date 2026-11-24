@@ -18,23 +18,23 @@ type Expressions = {
   ExpressionAttributeValues?: Record<string, unknown> | undefined;
 };
 
-export type TableGet = { TableName: string; Key: Record<string, unknown>; ConsistentRead?: boolean | undefined; ProjectionExpression?: string | undefined; ExpressionAttributeNames?: Record<string, string> | undefined };
+export type TableGet = { TableName: string | undefined; Key: Record<string, unknown>; ConsistentRead?: boolean | undefined; ProjectionExpression?: string | undefined; ExpressionAttributeNames?: Record<string, string> | undefined };
 
 export type TableUpdate = Expressions & {
-  TableName: string;
+  TableName: string | undefined;
   Key: Record<string, unknown>;
   UpdateExpression: string;
   ReturnValues?: "NONE" | "ALL_OLD" | "UPDATED_OLD" | "ALL_NEW" | "UPDATED_NEW" | undefined;
 };
 
-export type TablePut = Expressions & { TableName: string; Item: Record<string, unknown> };
+export type TablePut = Expressions & { TableName: string | undefined; Item: Record<string, unknown> };
 
-export type TableCheck = Expressions & { TableName: string; Key: Record<string, unknown>; ConditionExpression: string };
+export type TableCheck = Expressions & { TableName: string | undefined; Key: Record<string, unknown>; ConditionExpression: string };
 
-export type TableDelete = Expressions & { TableName: string; Key: Record<string, unknown> };
+export type TableDelete = Expressions & { TableName: string | undefined; Key: Record<string, unknown> };
 
 export type TableQuery = Expressions & {
-  TableName: string;
+  TableName: string | undefined;
   IndexName?: string | undefined;
   KeyConditionExpression: string;
   FilterExpression?: string | undefined;
@@ -47,7 +47,7 @@ export type TableQuery = Expressions & {
 };
 
 export type TableScan = Expressions & {
-  TableName: string;
+  TableName: string | undefined;
   IndexName?: string | undefined;
   FilterExpression?: string | undefined;
   ProjectionExpression?: string | undefined;
@@ -65,7 +65,7 @@ export type AccessTable = Readonly<{
   get: (input: TableGet) => Promise<{ Item?: StoredItem | undefined }>;
   put: (input: TablePut) => Promise<unknown>;
   update: (input: TableUpdate) => Promise<{ Attributes?: StoredItem | undefined }>;
-  delete: (input: TableDelete) => Promise<unknown>;
+  delete: (input: TableDelete & { ReturnValues?: "NONE" | "ALL_OLD" | undefined }) => Promise<{ Attributes?: StoredItem | undefined }>;
   query: (input: TableQuery) => Promise<TablePage>;
   scan: (input: TableScan) => Promise<TablePage>;
   transact: (input: { TransactItems: TableTransactItem[] }) => Promise<unknown>;

@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 
-import { ReleaseRefsError, type ReleaseRef, type ReleaseRefs } from "../control-plane/release-refs.ts";
+import { ReleaseRefsError, type ReleaseRef } from "../control-plane/release-refs.ts";
+import { type ReleaseRefs } from "../control-plane/dynamo-release-refs.ts";
 import type { ManifestPack } from "../control-plane/release-objects.ts";
 import { holdCatalog, publishRelease, withObjectLayout, writeObjects, WriterError, type Manifest, type ObjectPort, type WriteResult } from "./object-writer.ts";
 

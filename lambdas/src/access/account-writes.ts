@@ -1,4 +1,4 @@
-import { type UpdateCommandInput } from "@aws-sdk/lib-dynamodb";
+import { type TableUpdate } from "./table.ts";
 import { accountItemKey, candidateIndex } from "./keys.ts";
 
 export type ObservedAccount = Readonly<{
@@ -17,7 +17,7 @@ export type ObservedAccount = Readonly<{
  * Records that an account was seen. It creates the candidate as OBSERVED or
  * REQUESTED, and never changes the status or index of an existing one.
  */
-export function observeAccount(tableName: string, account: ObservedAccount, requested: boolean, now: string): UpdateCommandInput {
+export function observeAccount(tableName: string, account: ObservedAccount, requested: boolean, now: string): TableUpdate {
   const assignments = [
     "platform = :platform", "platform_user_id = :platformUserId", "display_name = :displayName", "username = :username",
     "first_seen_at = if_not_exists(first_seen_at, :now)", "last_seen_at = :now",
@@ -51,7 +51,7 @@ export function observeAccount(tableName: string, account: ObservedAccount, requ
  * Marks a candidate as asking for access. It fails when an identity is linked
  * already. `mustExist` also fails when the account item is missing.
  */
-export function requestAccountAccess(tableName: string, provider: string, subject: string, now: string, mustExist: boolean): UpdateCommandInput {
+export function requestAccountAccess(tableName: string, provider: string, subject: string, now: string, mustExist: boolean): TableUpdate {
   return {
     TableName: tableName, Key: accountItemKey(provider, subject),
     UpdateExpression: "SET #status = :requested, gsi1pk = :candidateIndex, requested_at = if_not_exists(requested_at, :now), gsi1sk = :now",

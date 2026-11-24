@@ -1,12 +1,11 @@
 import { normalizeEmail, validatePassword, normalizeDisplayName, hashPassword, verifyPassword } from "../../access/password-credential.ts";
 import { accessInvitationTokenHash, accessInvitationUsable } from "../../access/access-invitations.ts";
-import { GetCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { issueEmailAction } from "../../access/email-actions.ts";
 import { type Identity } from "../../access/domain.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { type Event, type Response, parseJsonObject, response, errorResponse } from "./http.ts";
-import { document, tableName } from "./access-store.ts";
+import { accessTable, tableName } from "./access-store.ts";
 import { accessInvitationKey, accountItemKey } from "../../access/keys.ts";
 import { loginProviderMarker } from "../../access/identity-creation.ts";
 import { passwordCredentialItem, passwordAccountItem, passwordCredentials, credentialKey } from "./credentials.ts";
@@ -36,7 +35,7 @@ export async function registerPassword(event: Event): Promise<Response> {
   if (invitationToken !== undefined) {
     const tokenHash = accessInvitationTokenHash(invitationToken);
     if (tokenHash === null) return errorResponse(400, "invalid_or_expired_invitation");
-    const invitation = await document.send(new GetCommand({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true }));
+    const invitation = await accessTable.get({ TableName: tableName, Key: accessInvitationKey(tokenHash), ConsistentRead: true });
     if (!accessInvitationUsable(invitation.Item)) return errorResponse(400, "invalid_or_expired_invitation");
     if (invitation.Item?.delivery_email !== input.email) return errorResponse(403, "invited_email_mismatch");
   }
@@ -45,7 +44,7 @@ export async function registerPassword(event: Event): Promise<Response> {
   const action = issueEmailAction("verify_email");
   const credential = { subject, email, displayName };
   try {
-    await document.send(new TransactWriteCommand({ TransactItems: [
+    await accessTable.transact({ TransactItems: [
       { Put: {
         TableName: tableName,
         Item: passwordCredentialItem(subject, email, displayName, await hashPassword(password), action),
@@ -56,7 +55,7 @@ export async function registerPassword(event: Event): Promise<Response> {
         Item: emailActionItem("verify_email", action, credential),
         ConditionExpression: "attribute_not_exists(pk)",
       } },
-    ] }));
+    ] });
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") return errorResponse(409, "email_already_registered");
     throw error;
@@ -77,7 +76,7 @@ export async function linkPassword(identity: Identity, event: Event): Promise<Re
   const action = issueEmailAction("verify_email");
   const credential = { subject, email, displayName };
   try {
-    await document.send(new TransactWriteCommand({ TransactItems: [
+    await accessTable.transact({ TransactItems: [
       { Put: {
         TableName: tableName,
         Item: passwordCredentialItem(subject, email, displayName, await hashPassword(password), action),
@@ -98,7 +97,7 @@ export async function linkPassword(identity: Identity, event: Event): Promise<Re
         Item: emailActionItem("verify_email", action, credential, identity.id),
         ConditionExpression: "attribute_not_exists(pk)",
       } },
-    ] }));
+    ] });
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
       return errorResponse(409, "email_already_registered");
@@ -120,13 +119,13 @@ export async function changePassword(identity: Identity, event: Event): Promise<
   if (credential === null || !credential.emailVerified || !await verifyPassword(parsed.currentPassword, credential.passwordHash)) {
     return errorResponse(401, "invalid_current_password");
   }
-  const linked = await document.send(new GetCommand({
+  const linked = await accessTable.get({
     TableName: tableName,
     Key: accountItemKey(passwordProviderId, credential.subject),
     ConsistentRead: true,
-  }));
+  });
   if (linked.Item?.identity_id !== identity.id) return errorResponse(403, "credential_not_linked");
-  await document.send(new UpdateCommand({
+  await accessTable.update({
     TableName: tableName,
     Key: credentialKey(email),
     UpdateExpression: "SET password_hash = :hash, failed_sign_ins = :zero, locked_until = :none, password_changed_at = :now",
@@ -139,7 +138,7 @@ export async function changePassword(identity: Identity, event: Event): Promise<
       ":subject": credential.subject,
       ":verified": true,
     },
-  }));
+  });
   await revokePasswordLoginSessions(credential.subject);
   return response(204, null);
 }

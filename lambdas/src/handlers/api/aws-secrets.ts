@@ -1,5 +1,5 @@
 import { GetParameterCommand } from "@aws-sdk/client-ssm";
-import { ssm } from "./clients.ts";
+import { ssm } from "./aws-clients.ts";
 
 const botTokenParameter = process.env.BOT_TOKEN_PARAMETER;
 if (!botTokenParameter) throw new Error("missing environment variable: BOT_TOKEN_PARAMETER");

@@ -1,13 +1,11 @@
 import { type Identity, type Permission, permissions, reservedPermissions } from "../../access/domain.ts";
-import { QueryCommand, UpdateCommand, GetCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { privateTelegramChatId, type AccessApprovedEvent } from "../../domain/access-events.ts";
-import { PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { randomUUID } from "node:crypto";
 import { type Response, response, type Event, parameter, parseJsonObject, errorResponse } from "./http.ts";
-import { document, tableName, type Item } from "./access-store.ts";
+import { accessTable, tableName, type Item } from "./access-store.ts";
 import { requirePermission } from "./permissions.ts";
-import { events } from "./clients.ts";
+import { publishEvent } from "./aws-events.ts";
 import { identityById } from "./identity-store.ts";
 import { createIdentity } from "../../access/identity-creation.ts";
 import { accessIndexName, accountItemKey, activeIdentityIndex, candidateIndex, identityIndex, profileKey } from "../../access/keys.ts";
@@ -20,10 +18,10 @@ import { isConditionFailure } from "./conditions.ts";
 import type { AccessCandidate, AccessIdentity, ApprovedIdentity } from "../../../../contract/access.ts";
 
 export async function candidates(): Promise<Response> {
-  const pages = await Promise.all([candidateIndex.requested, candidateIndex.observed].map((state) => document.send(new QueryCommand({
+  const pages = await Promise.all([candidateIndex.requested, candidateIndex.observed].map((state) => accessTable.query({
     TableName: tableName, IndexName: accessIndexName, KeyConditionExpression: "gsi1pk = :state",
     ExpressionAttributeValues: { ":state": state }, ScanIndexForward: false,
-  }))));
+  })));
   return response(200, { candidates: pages.flatMap((page) => page.Items ?? []).map((item): AccessCandidate => ({
     platform: item.platform, platformUserId: item.platform_user_id, displayName: item.display_name,
     username: item.username ?? null, email: item.email ?? null, photoUrl: item.photo_url ?? null, status: item.status,
@@ -46,20 +44,20 @@ function verificationReader(): (email: string) => Promise<boolean> {
 export async function identities(caller: Identity): Promise<Response> {
   const roles = new Map((await listRoles()).map((role) => [role.id, role]));
   const emailVerified = verificationReader();
-  const profiles = await document.send(new QueryCommand({
+  const profiles = await accessTable.query({
     TableName: tableName,
     IndexName: accessIndexName,
     KeyConditionExpression: "gsi1pk = :state",
     ExpressionAttributeValues: { ":state": activeIdentityIndex },
-  }));
+  });
   const items = await Promise.all((profiles.Items ?? []).map(async (profile): Promise<AccessIdentity> => {
     const identityId = String(profile.identity_id);
-    const accounts = await document.send(new QueryCommand({
+    const accounts = await accessTable.query({
       TableName: tableName,
       IndexName: accessIndexName,
       KeyConditionExpression: "gsi1pk = :identity",
       ExpressionAttributeValues: { ":identity": identityIndex(identityId) },
-    }));
+    });
     return {
       id: identityId,
       displayName: profile.display_name,
@@ -95,7 +93,7 @@ function accountHandle(account: Item): string | null {
 async function commitRoleChange(callerIdentity: Identity, identityId: string, roleId: string, targetRoleId: string): Promise<Response | null> {
   // The target must still hold the role read above.
   try {
-    await document.send(new TransactWriteCommand({ TransactItems: [
+    await accessTable.transact({ TransactItems: [
       { ConditionCheck: { TableName: tableName, ...callerCondition(callerIdentity, targetRoleId) } },
       { Update: {
         TableName: tableName,
@@ -107,7 +105,7 @@ async function commitRoleChange(callerIdentity: Identity, identityId: string, ro
           ":roleId": roleId, ":now": new Date().toISOString(), ":by": callerIdentity.id, ":active": "ACTIVE", ":current": targetRoleId,
         },
       } },
-    ] }));
+    ] });
   } catch (error) {
     if (isConditionFailure(error)) return errorResponse(409, "role_change_conflict");
     throw error;
@@ -162,12 +160,8 @@ async function publishAccessApproval(platform: string, candidate: Item, identity
     roleName,
   };
   try {
-    const published = await events.send(new PutEventsCommand({ Entries: [{
-      Source: "spawnpoint.access",
-      DetailType: "Access Approved",
-      Detail: JSON.stringify(detail),
-    }] }));
-    if ((published.FailedEntryCount ?? 0) > 0) throw new Error(published.Entries?.[0]?.ErrorMessage ?? "EventBridge rejected access approval");
+    const refused = await publishEvent({ source: "spawnpoint.access", detailType: "Access Approved", detail });
+    if (refused !== null) throw new Error(refused);
   } catch (error) {
     // Approval is already committed. A best-effort notification must not make
     // the client retry the access mutation and receive a false conflict.
@@ -186,18 +180,18 @@ export async function approve(identity: Identity, platform: string, platformUser
   const forbidden = directGrants.length > 0 ? requirePermission(identity, "access.owner.grant") : escalationRefusal(identity, [role]);
   if (forbidden !== null) return forbidden;
   const account = accountItemKey(platform, platformUserId);
-  const candidate = await document.send(new GetCommand({ TableName: tableName, Key: account }));
+  const candidate = await accessTable.get({ TableName: tableName, Key: account });
   if (candidate.Item === undefined || candidate.Item.identity_id !== undefined) return errorResponse(409, "candidate_unavailable");
   const identityId = randomUUID();
   const now = new Date().toISOString();
   const name = String(candidate.Item.display_name ?? candidate.Item.email ?? platformUserId);
   try {
-    await document.send(new TransactWriteCommand({ TransactItems: [
+    await accessTable.transact({ TransactItems: [
       ...createIdentity({
         tableName, identityId, account: { provider: platform, subject: platformUserId }, displayName: name,
         roleId, directGrants, createdBy: identity.id, now,
       }),
-    ] }));
+    ] });
   } catch (error) {
     // Another Owner approved or dismissed the candidate first.
     if (isConditionFailure(error)) return errorResponse(409, "candidate_unavailable");
@@ -211,13 +205,13 @@ export async function approve(identity: Identity, platform: string, platformUser
 export async function dismiss(identity: Identity, platform: string, platformUserId: string): Promise<Response> {
   const now = new Date().toISOString();
   try {
-    await document.send(new UpdateCommand({
+    await accessTable.update({
       TableName: tableName, Key: accountItemKey(platform, platformUserId),
       UpdateExpression: "SET #status = :dismissed, gsi1pk = :state, gsi1sk = :now, dismissed_at = :now, dismissed_by = :by",
       ConditionExpression: "attribute_exists(pk) AND attribute_not_exists(identity_id)",
       ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: { ":dismissed": "DISMISSED", ":state": candidateIndex.dismissed, ":now": now, ":by": identity.id },
-    }));
+    });
   } catch (error) {
     // The candidate was approved first, or no longer exists.
     if (isConditionFailure(error)) return errorResponse(409, "candidate_unavailable");

@@ -1,9 +1,8 @@
 import { type PasswordCredential, type PasswordCredentialStore, passwordProviderId } from "../../access/password-login-provider.ts";
-import { UpdateCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { type SignInGuard, afterFailedSignIn, signInLocked } from "../../access/password-credential.ts";
 import { type EmailAction } from "../../access/email-actions.ts";
 import { type Identity } from "../../access/domain.ts";
-import { type Item, document, tableName } from "./access-store.ts";
+import { accessTable, type Item, tableName } from "./access-store.ts";
 import { accountItemKey, identityIndex } from "../../access/keys.ts";
 
 // Email and password is one login adapter among peers. Its credential is kept
@@ -33,13 +32,13 @@ export function credentialFromItem(item: Item): PasswordCredential | null {
 // password into a server error.
 async function updateCredentialGuard(email: string, expression: string, values: Record<string, unknown>): Promise<void> {
   try {
-    await document.send(new UpdateCommand({
+    await accessTable.update({
       TableName: tableName,
       Key: credentialKey(email),
       UpdateExpression: expression,
       ConditionExpression: "attribute_exists(pk)",
       ExpressionAttributeValues: values,
-    }));
+    });
   } catch (error) {
     if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error;
   }
@@ -48,7 +47,7 @@ async function updateCredentialGuard(email: string, expression: string, values: 
 export const passwordCredentials: PasswordCredentialStore = {
   async find(email) {
     // Consistent, so a lock written a moment ago is seen by the next attempt.
-    const result = await document.send(new GetCommand({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true }));
+    const result = await accessTable.get({ TableName: tableName, Key: credentialKey(email), ConsistentRead: true });
     return result.Item === undefined ? null : credentialFromItem(result.Item);
   },
   async recordFailure(email, observed, nowSeconds) {
@@ -60,7 +59,7 @@ export const passwordCredentials: PasswordCredentialStore = {
       const next = afterFailedSignIn(current, nowSeconds);
       const expectedMissingOrZero = current.failedSignIns === 0;
       try {
-        await document.send(new UpdateCommand({
+        await accessTable.update({
           TableName: tableName,
           Key: credentialKey(email),
           UpdateExpression: "SET failed_sign_ins = :failed, locked_until = :lockedUntil, last_failed_sign_in_at = :now",
@@ -73,7 +72,7 @@ export const passwordCredentials: PasswordCredentialStore = {
             ":lockedUntil": next.lockedUntilEpochSeconds,
             ":now": new Date().toISOString(),
           },
-        }));
+        });
         return;
       } catch (error) {
         if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error;

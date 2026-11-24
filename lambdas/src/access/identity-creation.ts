@@ -1,7 +1,7 @@
-import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
+import { type TableTransactItem } from "./table.ts";
 import { accountItemKey, activeIdentityIndex, identityIndex, loginProviderKey, profileKey } from "./keys.ts";
 
-type TransactItems = NonNullable<TransactWriteCommandInput["TransactItems"]>;
+type TransactItems = TableTransactItem[];
 
 export type NewIdentity = Readonly<{
   tableName: string;

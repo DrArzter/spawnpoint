@@ -1,7 +1,6 @@
 import { type Identity } from "../../access/domain.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
 import { type LoginProvider, authenticateWith } from "../../access/login-provider.ts";
-import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { type Response, response, type Event, parseJsonObject, errorResponse } from "./http.ts";
 import { identityAccounts } from "./identity-store.ts";
 import { loginProviderMarker } from "../../access/identity-creation.ts";
@@ -9,8 +8,8 @@ import { accountItemKey, identityIndex } from "../../access/keys.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { proofLinkProviders } from "./login-providers.ts";
 import { passwordLoginEnabled } from "./auth-config.ts";
-import { emailDeliveryProvider } from "./mail.ts";
-import { document, tableName } from "./access-store.ts";
+import { emailDeliveryProvider } from "./aws-mail.ts";
+import { accessTable, tableName } from "./access-store.ts";
 import type { LinkedLoginAccount, LinkedLoginAccounts } from "../../../../contract/access.ts";
 
 export async function linkedAccounts(identity: Identity): Promise<Response> {
@@ -51,7 +50,7 @@ export async function linkProofAccount(identity: Identity, provider: LoginProvid
 
   const now = new Date().toISOString();
   try {
-    await document.send(new TransactWriteCommand({ TransactItems: [
+    await accessTable.transact({ TransactItems: [
       { Update: {
         TableName: tableName,
         Key: accountItemKey(principal.provider, principal.subject),
@@ -82,7 +81,7 @@ export async function linkProofAccount(identity: Identity, provider: LoginProvid
         Item: loginProviderMarker(identity.id, provider.id, principal.subject, now),
         ConditionExpression: "attribute_not_exists(pk)",
       } },
-    ] }));
+    ] });
   } catch (error) {
     if (error instanceof Error && error.name === "TransactionCanceledException") {
       return errorResponse(409, "account_already_linked");

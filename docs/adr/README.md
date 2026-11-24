@@ -155,6 +155,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0088](0088-a-game-declares-its-facts-once.md) | A game declares its facts once | Accepted | M6 |
 | [0089](0089-a-record-that-names-no-game-belongs-to-the-legacy-module.md) | A record that names no game belongs to the legacy module | Accepted | M6 |
 | [0090](0090-game-rules-live-in-the-module.md) | Game rules live in the module | Accepted | M6 |
+| [0091](0091-the-access-table-is-a-port.md) | The access table is a port | Accepted | M6 |
 
 ## Decisions still to record
 

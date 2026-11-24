@@ -3,7 +3,7 @@ import { SESv2Client } from "@aws-sdk/client-sesv2";
 import { type EmailSender } from "../../email/email-sender.ts";
 import { configuredEmailSender } from "../../email/email-delivery.ts";
 import { panelUrl } from "./origins.ts";
-import { ssm } from "./clients.ts";
+import { ssm } from "./aws-clients.ts";
 
 export const emailDeliveryProvider = process.env.EMAIL_DELIVERY_PROVIDER ?? "none";
 

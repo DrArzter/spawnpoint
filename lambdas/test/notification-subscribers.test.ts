@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { subscribedIdentityIds, telegramChatIds, verifiedEmailAddresses } from "../src/bot/services/subscribers.ts";
+import { subscribedIdentityIds, telegramChatIds, verifiedEmailAddresses } from "../src/bot/services/subscribers-store.ts";
 
 test("subscription records select unique enabled identities", () => {
   assert.deepEqual(subscribedIdentityIds([

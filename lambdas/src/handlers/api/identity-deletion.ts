@@ -6,17 +6,12 @@ import {
   identityPartition, sessionAccountIndex,
 } from "../../access/keys.ts";
 import { passwordProviderId } from "../../access/password-login-provider.ts";
-import { S3Client } from "@aws-sdk/client-s3";
-import {
-  DeleteCommand, GetCommand, QueryCommand, ScanCommand, TransactWriteCommand, UpdateCommand,
-  type QueryCommandInput, type ScanCommandInput, type TransactWriteCommandInput,
-} from "@aws-sdk/lib-dynamodb";
-import { ReleaseHolders, resolveFromWorldRecords } from "../../control-plane/release-holders.ts";
-import { ReleaseRefs } from "../../control-plane/release-refs.ts";
-import { S3WorldReader, S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
+import { type TableQuery, type TableScan, type TableTransactItem } from "../../access/table.ts";
+import { worldRepository } from "../../control-plane/aws-world-records.ts";
+import { type S3WorldRepository } from "../../control-plane/s3-world-repository.ts";
 import { type WorldRecord } from "../../control-plane/world-registry.ts";
 import { type Response, response, errorResponse } from "./http.ts";
-import { document, tableName, type Item } from "./access-store.ts";
+import { accessTable, tableName, type Item } from "./access-store.ts";
 import { deleteIdentityAvatars } from "./avatars.ts";
 import { callerCondition, escalationRefusal, lastHolderRefusal } from "./owner-guard.ts";
 import { readRole } from "./role-store.ts";
@@ -33,10 +28,8 @@ export type WorldStore = Pick<S3WorldRepository, "list" | "read" | "replace">;
 let releaseWorlds: WorldStore | undefined;
 
 function worldsInReleaseBucket(): WorldStore {
-  const bucket = process.env.RELEASE_BUCKET;
-  if (!bucket) throw new Error("missing environment variable: RELEASE_BUCKET");
   // Anonymising an owner rewrites the record: the holder of its release is already there, so this costs one read.
-  releaseWorlds ??= ((s3) => new S3WorldRepository(s3, bucket, new ReleaseHolders(new ReleaseRefs(document), resolveFromWorldRecords(new S3WorldReader(s3, bucket)))))(new S3Client({}));
+  releaseWorlds ??= worldRepository();
   return releaseWorlds;
 }
 
@@ -52,22 +45,22 @@ type Counts = {
 
 const keyOf = (item: Item): Key => ({ pk: String(item.pk), sk: String(item.sk) });
 
-async function queryAll(input: QueryCommandInput): Promise<Item[]> {
+async function queryAll(input: TableQuery): Promise<Item[]> {
   const items: Item[] = [];
   let cursor: Record<string, unknown> | undefined;
   do {
-    const page = await document.send(new QueryCommand({ ...input, ExclusiveStartKey: cursor })); // NOSONAR paginated: the next token comes from the previous page
+    const page = await accessTable.query({ ...input, ExclusiveStartKey: cursor }); // NOSONAR paginated: the next token comes from the previous page
     items.push(...(page.Items ?? []));
     cursor = page.LastEvaluatedKey;
   } while (cursor !== undefined);
   return items;
 }
 
-async function scanAll(input: ScanCommandInput): Promise<Item[]> {
+async function scanAll(input: TableScan): Promise<Item[]> {
   const items: Item[] = [];
   let cursor: Record<string, unknown> | undefined;
   do {
-    const page = await document.send(new ScanCommand({ ...input, ExclusiveStartKey: cursor })); // NOSONAR paginated: the next token comes from the previous page
+    const page = await accessTable.scan({ ...input, ExclusiveStartKey: cursor }); // NOSONAR paginated: the next token comes from the previous page
     items.push(...(page.Items ?? []));
     cursor = page.LastEvaluatedKey;
   } while (cursor !== undefined);
@@ -84,7 +77,7 @@ function conditionFailed(error: unknown): boolean {
 
 // Plain deletes: a retry after a partial failure finishes the work.
 async function remove(items: readonly Item[]): Promise<number> {
-  await inBatches(items, (item) => document.send(new DeleteCommand({ TableName: tableName, Key: keyOf(item) })));
+  await inBatches(items, (item) => accessTable.delete({ TableName: tableName, Key: keyOf(item) }));
   return items.length;
 }
 
@@ -114,7 +107,7 @@ async function linkedAccounts(identityId: string, partition: readonly Item[]): P
     .filter((item) => isLoginProviderSort(String(item.sk)) && typeof item.provider === "string" && typeof item.subject === "string")
     .map((item) => accountItemKey(String(item.provider), String(item.subject)))
     .filter((key) => !known.has(key.pk))
-    .map(async (key) => (await document.send(new GetCommand({ TableName: tableName, Key: key, ConsistentRead: true }))).Item));
+    .map(async (key) => (await accessTable.get({ TableName: tableName, Key: key, ConsistentRead: true })).Item));
   return [...indexed, ...marked.filter((item): item is Item => item?.identity_id === identityId)]
     .map(accountFromItem).filter((account): account is Account => account !== null);
 }
@@ -123,7 +116,7 @@ async function passwordCredentialItems(accounts: readonly Account[]): Promise<It
   const found = await Promise.all(accounts
     .filter((account) => account.provider === passwordProviderId && account.email !== null)
     .map(async (account) => {
-      const item = (await document.send(new GetCommand({ TableName: tableName, Key: credentialKey(account.email!), ConsistentRead: true }))).Item;
+      const item = (await accessTable.get({ TableName: tableName, Key: credentialKey(account.email!), ConsistentRead: true })).Item;
       return item?.subject === account.subject ? item : undefined;
     }));
   return found.filter((item): item is Item => item !== undefined);
@@ -189,9 +182,9 @@ async function forgetName(items: readonly Item[]): Promise<number> {
   let count = 0;
   await inBatches(items, async (item) => {
     try {
-      await document.send(new UpdateCommand({
+      await accessTable.update({
         TableName: tableName, Key: keyOf(item), UpdateExpression: "REMOVE display_name", ConditionExpression: "attribute_exists(pk)",
-      }));
+      });
       count += 1;
     } catch (error) {
       // Its TTL removed it first.
@@ -206,13 +199,13 @@ async function revokePending(items: readonly Item[]): Promise<number> {
   const now = new Date().toISOString();
   await inBatches(items, async (item) => {
     try {
-      await document.send(new UpdateCommand({
+      await accessTable.update({
         TableName: tableName, Key: keyOf(item),
         UpdateExpression: "SET #status = :revoked, revoked_at = :now",
         ConditionExpression: "#status = :pending",
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: { ":revoked": "REVOKED", ":pending": "PENDING", ":now": now },
-      }));
+      });
       count += 1;
     } catch (error) {
       // Redeemed or revoked meanwhile.
@@ -260,7 +253,7 @@ async function anonymiseWorlds(identityId: string, worlds: WorldStore): Promise<
 }
 
 type Cancellation = Error & { CancellationReasons?: readonly { Code?: string }[] };
-type Transaction = NonNullable<TransactWriteCommandInput["TransactItems"]>;
+type Transaction = TableTransactItem[];
 
 type Deletion = Readonly<{
   identityId: string; roleId: string; partition: readonly Item[]; accounts: readonly Account[];
@@ -302,9 +295,9 @@ async function cancellationResponse(error: Cancellation, deletion: Deletion): Pr
   // Index 0 is the caller check; the partition's items follow it.
   const profileIndex = 1 + deletion.partition.findIndex((item) => item.sk === profileSort);
   if (failed(profileIndex)) {
-    const current = await document.send(new GetCommand({
+    const current = await accessTable.get({
       TableName: tableName, Key: profileKey(deletion.identityId), ConsistentRead: true,
-    }));
+    });
     return current.Item === undefined ? response(204, null) : errorResponse(409, "identity_changed");
   }
   if (reasons.some((reason) => reason.Code === "ConditionalCheckFailed")) return errorResponse(409, "identity_changed");
@@ -314,7 +307,7 @@ async function cancellationResponse(error: Cancellation, deletion: Deletion): Pr
 // Returns the refusal when the transaction was cancelled, or null once committed.
 async function commitDeletion(caller: Identity, deletion: Deletion): Promise<Response | null> {
   try {
-    await document.send(new TransactWriteCommand({ TransactItems: deletionTransaction(caller, deletion) }));
+    await accessTable.transact({ TransactItems: deletionTransaction(caller, deletion) });
     return null;
   } catch (error) {
     if (!(error instanceof Error && error.name === "TransactionCanceledException")) throw error;
@@ -325,9 +318,9 @@ async function commitDeletion(caller: Identity, deletion: Deletion): Promise<Res
 async function deleteLateAccounts(identityId: string, accounts: readonly Account[], counts: Counts): Promise<void> {
   await inBatches(accounts, async (account) => {
     try {
-      await document.send(new DeleteCommand({
+      await accessTable.delete({
         TableName: tableName, Key: account.key, ConditionExpression: "identity_id = :id", ExpressionAttributeValues: { ":id": identityId },
-      }));
+      });
       counts.removed.accounts += 1;
     } catch (error) {
       if (!conditionFailed(error)) throw error;
@@ -366,9 +359,9 @@ async function sweepRemainder(identityId: string, accounts: readonly Account[], 
 
 export async function deleteIdentity(caller: Identity, identityId: string, worlds: () => WorldStore = worldsInReleaseBucket): Promise<Response> {
   if (identityId === caller.id) return errorResponse(409, "self_delete_forbidden");
-  const profile = (await document.send(new GetCommand({
+  const profile = (await accessTable.get({
     TableName: tableName, Key: profileKey(identityId), ConsistentRead: true,
-  }))).Item;
+  })).Item;
   if (profile === undefined) return response(204, null);
   const roleId = String(profile.role_id);
   // No escalation: the caller holds every permission of the target's role. The protected role keeps a holder.

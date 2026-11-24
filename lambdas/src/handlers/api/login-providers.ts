@@ -6,8 +6,8 @@ import { type Event, type Response, parseJsonObject, response, errorResponse } f
 import { createLoginSession } from "./login-sessions.ts";
 import { passwordCredentials } from "./credentials.ts";
 import { telegramOidcClientId, googleOidcClientId, telegramLoginEnabled, googleLoginEnabled, passwordLoginEnabled, passwordRegistrationEnabled } from "./auth-config.ts";
-import { botToken } from "./secrets.ts";
-import { emailDeliveryProvider } from "./mail.ts";
+import { botToken } from "./aws-secrets.ts";
+import { emailDeliveryProvider } from "./aws-mail.ts";
 import type { LoginOptions } from "../../../../contract/access.ts";
 import type { LoginProviderId } from "../../../../contract/login.ts";
 

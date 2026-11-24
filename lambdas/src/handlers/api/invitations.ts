@@ -1,41 +1,39 @@
 import { type Identity } from "../../access/domain.ts";
-import { QueryCommand, GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { directInvitationReadiness } from "../../access/invitation-readiness.ts";
 import { type InvitationAudience, type InvitationEvent } from "../../domain/invitations.ts";
 import { awsControlPlaneSources } from "../../control-plane/aws.ts";
 import { findCatalogWorld, catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { randomUUID } from "node:crypto";
-import { PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { type Response, response, parseJsonObject, errorResponse } from "./http.ts";
-import { document, tableName } from "./access-store.ts";
-import { events } from "./clients.ts";
+import { accessTable, tableName } from "./access-store.ts";
+import { publishEvent } from "./aws-events.ts";
 import { accessIndexName, activeIdentityIndex, identityIndex, identitySettingKey, playerInvitationKey, playerInvitationSenderIndex, profileKey } from "../../access/keys.ts";
 import type { InvitationRecipient, InvitationSummary } from "../../../../contract/access.ts";
 
 export async function invitationRecipients(identity: Identity): Promise<Response> {
-  const profiles = await document.send(new QueryCommand({
+  const profiles = await accessTable.query({
     TableName: tableName,
     IndexName: accessIndexName,
     KeyConditionExpression: "gsi1pk = :state",
     ExpressionAttributeValues: { ":state": activeIdentityIndex },
-  }));
+  });
   const candidates = (profiles.Items ?? []).filter((profile) => profile.identity_id !== identity.id);
   const recipients = await Promise.all(candidates.map(async (profile): Promise<InvitationRecipient> => {
     const identityId = String(profile.identity_id);
-    const subscriptions = await document.send(new GetCommand({
+    const subscriptions = await accessTable.get({
       TableName: tableName,
       Key: identitySettingKey(identityId, "SUBSCRIPTIONS"),
       ConsistentRead: true,
-    }));
+    });
     const subscriptionMap = subscriptions.Item?.subscriptions;
     const directEnabled = subscriptionMap !== null && typeof subscriptionMap === "object"
       && (subscriptionMap as Record<string, unknown>)["invitation.direct"] === true;
-    const accounts = directEnabled ? await document.send(new QueryCommand({
+    const accounts = directEnabled ? await accessTable.query({
       TableName: tableName,
       IndexName: accessIndexName,
       KeyConditionExpression: "gsi1pk = :identity",
       ExpressionAttributeValues: { ":identity": identityIndex(identityId) },
-    })) : { Items: [] };
+    }) : { Items: [] };
     return {
       id: identityId,
       displayName: String(profile.display_name),
@@ -79,10 +77,10 @@ export async function createInvitation(identity: Identity, gameId: string, world
   const { game, world } = found;
 
   if (audience === "direct") {
-    const profiles = await Promise.all(recipientIdentityIds.map((id) => document.send(new GetCommand({
+    const profiles = await Promise.all(recipientIdentityIds.map((id) => accessTable.get({
       TableName: tableName, Key: profileKey(id), ProjectionExpression: "identity_id, #status",
       ExpressionAttributeNames: { "#status": "status" },
-    }))));
+    })));
     if (profiles.some((profile) => profile.Item?.status !== "ACTIVE")) return errorResponse(400, "invalid_recipients");
   }
 
@@ -93,30 +91,29 @@ export async function createInvitation(identity: Identity, gameId: string, world
     worldId, worldName: world.displayName, senderIdentityId: identity.id,
     senderDisplayName: identity.displayName, recipientIdentityIds,
   };
-  await document.send(new PutCommand({ TableName: tableName, Item: {
+  await accessTable.put({ TableName: tableName, Item: {
     ...playerInvitationKey(invitationId), invitation_id: invitationId, audience,
     game_id: gameId, world_id: worldId, sender_identity_id: identity.id,
     recipient_identity_ids: recipientIdentityIds, status: "READY", created_at: now, published_at: now,
     gsi1pk: playerInvitationSenderIndex(identity.id, gameId, worldId), gsi1sk: `${now}#${invitationId}`,
-  } }));
-  const published = await events.send(new PutEventsCommand({ Entries: [{
-    EventBusName: process.env.EVENT_BUS_NAME ?? "default", Source: "spawnpoint.access",
-    DetailType: "Game Invitation", Detail: JSON.stringify(detail),
-  }] }));
-  if ((published.FailedEntryCount ?? 0) > 0) {
-    await document.send(new UpdateCommand({ TableName: tableName, Key: playerInvitationKey(invitationId),
+  } });
+  const refused = await publishEvent({
+    eventBusName: process.env.EVENT_BUS_NAME ?? "default", source: "spawnpoint.access", detailType: "Game Invitation", detail,
+  });
+  if (refused !== null) {
+    await accessTable.update({ TableName: tableName, Key: playerInvitationKey(invitationId),
       UpdateExpression: "SET #status = :failed", ExpressionAttributeNames: { "#status": "status" }, ExpressionAttributeValues: { ":failed": "PUBLISH_FAILED" },
-    }));
+    });
     return errorResponse(502, "invitation_publish_failed");
   }
   return response(202, { invitation: { id: invitationId, audience, recipientCount: audience === "direct" ? recipientIdentityIds.length : null, state: "queued" } });
 }
 
 export async function invitationHistory(identity: Identity, gameId: string, worldId: string): Promise<Response> {
-  const page = await document.send(new QueryCommand({
+  const page = await accessTable.query({
     TableName: tableName, IndexName: accessIndexName, KeyConditionExpression: "gsi1pk = :sender",
     ExpressionAttributeValues: { ":sender": playerInvitationSenderIndex(identity.id, gameId, worldId) }, ScanIndexForward: false, Limit: 5,
-  }));
+  });
   return response(200, { invitations: (page.Items ?? [])
     .map((item): InvitationSummary => ({
       id: item.invitation_id, audience: item.audience, status: item.status,

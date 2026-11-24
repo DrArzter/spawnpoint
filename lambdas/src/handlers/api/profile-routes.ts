@@ -6,7 +6,7 @@ import { linkedAccounts, linkProofAccount } from "./linked-accounts.ts";
 import { proofLinkProviders, loginProviderDisabled } from "./login-providers.ts";
 import { parameter, response, errorResponse } from "./http.ts";
 import { passwordLoginEnabled } from "./auth-config.ts";
-import { emailDeliveryProvider } from "./mail.ts";
+import { emailDeliveryProvider } from "./aws-mail.ts";
 import { linkPassword, changePassword } from "./passwords.ts";
 
 export const profileRoutes: Readonly<Record<string, Route>> = {

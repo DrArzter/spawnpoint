@@ -279,6 +279,8 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "lambda:AddPermission",
       "lambda:CreateFunction",
       "lambda:CreateFunctionUrlConfig",
+      # The log assistant's worker is never retried (ADR-0094).
+      "lambda:PutFunctionEventInvokeConfig",
       "lambda:TagResource",
       "lambda:UpdateFunctionCode",
       "lambda:UpdateFunctionConfiguration",

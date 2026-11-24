@@ -71,6 +71,12 @@ html[data-skin="console"] .c-input-colour {
 }
 
 html[data-skin="console"] .c-input:hover,
+/* A message, not a file: wrapped in the body font, a few lines tall. */
+html[data-skin="console"] .c-textarea-prose {
+  min-height: 88px;
+  white-space: pre-wrap;
+}
+
 /* A text area that fills its column: the space a panel's body leaves above its note. */
 html[data-skin="console"] .c-dialog-body > .c-textarea-fill {
   flex: 1 1 auto;

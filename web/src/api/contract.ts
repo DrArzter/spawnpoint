@@ -7,7 +7,7 @@ import type { ApiErrorCode } from "../../../contract/errors";
 import type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermission, AccessRole, AccessRoleDirectory, AccountProfile, AppearancePreference, ApprovedIdentity, InvitationRecipient, InvitationSummary, IssuedAccessInvitation, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, RoleDefinition, SubscriptionState, VisitorSession, ActiveSession as ServedSession } from "../../../contract/access";
 import type { HostLogLine, OperationProgress, OperationStep } from "../../../contract/operations";
 import type { WorldLogRead } from "../../../contract/world-log";
-import type { AssistantAnswer, AssistantModel } from "../../../contract/assistant";
+import type { AssistantAnswer, AssistantConversation, AssistantModel, ConversationSummary } from "../../../contract/assistant";
 import type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../contract/config-files";
 
 // Shapes the API and the panel share live in ../contract (review X2).
@@ -18,7 +18,7 @@ export type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermissio
 export type ActiveSession = ServedSession & Readonly<{ demo?: boolean }>;
 /** A world's recent log and the owner's log assistant (contract/world-log.ts, contract/assistant.ts). */
 export type { WorldLogRead, WorldLogStatus } from "../../../contract/world-log";
-export type { AssistantAnswer, AssistantModel } from "../../../contract/assistant";
+export type { AssistantAnswer, AssistantConversation, AssistantModel, AssistantProposal, ConversationEntry, ConversationStatus, ConversationSummary } from "../../../contract/assistant";
 /** A world's own config files (contract/config-files.ts). */
 export type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../contract/config-files";
 export type { BackupEntry, BackupInventory, ConsoleEntry, HostLogLine, HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
@@ -268,6 +268,13 @@ export type SpawnpointApi = Readonly<{
   /** Asks the model to explain a finished log read; answered later through loadAssistantAnswer. */
   askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>): Promise<AssistantAnswer>;
   loadAssistantAnswer(gameId: string, worldId: string, answerId: string): Promise<AssistantAnswer>;
+  /** The Owner's conversations with the assistant, newest first (ADR-0096). */
+  listConversations(): Promise<readonly ConversationSummary[]>;
+  startConversation(model: AssistantModel, message: string): Promise<AssistantConversation>;
+  loadConversation(conversationId: string): Promise<AssistantConversation>;
+  sendMessage(conversationId: string, model: AssistantModel, message: string): Promise<AssistantConversation>;
+  /** Applies a proposal, which runs its change as the Owner, or rejects it. */
+  decideProposal(conversationId: string, proposalId: string, decision: "apply" | "reject"): Promise<AssistantConversation>;
   /** A release's server mods, from its manifest. */
   loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage>;
   /** What a release changes: against `from`, or, with null, against what its build compared it with; null when that build kept no plan. */

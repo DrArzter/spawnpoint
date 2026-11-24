@@ -187,9 +187,9 @@ accepted: `home` 1, 2 from 1024px, 3 from 1200px, 4 from 2000px; `metrics` 1, 2 
 | Step | What changes |
 |---|---|
 | 760px | Phone below: bottom bar instead of the rail, back button instead of the trail, dialogs dock to the bottom, 44px targets |
-| 1024px | Split pages show their list column; the scope switcher becomes a segmented group; the search field shows |
+| 1024px | Split pages show their list column; the scope switcher becomes a segmented group |
 | 1200px | The worlds quick look sits beside the table instead of as a sheet |
-| 1280px | The breadcrumb shows the game segment |
+| 1280px | The breadcrumb shows the game segment; the search field shows in place of its icon |
 | 1500px | The top bar shows the "Refreshed" text beside its Refresh button |
 | 2000px | The game home grid takes 4 columns |
 
@@ -247,7 +247,9 @@ rows on sort or filter; focus rings; skeletons on a page switch; any attention p
 ## Frame
 
 - **Top bar** (ink band): brand, the game as a pill switcher with its own status, search (`/` or Ctrl K), the
-  Refreshed time with the one Refresh button, the Demo chip and the account avatar. No theme control.
+  Refreshed time with the one Refresh button, the Owner's Assistant (a wide side panel over any page,
+  [ADR-0096](../docs/adr/0096-the-assistant-reads-as-the-owner-and-proposes-writes.md)), the Demo chip and the account
+  avatar. No theme control.
 - **Rail** (760px and up): Home, Worlds, Releases, a divider, Access with its request badge, Profile. On a phone the
   same items are a bottom bar.
 - **Page header**: the breadcrumb is the title; status after it; actions at the end edge of the same row.

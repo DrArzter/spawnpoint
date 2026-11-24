@@ -61,9 +61,12 @@ export function TextInput({ mono = false, className, ...rest }: Readonly<{ mono?
 }
 
 /** Text of many lines at a fixed, monospaced layout: no wrapping, so a line of a config file keeps its columns. */
-/** Text of many lines, monospaced and never wrapped. `fill` takes the height its column leaves, for a whole file. */
-export function TextArea({ className, fill = false, ...rest }: Readonly<TextareaHTMLAttributes<HTMLTextAreaElement> & { fill?: boolean }>) {
-  return <textarea className={cx("c-textarea", "c-mono", fill && "c-textarea-fill", className)} spellCheck={false} {...controlProps(useWiring())} {...rest} />;
+/**
+ * Text of many lines, monospaced and never wrapped. `fill` takes the height its column leaves, for a whole file;
+ * `prose` is a short message instead: the body font, wrapped, a few lines tall, and spell-checked.
+ */
+export function TextArea({ className, fill = false, prose = false, ...rest }: Readonly<TextareaHTMLAttributes<HTMLTextAreaElement> & { fill?: boolean; prose?: boolean }>) {
+  return <textarea className={cx("c-textarea", prose ? "c-textarea-prose" : "c-mono", fill && "c-textarea-fill", className)} spellCheck={prose} {...controlProps(useWiring())} {...rest} />;
 }
 
 export function NumberInput({ className, ...rest }: Readonly<Omit<InputHTMLAttributes<HTMLInputElement>, "type">>) {

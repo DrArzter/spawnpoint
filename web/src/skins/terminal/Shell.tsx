@@ -3,7 +3,8 @@ import { useEffect, type ReactNode } from "react";
 import type { ShellModel } from "../../core/models";
 import { SpawnpointMark } from "../../shell/AppBar";
 import { ensureTerminalFont } from "./font";
-import { Avatar } from "./ui";
+import { AssistantDrawer } from "./Assistant";
+import { Avatar, Verb } from "./ui";
 
 // The screen: a top row, a menu row, then the grid. Nothing sits beside the
 // content; every row runs the whole width, on a phone as on a 4K monitor.
@@ -36,6 +37,8 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
         </nav>
         <span className="t-bar-gap" />
         <div className="t-bar-verbs">
+          {/* The Owner's assistant opens over any page (ADR-0096). */}
+          {model.assistant && <Verb action={model.assistant.open} size="small" />}
           {model.demo && <span className="t-demo">Demo data</span>}
           <button aria-label={model.openProfile.label} className="t-bar-avatar" data-action={model.openProfile.id} onClick={model.openProfile.run} title={model.viewer.displayName} type="button">
             <Avatar name={model.viewer.displayName} photoUrl={model.viewer.photoUrl} size="small" />
@@ -53,6 +56,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
       <main className="t-main" id="main">
         {children}
       </main>
+      {model.assistant?.shown && <AssistantDrawer model={model.assistant} />}
     </div>
   );
 }

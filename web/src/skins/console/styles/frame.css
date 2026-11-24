@@ -341,13 +341,8 @@ html[data-skin="console"] .c-keys-row dd {
   }
 }
 
-@media (max-width: 1199px) {
-  html[data-skin="console"] .c-search kbd {
-    display: none;
-  }
-}
-
-@media (max-width: 1023px) {
+/* Under 1280px the game pills and the Owner's assistant leave no room for the search field: its icon stands in. */
+@media (max-width: 1279px) {
   html[data-skin="console"] .c-search {
     display: none;
   }

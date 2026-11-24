@@ -1,4 +1,4 @@
-import type { AssistantAnswer, AssistantModel, WorldLogRead, ConfigFileContent, ConfigFileList, SavedConfigFile, AccessCandidate, AccessIdentity, AccessRole, AccessRoleDirectory, AccessRoleDraft, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../api/contract";
+import type { AssistantAnswer, AssistantConversation, AssistantModel, ConversationEntry, ConversationSummary, WorldLogRead, ConfigFileContent, ConfigFileList, SavedConfigFile, AccessCandidate, AccessIdentity, AccessRole, AccessRoleDirectory, AccessRoleDraft, AppearancePreference, BackupEntry, BackupInventory, InvitationRecipient, InvitationSummary, SubscriptionState } from "../api/contract";
 import { ApiError, identityDeletionRefusal, type ApiErrorCode, type HostLogLine, type PromotionResult, type ConsoleEntry, type FileLink, type DiffClasses, type DiffMod, type DiffValue, type HostMetrics, type MetricRange, type OperationProgress, type OperationStep, type ReleaseDiff, type ModSource, type ReleaseMod, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type WorldWhitelist } from "../api/contract";
 import { API_ERROR_TEXT } from "../api/error-text";
 import { startableReleases } from "../core/presets";
@@ -1291,6 +1291,85 @@ export function assistantAnswer(gameId: string, worldId: string, answerId: strin
   const held = state.answers[answerId];
   if (held?.world !== worldKey(gameId, worldId)) refuse(404, "unknown_assistant_answer");
   return held.answer;
+}
+
+// The Owner's conversations with the assistant (ADR-0096). The demo's
+// assistant reads the control plane, proposes starting a stopped world, and
+// answers once the proposal is decided; a later message gets one fixed line.
+const TURN_MS = 1500;
+
+function savedConversation(id: string, change: (conversation: AssistantConversation) => AssistantConversation): AssistantConversation {
+  const current = state.conversations[id];
+  if (current === undefined) refuse(404, "unknown_conversation");
+  const next = change(current);
+  state.conversations[id] = next;
+  return next;
+}
+
+function answerLater(id: string, entries: readonly ConversationEntry[], status: AssistantConversation["status"] = "idle"): void {
+  window.setTimeout(() => {
+    if (state.conversations[id] === undefined) return;
+    savedConversation(id, (conversation) => ({ ...conversation, status, updatedAt: iso(), entries: [...conversation.entries, ...entries] }));
+  }, TURN_MS);
+}
+
+export function listConversations(): readonly ConversationSummary[] {
+  return Object.values(state.conversations)
+    .map(({ id, title, model, status, updatedAt }) => ({ id, title, model, status, updatedAt }))
+    .sort((left, right) => (left.updatedAt < right.updatedAt ? 1 : -1));
+}
+
+export function startConversation(model: AssistantModel, message: string): AssistantConversation {
+  const text = message.trim();
+  if (text === "" || text.length > 4000) refuse(400, "invalid_assistant_request");
+  state.counter += 1;
+  const id = `conversation-${state.counter + 100}`;
+  const conversation: AssistantConversation = {
+    id, title: text.split("\n")[0]!.slice(0, 60), model, status: "working", updatedAt: iso(), note: null,
+    entries: [{ kind: "owner", text }],
+  };
+  state.conversations[id] = conversation;
+  const stopped = state.snapshot.games.flatMap((game) => game.worlds.map((item) => ({ game, world: item })))
+    .find(({ game, world: candidate }) => game.id === "minecraft" && heldSession(game.id, candidate) === null && candidate.worldLifecycleAvailable);
+  answerLater(id, stopped === undefined
+    ? [{ kind: "read", tool: "get_control_plane", title: "Get Spawnpoint control plane", ok: true }, { kind: "assistant", text: "Every Minecraft world is already running." }]
+    : [
+      { kind: "read", tool: "get_control_plane", title: "Get Spawnpoint control plane", ok: true },
+      { kind: "assistant", text: `${stopped.world.displayName} is stopped. I propose to start it.` },
+      { kind: "proposal", proposal: {
+        id: `${id}-p1`, tool: "start_world", title: "Start world", destructive: false,
+        arguments: { gameId: stopped.game.id, worldId: stopped.world.id }, status: "pending", result: null, decidedAt: null,
+      } },
+    ], stopped === undefined ? "idle" : "waiting");
+  return conversation;
+}
+
+export function conversation(conversationId: string): AssistantConversation {
+  return savedConversation(conversationId, (current) => current);
+}
+
+export function sendMessage(conversationId: string, model: AssistantModel, message: string): AssistantConversation {
+  const current = conversation(conversationId);
+  if (current.status === "working" || current.status === "waiting") refuse(409, "conversation_busy");
+  const next = savedConversation(conversationId, (item) => ({ ...item, model, status: "working", updatedAt: iso(), entries: [...item.entries, { kind: "owner", text: message.trim() }] }));
+  answerLater(conversationId, [{ kind: "assistant", text: "In the demo the assistant answers only its first question." }]);
+  return next;
+}
+
+export function decideProposal(conversationId: string, proposalId: string, decision: "apply" | "reject"): AssistantConversation {
+  const current = conversation(conversationId);
+  const entry = current.entries.find((item) => item.kind === "proposal" && item.proposal.id === proposalId);
+  if (entry?.kind !== "proposal") refuse(404, "unknown_proposal");
+  if (entry.proposal.status !== "pending") refuse(409, "proposal_decided");
+  const { gameId, worldId } = entry.proposal.arguments as { gameId: string; worldId: string };
+  const outcome = decision === "apply" ? startSession(gameId, worldId) : null;
+  const decided = { ...entry.proposal, status: decision === "apply" ? "applied" as const : "rejected" as const, decidedAt: iso(), result: outcome === null ? null : JSON.stringify(outcome) };
+  const next = savedConversation(conversationId, (item) => ({
+    ...item, status: "working", updatedAt: iso(),
+    entries: item.entries.map((candidate) => (candidate.kind === "proposal" && candidate.proposal.id === proposalId ? { kind: "proposal", proposal: decided } : candidate)),
+  }));
+  answerLater(conversationId, [{ kind: "assistant", text: decision === "apply" ? "The world is starting. It takes a few minutes; I will not say it is up until it is." : "Understood. I left it as it is." }]);
+  return next;
 }
 
 // `?operation=` (flag.ts) puts one promotion on the Creative world: running

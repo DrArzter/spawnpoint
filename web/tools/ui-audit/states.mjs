@@ -29,6 +29,8 @@ export const STATES = [
   { name: "archive", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "world.archive" }] },
   // A world's config file opens in a panel (the console) or a drawer (the terminal), with its text, Reset, Save and the line under it.
   { name: "config-file", route: `${WORLD}/config`, steps: [{ action: "config.open.config/claims.toml" }] },
+  // The Owner's assistant opens over any page: its conversations, the open one and the message box (ADR-0096).
+  { name: "assistant", route: WORLD, steps: [{ action: "assistant.show" }] },
   { name: "wipe", route: `${WORLD}/wipes`, steps: [{ action: "world.wipe" }] },
   { name: "restore", route: `${WORLD}/backups`, steps: [{ action: "backup.restore" }] },
   { name: "promote", route: "/?demo&latency=0#/worlds/minecraft/minecraft-creative-5e1c9a07", steps: [{ action: "world.promote" }] },
@@ -70,6 +72,7 @@ export const SURFACES = {
   console: {
     "Shell.tsx": { Shell: ["shortcuts"] },
     "ConfigSheet.tsx": { ConfigFileSheet: ["config-file"] },
+    "AssistantPanel.tsx": { AssistantPanel: ["assistant"] },
     "Access.tsx": { LinkedAccountsPanel: ["linked-accounts"], RolesPane: ["role"], RoleEditorPanel: ["role-create", "role-edit"] },
     "Scope.tsx": { ScopeDialog: ["scope"] },
     "Profile.tsx": { PasswordPanel: ["password"] },
@@ -83,6 +86,7 @@ export const SURFACES = {
   },
   terminal: {
     "Config.tsx": { Editor: ["config-file"] },
+    "Assistant.tsx": { AssistantDrawer: ["assistant"] },
     "Access.tsx": { Users: ["linked-accounts"], Roles: ["role"], RoleEditor: ["role-create", "role-edit"] },
     "Dialogs.tsx": {
       ScopeDialog: ["scope"],

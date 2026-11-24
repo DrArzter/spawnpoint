@@ -19,6 +19,7 @@ import { releaseBuildExpectation } from "./release-builds";
 import type { Notify } from "./notify";
 import { openDownload } from "./download";
 import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from "./models";
+import { useAssistantChat } from "./assistant-chat";
 import { visibleNavigation } from "./navigation";
 import { presetOf, stopDisconnect, type WorldCallbacks } from "./worlds";
 
@@ -459,6 +460,9 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     setAccent: appearance.setAccent,
   };
 
+  // The assistant is an Owner's: assistant.use is reserved to the Owner role (ADR-0094, ADR-0096).
+  const assistant = useAssistantChat(granted.has("assistant.use") && capabilities.has("assistant"), notify);
+
   const shell: ShellModel = {
     navigation: [...navItems, { id: "profile" as const, label: "Profile", href: "#/profile" }].map((item): NavigationItem => ({ ...item, current: item.id === page })),
     page,
@@ -478,6 +482,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     overview: { id: "worlds", label: "Home", href: routeHash({ page: "worlds", accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null, worldsView: "overview" }), current: page === "worlds" && !route.worldId && route.worldsView === "overview" },
     ...(snapshot ? { observedAtIso: snapshot.observedAt } : {}),
     requests: directory.requestCount,
+    assistant,
   };
 
   const changeAvatar = async (file: File) => {

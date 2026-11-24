@@ -33,7 +33,7 @@ html[data-skin="console"] .c-tracklist-row {
   transition: background var(--c-d1);
 }
 
-html[data-skin="console"] .c-tracklist-row:is(:hover, :has(a.c-track-title:focus-visible)) {
+html[data-skin="console"] .c-tracklist-row:is(:hover, :has(:is(a, button).c-track-title:focus-visible), :has(.c-track-title[aria-current="true"])) {
   background: var(--c-surface-2);
 }
 
@@ -88,24 +88,35 @@ html[data-skin="console"] .c-track-compact {
   display: none;
 }
 
+/* A title that runs an Action is a button that reads as the title. */
+html[data-skin="console"] button.c-track-title {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 800;
+  text-align: start;
+  cursor: pointer;
+}
+
 /* The title link stays a real anchor; its hit area and focus ring are the whole row. */
-html[data-skin="console"] .c-tracklist-row a.c-track-title::after {
+html[data-skin="console"] .c-tracklist-row :is(a, button).c-track-title::after {
   position: absolute;
   inset: 0;
   content: "";
 }
 
-html[data-skin="console"] .c-tracklist-row a.c-track-title:focus-visible {
+html[data-skin="console"] .c-tracklist-row :is(a, button).c-track-title:focus-visible {
   outline: 0;
 }
 
-html[data-skin="console"] .c-tracklist-row a.c-track-title:focus-visible::after {
+html[data-skin="console"] .c-tracklist-row :is(a, button).c-track-title:focus-visible::after {
   outline: 2px solid var(--c-accent);
   outline-offset: -2px;
 }
 
 /* Controls, copy, tooltips and other links in a row keep their own target above the row link. */
-html[data-skin="console"] .c-tracklist-row :is(button, select, label, input, [data-tip], .c-copy, a.c-btn, a:not(.c-track-title)) {
+html[data-skin="console"] .c-tracklist-row :is(button:not(.c-track-title), select, label, input, [data-tip], .c-copy, a.c-btn, a:not(.c-track-title)) {
   position: relative;
   z-index: 1;
 }

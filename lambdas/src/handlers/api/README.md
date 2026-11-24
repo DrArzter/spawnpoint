@@ -10,8 +10,9 @@ with `publicRoute`, `sessionRoute`, `identityRoute`, or `permissionRoute`.
 Its neighboring feature module implements the requests. Authentication,
 session, profile, access administration, access invitations, control plane,
 worlds, operations, metrics, releases, backups, release promotion, console,
-player invitations, OAuth, and MCP have separate route groups: sixteen, in the
-order `route-table.ts` composes them.
+world config files, world log, log assistant, player invitations, OAuth, and
+MCP have separate route groups: nineteen, in the order `route-table.ts`
+composes them.
 
 `route-table.ts` composes those groups and rejects duplicate route keys.
 `capabilities.ts` derives advertised capabilities from the composed routes;

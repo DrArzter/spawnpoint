@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConfigFile, ConfigFileContent, ConfigFileList, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, AssistantAnswer, AssistantModel, BackupEntry, BackupInventory, ConfigFile, ConfigFileContent, ConfigFileList, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldLogRead, WorldWhitelist } from "../api/contract";
 import { ApiError, failureKind } from "../api/contract";
 import { useApi, useSignInConfig } from "../api/context";
 import type { StatusKind } from "./status";
@@ -9,7 +9,7 @@ import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, Member, OwnerBootstrap, Role, World } from "../model";
 import { action, type Action } from "./actions";
 import type { Notify } from "./notify";
-import type { BackupsModel, CandidateRow, ConfigEditorModel, ConfigFileRow, ConfigFilesModel, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RoleEditorModel, RolesModel, UsersModel, WhitelistModel } from "./models";
+import type { AssistantChoice, AssistantPanelModel, BackupsModel, CandidateRow, HostLogRow, WorldLogModel, ConfigEditorModel, ConfigFileRow, ConfigFilesModel, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RoleEditorModel, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseChangeRows } from "./release-diff";
 import { candidateKey, type AccessDirectory } from "./access-directory";
 import { defaultRoleChoice, offeredPermissions, ROLE_ID_PATTERN, roleChoice, roleDeleteRefusal, roleEditRefusal, roleIdFor } from "./roles";
@@ -234,6 +234,148 @@ export function useConfigFiles(gameId: string, world: World, open: boolean, noti
   };
   const list: ConfigFilesModel["list"] = state.status !== "ready" ? asLoading(state, retry, "config.list.retry") : { status: "ready", value: { release: state.value.release, rows } };
   return { world, list, editor };
+}
+
+// --- a world's recent log and the owner's assistant (ADR-0094) ---------------
+
+const LOG_POLL_MS = 1500;
+const LOG_POLL_LIMIT = 40;
+const ANSWER_POLL_MS = 2000;
+const ANSWER_POLL_LIMIT = 90;
+
+type Polled<T> = { status: "idle" } | LoadState<T>;
+
+const wait = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(resolve, ms); });
+
+/**
+ * One request whose answer arrives later: `start` sends it, then `next` reads
+ * it again until `settled` says it is final. A newer start, a change of `key`
+ * or leaving the page drops the older one.
+ */
+function usePolled<T>(key: string, intervalMs: number, limit: number, settled: (value: T) => boolean, next: (value: T) => Promise<T>): [Polled<T>, (first: () => Promise<T>) => void] {
+  const [state, setState] = useState<Polled<T>>({ status: "idle" });
+  const run = useRef(0);
+  useEffect(() => {
+    run.current += 1;
+    setState({ status: "idle" });
+    return () => { run.current += 1; };
+  }, [key]);
+  const start = useCallback((first: () => Promise<T>) => {
+    run.current += 1;
+    const mine = run.current;
+    setState({ status: "loading" });
+    void (async () => {
+      try {
+        let value = await first();
+        for (let tries = 0; !settled(value); tries += 1) {
+          if (tries >= limit) throw new Error("No answer came in time. Try again.");
+          await wait(intervalMs);
+          if (run.current !== mine) return;
+          value = await next(value);
+        }
+        if (run.current === mine) setState({ status: "ready", value });
+      } catch (cause) {
+        if (run.current === mine) setState({ status: "error", error: cause instanceof Error ? cause.message : "The request failed.", kind: failureKind(cause) });
+      }
+    })();
+  // `settled` and `next` are recreated every render; the run counter guards what they act on.
+  }, [key]);
+  return [state, start];
+}
+
+/** How a game's line reads: an error or warning by the words games use for them. */
+export function logLineTone(text: string): HostLogRow["tone"] {
+  if (/\b(?:ERROR|FATAL|SEVERE)\b|Exception\b/.test(text)) return "error";
+  if (/\bWARN(?:ING)?\b/.test(text)) return "warning";
+  return "plain";
+}
+
+/** Why a read that the host answered has no lines. */
+const LOG_FAILURE: Readonly<Record<Exclude<WorldLogRead["status"], "pending" | "succeeded">, string>> = {
+  unavailable: "The game did not answer. Is it running?",
+  failed: "The host could not read the log.",
+  timed_out: "The host did not answer in time.",
+};
+
+function readFailure(status: WorldLogRead["status"]): string {
+  if (status === "pending") return "No answer came in time. Try again.";
+  return status === "succeeded" ? LOG_FAILURE.failed : LOG_FAILURE[status];
+}
+
+function logState(polled: Polled<WorldLogRead>, retry: Action): WorldLogModel["log"] {
+  if (polled.status === "idle") return null;
+  if (polled.status === "loading") return polled;
+  if (polled.status === "error") return { ...polled, retry };
+  const read = polled.value;
+  if (read.status === "succeeded" && read.lines !== null) {
+    return { status: "ready", value: { at: read.at, rows: read.lines.map((text, index) => ({ id: `${read.id}:${index}`, at: null, text, tone: logLineTone(text) })) } };
+  }
+  return { status: "error", error: readFailure(read.status), kind: "failed", retry };
+}
+
+export const ASSISTANT_CHOICES: readonly AssistantChoice[] = [
+  { value: "haiku", label: "Haiku", hint: "Fast and cheap: a short reading of the log" },
+  { value: "sonnet", label: "Sonnet", hint: "Slower and dearer: a closer reading, with steps to take" },
+];
+
+function answerState(polled: Polled<AssistantAnswer>, retry: Action): AssistantPanelModel["answer"] {
+  if (polled.status === "idle") return null;
+  if (polled.status === "loading") return polled;
+  if (polled.status === "error") return { ...polled, retry };
+  const answer = polled.value;
+  if (answer.status === "succeeded" && answer.text !== null) return { status: "ready", value: { text: answer.text, at: answer.at } };
+  return { status: "error", error: "The model could not answer. Try again, or try the other model.", kind: "failed", retry };
+}
+
+/**
+ * A world's recent log, read when asked while its tab is open, and the
+ * owner's assistant beside it. Nothing is read until the person asks, so an
+ * open tab costs the host nothing.
+ */
+export function useWorldLog(gameId: string, world: World, running: boolean, assistantOffered: boolean, notify: Notify): WorldLogModel {
+  const api = useApi();
+  const key = `${gameId}/${world.id}`;
+  const [read, startRead] = usePolled<WorldLogRead>(key, LOG_POLL_MS, LOG_POLL_LIMIT, (value) => value.status !== "pending", (value) => api.loadWorldLog(gameId, world.id, value.id));
+  const [answer, startAnswer] = usePolled<AssistantAnswer>(key, ANSWER_POLL_MS, ANSWER_POLL_LIMIT, (value) => value.status !== "pending", (value) => api.loadAssistantAnswer(gameId, world.id, value.id));
+  const [model, setModel] = useState<AssistantModel>("haiku");
+  const [question, setQuestion] = useState("");
+  useEffect(() => { setQuestion(""); }, [key]);
+
+  const reading = read.status === "loading";
+  const readLog = () => startRead(() => api.requestWorldLog(gameId, world.id));
+  const readAction = action("log.read", "Read log", readLog, {
+    icon: "refresh",
+    disabled: !running || reading,
+    busy: reading,
+    hint: running ? undefined : "The world is not running",
+  });
+
+  const finished = read.status === "ready" && read.value.status === "succeeded" ? read.value : null;
+  const asking = answer.status === "loading";
+  const ask = () => {
+    if (finished === null) return;
+    const text = question.trim();
+    startAnswer(() => api.askAssistant(gameId, world.id, { logReadId: finished.id, model, question: text === "" ? null : text }).catch((cause: unknown) => {
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The question could not be sent." });
+      throw cause;
+    }));
+  };
+  const assistant: AssistantPanelModel | null = assistantOffered ? {
+    choices: ASSISTANT_CHOICES,
+    model,
+    setModel,
+    question,
+    setQuestion,
+    ask: action("assistant.ask", "Explain", ask, {
+      icon: "help",
+      disabled: finished === null || asking,
+      busy: asking,
+      hint: finished === null ? "Read the log first" : undefined,
+    }),
+    answer: answerState(answer, action("assistant.retry", "Try again", ask)),
+  } : null;
+
+  return { world, read: readAction, log: logState(read, action("log.retry", "Try again", readLog)), assistant };
 }
 
 // --- release files (ADR-0065) -------------------------------------------------

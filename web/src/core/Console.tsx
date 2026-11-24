@@ -16,7 +16,7 @@ import { presetBuildStates, sessionStatus, worldStatus, type StatusDescriptor } 
 import { AVATAR_ACCEPT } from "./avatar-image";
 import { chooseFile } from "./choose-file";
 import { useConsole, type ConsoleController } from "./useConsole";
-import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useConfigFiles, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
+import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useConfigFiles, useWorldLog, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
@@ -204,6 +204,7 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
     whitelist: whitelistOffered(console, game, world),
     config: configOffered(console, world),
     console: granted.has("console.use") && capabilities.has("consoleGateway"),
+    log: granted.has("log.read") && capabilities.has("worldLog"),
     metrics: granted.has("metrics.read") && capabilities.has("worldMetrics"),
   });
   const offered = (tab: WorldTab) => tabs.some((item) => item.id === tab);
@@ -213,6 +214,8 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
   const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id, worldSessionId(game, world));
   const whitelist = useWhitelist(game.id, world, open("whitelist"), notify, game.playerName);
   const config = useConfigFiles(game.id, world, open("config"), notify);
+  // The assistant is an Owner's: assistant.use is reserved to the Owner role (ADR-0094).
+  const log = useWorldLog(game.id, world, running, granted.has("assistant.use") && capabilities.has("assistant"), notify);
   const mods = useReleaseMods(game.id, modsSource(world, open("releases") && capabilities.has("releaseFiles")), (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
   const changes = useReleaseChanges(game.id, changesSource(world, open("releases") && capabilities.has("releaseDiff")));
   return {
@@ -222,6 +225,7 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
     whitelist: offered("whitelist") ? whitelist : null,
     config: offered("config") ? config : null,
     console: offered("console") ? consoleModel : null,
+    log: offered("log") ? log : null,
     metrics: offered("metrics") ? metrics : null,
   };
 }
@@ -279,6 +283,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     },
     whitelist: shown.whitelist,
     config: shown.config,
+    log: shown.log,
     console: shown.console,
     metrics: shown.metrics,
     siblings: worldRows(console).map(siblingRow),

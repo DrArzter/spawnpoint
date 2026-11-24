@@ -39,6 +39,12 @@ const lambdas: readonly LambdaDefinition[] = [
   },
   { name: "access api", entry: "lambdas/src/handlers/access-api.ts", terraform: "infra/terraform-access-api/api.tf" },
   {
+    name: "assistant worker",
+    entry: "lambdas/src/handlers/assistant-worker.ts",
+    terraform: "infra/terraform-access-api/assistant.tf",
+    required: ["ACCESS_TABLE_NAME"],
+  },
+  {
     name: "control-plane subscriptions",
     entry: "lambdas/src/handlers/control-plane-subscriptions.ts",
     terraform: "infra/terraform-access-api/control-plane-websocket.tf",

@@ -2575,6 +2575,11 @@ html[data-skin="terminal"] .t-log[data-live] {
   height: 224px;
 }
 
+/* A game's whole recent log (ADR-0094) reads as a page, not a box. */
+html[data-skin="terminal"] .t-log-tall {
+  max-height: clamp(320px, 60vh, 640px);
+}
+
 html[data-skin="terminal"] .t-log-line {
   display: flex;
   gap: 1.5ch;
@@ -2593,6 +2598,18 @@ html[data-skin="terminal"] .t-log-text {
 
 html[data-skin="terminal"] .t-log-warning .t-log-text { color: var(--warning-ink); }
 html[data-skin="terminal"] .t-log-error .t-log-text { color: var(--error-ink); }
+
+/* The Owner's log assistant (ADR-0094): the answer under the question, as the model wrote it. */
+html[data-skin="terminal"] .t-assistant-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* --- the console: a terminal inside the terminal -------------------------------------------- */
 

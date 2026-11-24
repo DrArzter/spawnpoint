@@ -17,13 +17,16 @@ const capabilityRoutes: Readonly<Record<string, string>> = {
   backupDownloads: "POST /games/{gameId}/worlds/{worldId}/backups/download",
   whitelist: "PUT /games/{gameId}/worlds/{worldId}/whitelist",
   configFiles: "PUT /games/{gameId}/worlds/{worldId}/config-files",
+  worldLog: "POST /games/{gameId}/worlds/{worldId}/log",
+  assistant: "POST /games/{gameId}/worlds/{worldId}/assistant",
   releaseBuilds: "POST /games/{gameId}/presets/{presetId}/builds",
   releasePromotion: "POST /games/{gameId}/worlds/{worldId}/promote",
   operationProgress: "GET /games/{gameId}/worlds/{worldId}/operations/{operationId}",
 };
 
-export function capabilitiesForRoutes(routes: Readonly<Record<string, unknown>>): readonly string[] {
+/** The capabilities whose routes exist, less those the deployment switched off (the assistant, ADR-0094). */
+export function capabilitiesForRoutes(routes: Readonly<Record<string, unknown>>, switchedOff: ReadonlySet<string> = new Set()): readonly string[] {
   return Object.entries(capabilityRoutes)
-    .filter(([, routeKey]) => Object.hasOwn(routes, routeKey))
+    .filter(([name, routeKey]) => Object.hasOwn(routes, routeKey) && !switchedOff.has(name))
     .map(([name]) => name);
 }

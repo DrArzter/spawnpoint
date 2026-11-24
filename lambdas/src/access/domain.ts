@@ -9,6 +9,8 @@ export const permissions = [
   "console.use",
   "whitelist.manage",
   "config.edit",
+  "log.read",
+  "assistant.use",
   "release.read",
   "release.build",
   "release.promote",
@@ -26,10 +28,12 @@ export const permissions = [
 export type Permission = typeof permissions[number];
 
 /**
- * Held only through the Owner role, never as a direct grant: the last-owner
- * rule counts Owner identities, so a direct holder would escape it.
+ * Held only through the Owner role, never as a direct grant or by another
+ * role. The last-owner rule counts Owner identities, so a direct holder of
+ * access.owner.grant would escape it; the log assistant spends the
+ * deployment's money, which only an owner decides (ADR-0094).
  */
-export const reservedPermissions: readonly Permission[] = ["access.owner.grant"];
+export const reservedPermissions: readonly Permission[] = ["access.owner.grant", "assistant.use"];
 export type BuiltInRoleId = "viewer" | "player" | "operator" | "owner";
 
 export type PermissionEntry = Readonly<{ group: string; label: string; description: string }>;
@@ -42,6 +46,8 @@ const permissionEntries: Readonly<Record<Permission, PermissionEntry>> = {
   "console.use": { group: "Worlds", label: "Use the console", description: "Run RCON commands, recorded against your identity." },
   "whitelist.manage": { group: "Worlds", label: "Manage the whitelist", description: "Choose which players may join a world." },
   "config.edit": { group: "Worlds", label: "Edit config files", description: "Change a world's config files; the next start uses them." },
+  "log.read": { group: "Worlds", label: "Read the log", description: "Read a running world's recent log, without addresses or player names." },
+  "assistant.use": { group: "Worlds", label: "Ask the assistant", description: "Ask an AI model to explain a world's log; each answer is paid for by the deployment." },
   "world.manage": { group: "Worlds", label: "Manage worlds", description: "Create, wipe, archive and permanently delete worlds, and change their game settings." },
   "session.start": { group: "Sessions", label: "Start", description: "Start a session on the shared host." },
   "session.stop": { group: "Sessions", label: "Stop", description: "Stop a session, which saves the world and backs it up first." },

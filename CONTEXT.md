@@ -24,6 +24,10 @@ One word per thing. If a word here disagrees with a word in the product, the pro
 
 **World config file**: A text file inside a game's config roots that a world keeps its own version of, written over the release's file at every start and kept across wipes. _Avoid_: Override when the release's managed files are meant.
 
+**World log**: The game's own recent lines on the host that runs a world, read on request, with addresses, ids and player names replaced by tokens before anyone sees them. _Avoid_: Host log, which names the host's own lines of a start.
+
+**Log assistant**: An AI model an Owner asks to explain a world log, paid for by the deployment and capped per day and per month. _Avoid_: Bot, which names the Telegram bot.
+
 **World generation**: One save lineage in a world's history, created from a specific release and carrying its own desired and active release state. Regenerating a world closes the current generation with a recoverable final backup and starts a fresh generation from a selected release without reusing the previous save. Promoting a compatible release may update an existing generation without creating a new one. A generation may have many backups; it is not itself a backup.
 
 **Wipe**: The player-facing name for a world generation and, by extension, the deliberate transition that closes the current generation and starts the next one. Interfaces may say “current wipe”, “wipe history” and “start new wipe”; internal records retain the precise term world generation.

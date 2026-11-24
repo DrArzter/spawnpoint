@@ -14,7 +14,7 @@ const WAITING = ["14em", "22em", "18em"] as const;
  * A `live` log keeps one height while lines arrive, with placeholders until
  * the first one.
  */
-export function HostLog({ label, rows, live = false }: Readonly<{ label: string; rows: readonly HostLogRow[]; live?: boolean }>) {
+export function HostLog({ label, rows, live = false, tall = false }: Readonly<{ label: string; rows: readonly HostLogRow[]; live?: boolean; /** A game's whole recent log: a taller region. */ tall?: boolean }>) {
   const region = useRef<HTMLDivElement>(null);
   const newest = rows.at(-1)?.id;
   useLayoutEffect(() => {
@@ -22,11 +22,11 @@ export function HostLog({ label, rows, live = false }: Readonly<{ label: string;
     if (element) element.scrollTop = element.scrollHeight;
   }, [newest]);
   return (
-    <div aria-busy={live && rows.length === 0 ? true : undefined} aria-label={label} aria-live="polite" className="c-host-log" data-live={live ? "" : undefined} ref={region} role="log">
+    <div aria-busy={live && rows.length === 0 ? true : undefined} aria-label={label} aria-live="polite" className="c-host-log" data-live={live ? "" : undefined} data-size={tall ? "tall" : undefined} ref={region} role="log">
       {live && rows.length === 0 && WAITING.map((width) => <div className="c-host-line" key={width}><Skeleton text width={width} /></div>)}
       {rows.map((row) => (
         <div className="c-host-line" data-tone={row.tone === "plain" ? undefined : row.tone} key={row.id}>
-          <time className="c-host-time" dateTime={row.at}>{logTime(row.at)}</time>
+          {row.at !== null && <time className="c-host-time" dateTime={row.at}>{logTime(row.at)}</time>}
           <span className="c-host-text">{row.tone !== "plain" && <span className="c-sr">{row.tone === "error" ? "Error: " : "Warning: "}</span>}{row.text}</span>
         </div>
       ))}

@@ -30,6 +30,7 @@ const handler = createDispatcher(routes, {
 // Routes that read a JSON object body. A body that is not one object is a 400
 // before the handler does anything else.
 const READS_BODY = [
+  "POST /games/{gameId}/worlds/{worldId}/assistant",
   "POST /access/candidates/{platform}/{platformUserId}/approve",
   "POST /access/identities/{identityId}/role",
   "POST /access/roles",
@@ -74,6 +75,8 @@ const READS_BODY = [
 
 // Writes that do not read a body, or that answer in a protocol's own error format.
 const OTHER_WRITES = new Set([
+  // A log read names only its world, in the path.
+  "POST /games/{gameId}/worlds/{worldId}/log",
   // The path and the digest it resets from are query parameters.
   "DELETE /games/{gameId}/worlds/{worldId}/config-files",
   "POST /access/candidates/{platform}/{platformUserId}/dismiss",

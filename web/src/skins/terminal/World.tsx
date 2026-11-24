@@ -17,6 +17,7 @@ import { Address, Choice, Choices, Col, DetailRow, DetailsGroup, Empty, Field, F
 import { MetricsPanel } from "./Metrics";
 import { ConsolePanel } from "./Rcon";
 import { ConfigPanel } from "./Config";
+import { LogPanel } from "./Log";
 import { WhitelistPanel } from "./Whitelist";
 import { Notices } from "./Worlds";
 
@@ -62,6 +63,7 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
       {model.tab === "whitelist" && model.whitelist && <WhitelistPanel model={model.whitelist} />}
       {model.tab === "config" && model.config && <ConfigPanel model={model.config} />}
       {model.tab === "console" && model.console && <ConsolePanel model={model.console} />}
+      {model.tab === "log" && model.log && <LogPanel model={model.log} />}
       {model.tab === "metrics" && model.metrics && <MetricsPanel model={model.metrics} />}
       <span className="visually-hidden">{game.displayName}</span>
     </Page>

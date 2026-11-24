@@ -65,11 +65,19 @@ data "aws_iam_policy_document" "access_api" {
   }
 
   # Retiring a release (ADR-0080) is one asynchronous call to one function, under
-  # release.retire, which only the Owner role holds. No other Lambda is reachable.
+  # release.retire, which only the Owner role holds.
   statement {
     sid       = "RequestReleaseRetirement"
     actions   = ["lambda:InvokeFunction"]
     resources = [local.release_retirement_function_arn]
+  }
+
+  # The log assistant's worker (ADR-0094), under assistant.use, which only the
+  # Owner role holds. No other Lambda is reachable.
+  statement {
+    sid       = "StartAssistantAnswers"
+    actions   = ["lambda:InvokeFunction"]
+    resources = [aws_lambda_function.assistant.arn]
   }
 
   statement {
@@ -359,6 +367,13 @@ resource "aws_lambda_function" "access_api" {
       CONNECTION_HOST                  = var.connection_host
       CONSOLE_DOCUMENT_NAME            = aws_ssm_document.console.name
       WHITELIST_DOCUMENT_NAME          = aws_ssm_document.whitelist.name
+      WORLD_LOG_DOCUMENT_NAME          = aws_ssm_document.world_log.name
+      ASSISTANT_FUNCTION_NAME          = aws_lambda_function.assistant.function_name
+      ASSISTANT_ENABLED                = local.assistant_environment.ASSISTANT_ENABLED
+      ASSISTANT_MONTHLY_CAP_USD        = local.assistant_environment.ASSISTANT_MONTHLY_CAP_USD
+      ASSISTANT_HAIKU_MODEL_ID         = local.assistant_environment.ASSISTANT_HAIKU_MODEL_ID
+      ASSISTANT_SONNET_MODEL_ID        = local.assistant_environment.ASSISTANT_SONNET_MODEL_ID
+      ASSISTANT_PRICES                 = local.assistant_environment.ASSISTANT_PRICES
       SPAWNPOINT_PLACEMENT             = var.placement
       SPAWNPOINT_LAUNCH                = var.launch
       SPAWNPOINT_APP_COMMIT            = var.app_commit
@@ -469,6 +484,10 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/config-files/content",
     "PUT /games/{gameId}/worlds/{worldId}/config-files",
     "DELETE /games/{gameId}/worlds/{worldId}/config-files",
+    "POST /games/{gameId}/worlds/{worldId}/log",
+    "GET /games/{gameId}/worlds/{worldId}/log/{readId}",
+    "POST /games/{gameId}/worlds/{worldId}/assistant",
+    "GET /games/{gameId}/worlds/{worldId}/assistant/{answerId}",
     "POST /games/{gameId}/worlds/{worldId}/archive",
     "POST /games/{gameId}/worlds/{worldId}/wipe",
     "POST /games/{gameId}/worlds/{worldId}/restore",

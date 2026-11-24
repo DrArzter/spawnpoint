@@ -195,5 +195,9 @@ test("a capability is advertised only while its route exists", async () => {
     assert.ok(deployed.has(routeKey), `capability points at ${routeKey}, which is not deployed`);
     assert.ok(Object.hasOwn(routes, routeKey), `capability points at ${routeKey}, which the handler does not declare`);
   }
-  assert.equal(deployedCapabilities().length, named.length, "every mapped capability should be advertised by this build");
+  // The assistant is advertised only where the deployment switched it on and
+  // set its limits (ADR-0094); this build has no settings for it.
+  const advertised = deployedCapabilities();
+  assert.equal(advertised.length, named.length - 1, "every other mapped capability should be advertised by this build");
+  assert.ok(!advertised.includes("assistant"), "the assistant is off until the deployment switches it on");
 });

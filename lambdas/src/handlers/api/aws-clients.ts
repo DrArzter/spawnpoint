@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 import { SSMClient } from "@aws-sdk/client-ssm";
 
 // Reused across invocations. Client construction neither reads feature
@@ -8,3 +9,4 @@ import { SSMClient } from "@aws-sdk/client-ssm";
 export const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 export const events = new EventBridgeClient({});
 export const ssm = new SSMClient({});
+export const lambda = new LambdaClient({});

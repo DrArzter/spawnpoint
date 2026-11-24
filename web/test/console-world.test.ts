@@ -66,6 +66,7 @@ const model: WorldModel = {
   releases: { rows: [], state: "available", mods: null, changes: null },
   whitelist: null,
   config: null,
+  log: null,
   console: null,
   metrics: null,
   siblings: [

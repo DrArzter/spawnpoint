@@ -1,4 +1,4 @@
-import { ApiError, type AccessInvitation, type AccessRoleDraft, type AuthState, type MetricRange, type ReleaseModQuery, type ReleasePackName, type SpawnpointApi } from "../api/contract";
+import { ApiError, type AccessInvitation, type AssistantModel, type AccessRoleDraft, type AuthState, type MetricRange, type ReleaseModQuery, type ReleasePackName, type SpawnpointApi } from "../api/contract";
 import { demoSession } from "./data";
 import { UNREACHABLE } from "../api/error-text";
 import { clearDemoFlag, demoFailure, demoLatency, type DemoFailureCall } from "./flag";
@@ -282,6 +282,26 @@ export const demoApi: SpawnpointApi = {
   async resetConfigFile(gameId: string, worldId: string, path: string, expected: string | null) {
     await demoLatency();
     store.resetConfigFile(gameId, worldId, path, expected);
+  },
+
+  async requestWorldLog(gameId: string, worldId: string) {
+    await demoLatency();
+    return store.requestWorldLog(gameId, worldId);
+  },
+
+  async loadWorldLog(gameId: string, worldId: string, readId: string) {
+    await demoLatency();
+    return store.worldLog(gameId, worldId, readId);
+  },
+
+  async askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>) {
+    await demoLatency();
+    return store.askAssistant(gameId, worldId, question);
+  },
+
+  async loadAssistantAnswer(gameId: string, worldId: string, answerId: string) {
+    await demoLatency();
+    return store.assistantAnswer(gameId, worldId, answerId);
   },
 
   async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery) {

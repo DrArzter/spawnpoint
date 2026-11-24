@@ -158,6 +158,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0091](0091-the-access-table-is-a-port.md) | The access table is a port | Accepted | M6 |
 | [0092](0092-a-lambda-entry-is-its-composition-root.md) | A Lambda entry is its composition root | Accepted | M6 |
 | [0093](0093-a-world-keeps-its-own-config-files.md) | A world keeps its own config files | Accepted | M6 |
+| [0094](0094-read-a-world-log-and-ask-a-model-about-it.md) | Read a world's log, and ask a model about it | Accepted | M6 |
 
 ## Decisions still to record
 

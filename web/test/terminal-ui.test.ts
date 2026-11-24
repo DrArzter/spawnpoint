@@ -7,7 +7,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action } from "../src/core/actions.ts";
-import { Address, Drawer, Field, FilterRow, Indicator, LoadError, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table, TextArea } from "../src/skins/terminal/ui.tsx";
+import { Address, Drawer, Field, FilterRow, Indicator, LoadError, Log, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table, TextArea } from "../src/skins/terminal/ui.tsx";
 
 test("terminal dense status keeps one visible mark and an accessible label", () => {
   const markup = renderToStaticMarkup(createElement(Indicator, { kind: "ok", label: "Verified" }));
@@ -180,4 +180,11 @@ test("a wide drawer holds a whole file: its field and text area fill the height 
   assert.match(markup, /<label class="t-field t-field-fill">/);
   assert.match(markup, /<textarea class="t-textarea t-textarea-fill"/);
   assert.match(renderToStaticMarkup(createElement(Drawer, { onClose: () => undefined, open: true, title: "Invite" })), /class="t-drawer"/);
+});
+
+test("a terminal log line of the game's own keeps no time of ours, and a whole log is the tall variant", () => {
+  const markup = renderToStaticMarkup(createElement(Log, { label: "World A: game log", rows: [{ id: "a", at: null, text: "[12:00:01] Done", tone: "warning" }], tall: true }));
+  assert.match(markup, /class="t-log t-log-tall"/);
+  assert.doesNotMatch(markup, /<time/);
+  assert.match(markup, /Warning: <\/span>\[12:00:01\] Done/);
 });

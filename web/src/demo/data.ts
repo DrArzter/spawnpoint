@@ -1,5 +1,5 @@
 import type { AccessCandidate, AccessIdentity, AccessPermission, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../api/contract";
-import type { ConsoleEntry } from "../api/contract";
+import type { AssistantAnswer, ConsoleEntry, WorldLogRead } from "../api/contract";
 import type { ControlPlaneSnapshot, Game, SettingDefinition, World, WorldSession } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";
 
@@ -52,6 +52,11 @@ export type DemoState = {
   serverWhitelists: Record<string, string[]>;
   /** What each world edited or added in its config files (ADR-0093), by world then path; `base` is the release digest the edit started from. */
   configEdits: Record<string, Record<string, { text: string; base: string | null; updatedAt: string; updatedBy: string }>>;
+  /** Log reads and assistant answers by id (ADR-0094); `world` keys each to its world. */
+  worldLogs: Record<string, { world: string; read: WorldLogRead }>;
+  answers: Record<string, { world: string; answer: AssistantAnswer }>;
+  /** Questions asked today, for the assistant's daily limit. */
+  questionsToday: number;
   /** Effects that land when their time passes; read calls settle them. */
   scheduled: { operationId: string; at: number; apply: (state: DemoState) => void }[];
   /** How far each operation has come, by id; read by the operation progress call. */
@@ -65,8 +70,8 @@ export const demoSession: ActiveSession = {
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
-  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "configFiles", "releasePromotion", "operationProgress"],
-  role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "config.edit", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
+  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "configFiles", "worldLog", "assistant", "releasePromotion", "operationProgress"],
+  role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "config.edit", "log.read", "assistant.use", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
@@ -83,6 +88,8 @@ export const PERMISSION_CATALOGUE: readonly AccessPermission[] = [
   { id: "console.use", group: "Worlds", label: "Use the console", description: "Run RCON commands, recorded against your identity.", reserved: false },
   { id: "whitelist.manage", group: "Worlds", label: "Manage the whitelist", description: "Choose which players may join a world.", reserved: false },
   { id: "config.edit", group: "Worlds", label: "Edit config files", description: "Change a world's config files; they apply at its next start.", reserved: false },
+  { id: "log.read", group: "Worlds", label: "Read the log", description: "Read a running world's recent log, without addresses or player names.", reserved: false },
+  { id: "assistant.use", group: "Worlds", label: "Ask the assistant", description: "Ask an AI model to explain a world's log; each answer is paid for by the deployment.", reserved: true },
   { id: "release.read", group: "Releases", label: "See releases", description: "See presets and the releases built from them.", reserved: false },
   { id: "release.build", group: "Releases", label: "Build", description: "Build releases and retry failed build attempts.", reserved: false },
   { id: "release.promote", group: "Releases", label: "Promote", description: "Move a world onto another release.", reserved: false },
@@ -294,6 +301,9 @@ export function initialState(): DemoState {
     serverWhitelists: {
       "minecraft/minecraft-creative-5e1c9a07": ["DrArzter", "Mira"],
     },
+    worldLogs: {},
+    answers: {},
+    questionsToday: 0,
     configEdits: {
       // The release's claims.toml has changed since this edit started from it.
       "minecraft/minecraft-rostik-12345678": {

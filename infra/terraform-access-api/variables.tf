@@ -278,3 +278,54 @@ variable "app_commit" {
     error_message = "app_commit must be a commit hash or a ref name that starts with a letter or digit."
   }
 }
+
+variable "assistant_enabled" {
+  description = "Whether owners may ask an AI model to explain a world's log (ADR-0094). Off by default: each answer is paid for by this account through Amazon Bedrock."
+  type        = bool
+  default     = false
+}
+
+variable "assistant_monthly_cap_usd" {
+  description = "The most the log assistant may spend in one UTC month, in US dollars, estimated from token counts and assistant_prices (ADR-0094). The cap is checked before each question, so one answer may pass it."
+  type        = number
+  default     = 5
+
+  validation {
+    condition     = var.assistant_monthly_cap_usd > 0 && var.assistant_monthly_cap_usd <= 100
+    error_message = "assistant_monthly_cap_usd must be more than 0 and at most 100."
+  }
+}
+
+variable "assistant_haiku_model_id" {
+  description = "The Bedrock inference profile the assistant's Haiku choice calls. An EU profile keeps the log in the EU."
+  type        = string
+  default     = "eu.anthropic.claude-haiku-5-5"
+
+  validation {
+    condition     = can(regex("^eu\\.anthropic\\.[a-z0-9.-]+$", var.assistant_haiku_model_id))
+    error_message = "assistant_haiku_model_id must be an EU Anthropic inference profile id."
+  }
+}
+
+variable "assistant_sonnet_model_id" {
+  description = "The Bedrock inference profile the assistant's Sonnet choice calls. An EU profile keeps the log in the EU."
+  type        = string
+  default     = "eu.anthropic.claude-sonnet-5-5"
+
+  validation {
+    condition     = can(regex("^eu\\.anthropic\\.[a-z0-9.-]+$", var.assistant_sonnet_model_id))
+    error_message = "assistant_sonnet_model_id must be an EU Anthropic inference profile id."
+  }
+}
+
+variable "assistant_prices" {
+  description = "Each assistant model's price in US dollars per million input and output tokens, for the monthly cap's estimate. Check them against Amazon Bedrock's pricing for the EU profiles."
+  type = object({
+    haiku  = object({ input = number, output = number })
+    sonnet = object({ input = number, output = number })
+  })
+  default = {
+    haiku  = { input = 0.1, output = 0.5 }
+    sonnet = { input = 2, output = 10 }
+  }
+}

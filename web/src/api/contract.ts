@@ -6,6 +6,8 @@ import type { BackupEntry, BackupInventory } from "../../../contract/backups";
 import type { ApiErrorCode } from "../../../contract/errors";
 import type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermission, AccessRole, AccessRoleDirectory, AccountProfile, AppearancePreference, ApprovedIdentity, InvitationRecipient, InvitationSummary, IssuedAccessInvitation, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, RoleDefinition, SubscriptionState, VisitorSession, ActiveSession as ServedSession } from "../../../contract/access";
 import type { HostLogLine, OperationProgress, OperationStep } from "../../../contract/operations";
+import type { WorldLogRead } from "../../../contract/world-log";
+import type { AssistantAnswer, AssistantModel } from "../../../contract/assistant";
 import type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../contract/config-files";
 
 // Shapes the API and the panel share live in ../contract (review X2).
@@ -14,6 +16,9 @@ export type { ApiErrorCode };
 export type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermission, AccessRole, AccessRoleDirectory, AccountProfile, AppearancePreference, ApprovedIdentity, InvitationRecipient, InvitationSummary, IssuedAccessInvitation, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, RoleDefinition, SubscriptionState, VisitorSession };
 /** A signed-in session; `demo` is set by a transport whose data is not real, so the panel can say so. */
 export type ActiveSession = ServedSession & Readonly<{ demo?: boolean }>;
+/** A world's recent log and the owner's log assistant (contract/world-log.ts, contract/assistant.ts). */
+export type { WorldLogRead, WorldLogStatus } from "../../../contract/world-log";
+export type { AssistantAnswer, AssistantModel } from "../../../contract/assistant";
 /** A world's own config files (contract/config-files.ts). */
 export type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../contract/config-files";
 export type { BackupEntry, BackupInventory, ConsoleEntry, HostLogLine, HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
@@ -256,6 +261,13 @@ export type SpawnpointApi = Readonly<{
   saveConfigFile(gameId: string, worldId: string, path: string, text: string, expectedSha256: string | null): Promise<SavedConfigFile>;
   /** Drops the world's edit so the next start takes the release's file; `expected` is the world's digest. */
   resetConfigFile(gameId: string, worldId: string, path: string, expected: string | null): Promise<void>;
+  /** Asks the world's host for its game's newest lines (ADR-0094); read them with loadWorldLog. */
+  requestWorldLog(gameId: string, worldId: string): Promise<WorldLogRead>;
+  /** One log read, with addresses and player names replaced by tokens; `pending` until the host answers. */
+  loadWorldLog(gameId: string, worldId: string, readId: string): Promise<WorldLogRead>;
+  /** Asks the model to explain a finished log read; answered later through loadAssistantAnswer. */
+  askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>): Promise<AssistantAnswer>;
+  loadAssistantAnswer(gameId: string, worldId: string, answerId: string): Promise<AssistantAnswer>;
   /** A release's server mods, from its manifest. */
   loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage>;
   /** What a release changes: against `from`, or, with null, against what its build compared it with; null when that build kept no plan. */

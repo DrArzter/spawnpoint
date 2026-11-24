@@ -1,7 +1,7 @@
 import { type Identity } from "../../access/domain.ts";
 import { type TableKey } from "../../access/keys.ts";
 import {
-  accessIndexName, accessInvitationPrefix, accountItemKey, accountSort, consolePrefix, downloadPrefix, emailActionPrefix, identityIndex,
+  accessIndexName, accessInvitationPrefix, assistantAnswerPrefix, assistantConversationPrefix, worldLogPrefix, accountItemKey, accountSort, consolePrefix, downloadPrefix, emailActionPrefix, identityIndex,
   isLoginProviderSort, oauthCredentialPrefix, accessInvitationProofSort, parseAccountKey, playerInvitationPrefix, profileKey, profileSort,
   identityPartition, sessionAccountIndex,
 } from "../../access/keys.ts";
@@ -38,7 +38,7 @@ type Key = TableKey;
 type Account = Readonly<{ key: Key; provider: string; subject: string; email: string | null }>;
 
 type Counts = {
-  removed: { accounts: number; credentials: number; loginSessions: number; oauth: number; emailActions: number; invitations: number; playerInvitations: number; avatars: number };
+  removed: { accounts: number; credentials: number; loginSessions: number; oauth: number; emailActions: number; invitations: number; playerInvitations: number; avatars: number; assistant: number };
   revoked: { accessInvitations: number };
   anonymised: { console: number; downloads: number; worlds: number; bootstrap: number };
 };
@@ -140,6 +140,8 @@ function placeholders(prefix: string, count: number): string {
 type Secondary = Readonly<{
   oauth: Item[]; emailActions: Item[]; invitee: Item[]; proofs: Item[]; playerInvitations: Item[];
   pendingInvitations: Item[]; console: Item[]; downloads: Item[]; bootstrap: Item | null;
+  /** The person's conversations and answers with the assistant, and their log reads (ADR-0094, ADR-0096). */
+  assistant: Item[];
 }>;
 
 // OAuth credentials, email actions and player invitations have no index by
@@ -175,6 +177,7 @@ async function secondaryRecords(identityId: string, accounts: readonly Account[]
     console: items.filter((item) => named(item) && is(item, consolePrefix) && item.display_name !== undefined),
     downloads: items.filter((item) => named(item) && is(item, downloadPrefix) && item.display_name !== undefined),
     bootstrap: items.find((item) => named(item) && item.pk === "SYSTEM" && item.sk === "BOOTSTRAP") ?? null,
+    assistant: items.filter((item) => named(item) && [assistantConversationPrefix, assistantAnswerPrefix, worldLogPrefix].some((prefix) => is(item, prefix))),
   };
 }
 
@@ -347,6 +350,7 @@ async function sweepRemainder(identityId: string, accounts: readonly Account[], 
     counts.anonymised.downloads += await forgetName(after.downloads);
     counts.anonymised.worlds += await anonymiseWorlds(identityId, worlds());
     counts.removed.avatars += await deleteIdentityAvatars(identityId);
+    counts.removed.assistant += await remove(after.assistant);
     return "complete";
   } catch (error) {
     console.error(JSON.stringify({
@@ -375,7 +379,7 @@ export async function deleteIdentity(caller: Identity, identityId: string, world
   const credentials = await passwordCredentialItems(accounts);
   const before = await secondaryRecords(identityId, accounts);
   const counts: Counts = {
-    removed: { accounts: 0, credentials: 0, loginSessions: 0, oauth: 0, emailActions: 0, invitations: 0, playerInvitations: 0, avatars: 0 },
+    removed: { accounts: 0, credentials: 0, loginSessions: 0, oauth: 0, emailActions: 0, invitations: 0, playerInvitations: 0, avatars: 0, assistant: 0 },
     revoked: { accessInvitations: 0 },
     anonymised: { console: 0, downloads: 0, worlds: 0, bootstrap: 0 },
   };

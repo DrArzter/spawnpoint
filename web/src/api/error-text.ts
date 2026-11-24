@@ -165,6 +165,12 @@ export const API_ERROR_TEXT: Readonly<Record<ApiErrorCode, string>> = {
   assistant_monthly_limit: "The assistant has reached this month's spending cap.",
   invalid_assistant_request: "Choose a model, and keep the question under 500 characters.",
   unknown_assistant_answer: "This answer has expired. Ask again.",
+  unknown_conversation: "This conversation no longer exists. Start a new one.",
+  unknown_proposal: "This proposal no longer exists. Refresh the conversation.",
+  proposal_decided: "This proposal was already decided.",
+  conversation_changed: "The conversation changed meanwhile. Refresh it and try again.",
+  conversation_busy: "The assistant is still working, or waits for your decision on its proposals.",
+  conversation_full: "This conversation is too long. Start a new one.",
 
   // Promotion (a variable carries these)
   release_retired: "That release is retired or being retired. Choose another.",

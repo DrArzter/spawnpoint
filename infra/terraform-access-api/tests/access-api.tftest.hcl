@@ -912,9 +912,18 @@ run "the_log_assistant_is_off_by_default_and_reaches_only_its_eu_models" {
   assert {
     condition = alltrue([
       for statement in data.aws_iam_policy_document.assistant.statement :
-      alltrue([for action in statement.actions : contains(["dynamodb:UpdateItem", "bedrock:InvokeModel"], action)])
+      alltrue([for action in statement.actions : contains(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "bedrock:InvokeModel", "lambda:InvokeFunction"], action)])
     ])
-    error_message = "The assistant's worker may only settle answers and call Bedrock."
+    error_message = "The assistant's worker may only keep its answers and conversations, call Bedrock, and ask the API for reads."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for statement in data.aws_iam_policy_document.assistant.statement : [
+        for resource in statement.resources : resource == "arn:aws:lambda:eu-central-1:123456789012:function:spawnpoint-access-api"
+      ] if contains(statement.actions, "lambda:InvokeFunction")
+    ]))
+    error_message = "The worker may invoke the access API and no other function."
   }
 
   assert {

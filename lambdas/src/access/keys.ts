@@ -107,3 +107,9 @@ export const assistantAnswerKey = (worldId: string, answerId: string): TableKey 
 export const assistantDailyUseKey = (identityId: string, day: string): TableKey => ({ pk: `ASSISTANT_USE#${identityId}`, sk: day });
 /** What the deployment's assistant cost in one UTC month, in millionths of a dollar. */
 export const assistantMonthlySpendKey = (month: string): TableKey => ({ pk: "ASSISTANT_SPEND", sk: month });
+
+export const assistantConversationPrefix = "ASSISTANT_CONVERSATION#";
+/** One owner's conversations with the assistant (ADR-0096), by id. */
+export const assistantConversationKey = (identityId: string, conversationId: string): TableKey =>
+  ({ pk: `${assistantConversationPrefix}${identityId}`, sk: conversationId });
+export const assistantConversationPartition = (identityId: string): string => `${assistantConversationPrefix}${identityId}`;

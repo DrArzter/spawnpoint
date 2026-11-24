@@ -1,0 +1,1610 @@
+[
+  {
+    "name": "approve_access_request",
+    "title": "Approve access request",
+    "description": "Give a waiting account access to the panel with a role, and optionally direct grants.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The waiting account's login provider, from list_access_candidates"
+        },
+        "platformUserId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The waiting account's id at its provider, from list_access_candidates"
+        },
+        "roleId": {
+          "type": "string",
+          "description": "Role ID from list_roles; left out, the default role"
+        },
+        "directGrants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Permission ids given on top of the role"
+        }
+      },
+      "required": [
+        "platform",
+        "platformUserId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "archive_world",
+    "title": "Archive world",
+    "description": "Archive a stopped world: it keeps its backups and can be restored, but cannot start until then.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "build_release",
+    "title": "Build release",
+    "description": "Build a new release of a preset from its current definition, or retry a failed build. Building takes several minutes; follow it in get_control_plane.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "presetId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preset ID from get_control_plane"
+        },
+        "profileDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The preset definition's digest from get_control_plane, so a preset that changed meanwhile is refused"
+        },
+        "retryRelease": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "A failed release to build again"
+        }
+      },
+      "required": [
+        "gameId",
+        "presetId",
+        "profileDigest"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "change_person_role",
+    "title": "Change a person's role",
+    "description": "Give a person another role. You cannot change your own role, nor remove the last Owner.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "identityId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identity ID from list_identities",
+          "pattern": "^[0-9a-f-]{36}$"
+        },
+        "roleId": {
+          "type": "string",
+          "description": "Role ID from list_roles"
+        }
+      },
+      "required": [
+        "identityId",
+        "roleId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_access_invitation",
+    "title": "Invite a person to the panel",
+    "description": "Create an invitation link to the panel, and send it by email when an address is given.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Where to send the link; left out, the link is only returned"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_role",
+    "title": "Create role",
+    "description": "Create a panel role with a set of permissions.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
+          "description": "The role's id, lowercase"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "The role's name"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What the role is for"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Permission ids from list_roles' catalogue; you can give only permissions you hold"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "permissions"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_world",
+    "title": "Create world",
+    "description": "Create a world from a preset on one of its built releases. It starts stopped; start it with start_world.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "presetId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preset ID from get_control_plane"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The world's name, as players see it"
+        },
+        "release": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "A release version of the world's preset, from get_control_plane"
+        },
+        "placement": {
+          "type": "string",
+          "enum": [
+            "configured",
+            "fleet"
+          ],
+          "description": "Where the world runs: the deployment's configured host, or a host launched for it"
+        },
+        "connectivity": {
+          "type": "string",
+          "enum": [
+            "zerotier",
+            "raw",
+            "route53"
+          ],
+          "description": "How players reach it: the ZeroTier network, the host's public address, or a DNS name"
+        },
+        "auth": {
+          "type": "string",
+          "enum": [
+            "game",
+            "external"
+          ],
+          "description": "Who checks a player: the game's own accounts, or an external whitelist; needed unless connectivity is zerotier"
+        }
+      },
+      "required": [
+        "gameId",
+        "presetId",
+        "displayName",
+        "release"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_person",
+    "title": "Delete person",
+    "description": "Delete a person's identity and access, and remove their name from what they did.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "identityId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identity ID from list_identities",
+          "pattern": "^[0-9a-f-]{36}$"
+        }
+      },
+      "required": [
+        "identityId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_role",
+    "title": "Delete role",
+    "description": "Delete a role nobody holds and that is not the default.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "roleId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Role ID from list_roles",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The role's version from list_roles, so a role changed meanwhile is refused"
+        }
+      },
+      "required": [
+        "roleId",
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "dismiss_access_request",
+    "title": "Dismiss access request",
+    "description": "Dismiss a waiting account's request for access.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The waiting account's login provider, from list_access_candidates"
+        },
+        "platformUserId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The waiting account's id at its provider, from list_access_candidates"
+        }
+      },
+      "required": [
+        "platform",
+        "platformUserId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_backup_download_link",
+    "title": "Get backup download link",
+    "description": "Create a download link, valid for five minutes, for one backup archive of a world, named by its key from list_world_backups. Who asked is recorded.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The archive's key from list_world_backups"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "key"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_console_history",
+    "title": "Get console history",
+    "description": "Read a world's recent console commands, newest first, with who ran each and the game's answer.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_console_result",
+    "title": "Get console result",
+    "description": "Read the answer to one console command by the id send_console_command returned. Its status stays pending until the game answers.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "commandId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The id send_console_command returned"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "commandId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_control_plane",
+    "title": "Get Spawnpoint control plane",
+    "description": "List games, worlds, sessions, hosts, releases, permissions, and their current state. Call this before a world action.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_host_metrics",
+    "title": "Get host metrics",
+    "description": "Read recent metrics for one host shown by get_control_plane. Name it by hostId.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Host ID from get_control_plane"
+        },
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The old name of hostId: give hostId instead"
+        },
+        "range": {
+          "type": "string",
+          "enum": [
+            "6h",
+            "24h",
+            "7d"
+          ],
+          "default": "24h",
+          "description": "How far back to read"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_operation_progress",
+    "title": "Get operation progress",
+    "description": "Read how far a world's start, stop or other operation has come: its steps and the host's own lines.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The operation's id, from get_control_plane or the call that started it"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "operationId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_release",
+    "title": "Get release",
+    "description": "Read one release: its loader, runtime, source preset, server mods and, when players install a different set, the players' mods, each with its SHA-256 digest.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "presetId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preset ID from get_control_plane"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Release version from get_control_plane, for example 1.2",
+          "pattern": "^\\d+\\.\\d+$"
+        }
+      },
+      "required": [
+        "gameId",
+        "presetId",
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_release_diff",
+    "title": "Compare releases",
+    "description": "Read what a release changes: the mods and files added, removed or changed, against another release or the one its build compared it with.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "presetId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preset ID from get_control_plane"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Release version from get_control_plane, for example 1.2",
+          "pattern": "^\\d+\\.\\d+$"
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "The release to compare with; left out, the one its build compared it with"
+        }
+      },
+      "required": [
+        "gameId",
+        "presetId",
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_release_mod_link",
+    "title": "Get release mod link",
+    "description": "Create a download link, valid for fifteen minutes, for one mod of a release, server or players', named by its SHA-256 digest from get_release.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "presetId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preset ID from get_control_plane"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Release version from get_control_plane, for example 1.2",
+          "pattern": "^\\d+\\.\\d+$"
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The mod's SHA-256 digest from get_release",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "gameId",
+        "presetId",
+        "version",
+        "sha256"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_release_pack_link",
+    "title": "Get release pack link",
+    "description": "Create a temporary download link for a release's server pack or full client pack.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "presetId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preset ID from get_control_plane"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Release version from get_control_plane, for example 1.2",
+          "pattern": "^\\d+\\.\\d+$"
+        },
+        "pack": {
+          "type": "string",
+          "enum": [
+            "server",
+            "full"
+          ],
+          "description": "Which pack: the server's files, or the full client pack"
+        }
+      },
+      "required": [
+        "gameId",
+        "presetId",
+        "version",
+        "pack"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_whitelist",
+    "title": "Get whitelist",
+    "description": "Read the players who may join a world: the names its record keeps, or the running server's own list.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_world_log_result",
+    "title": "Get world log result",
+    "description": "Read the lines of one log read by the id read_world_log returned. Its status stays pending until the host answers.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "readId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The id read_world_log returned"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "readId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_world_metrics",
+    "title": "Get world metrics",
+    "description": "Read recent metrics for one world's session: players, tick time, memory and processor.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "range": {
+          "type": "string",
+          "enum": [
+            "6h",
+            "24h",
+            "7d"
+          ],
+          "default": "24h",
+          "description": "How far back to read"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_world_pack",
+    "title": "Get world client pack",
+    "description": "Create a temporary download link for the client pack used by the world's active release.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "invite_players",
+    "title": "Invite players",
+    "description": "Send an invitation to play a world through the Telegram bot: to everyone, or to the people named.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "broadcast",
+            "direct"
+          ],
+          "description": "Everyone the bot can reach, or only the people named"
+        },
+        "recipientIdentityIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "maxItems": 100,
+          "description": "For direct: identity ids from list_invitation_recipients"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "audience"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_access_candidates",
+    "title": "List access requests",
+    "description": "List the accounts waiting for access to the panel.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_access_invitations",
+    "title": "List access invitations",
+    "description": "List the invitations to the panel that are still open.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_config_files",
+    "title": "List config files",
+    "description": "List the config files a world may edit: the release's files and the world's own versions, with their digests.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_identities",
+    "title": "List people",
+    "description": "List the people with access to the panel, their roles, direct grants and linked accounts.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_invitation_recipients",
+    "title": "List invitation recipients",
+    "description": "List the people a player invitation can go to directly, with whether the Telegram bot can reach each.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_roles",
+    "title": "List roles",
+    "description": "List the panel's roles with their permissions, who holds each, the default role, and the catalogue of permissions.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_world_backups",
+    "title": "List world backups",
+    "description": "List recoverable backups for one Spawnpoint world.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_world_invitations",
+    "title": "List world invitations",
+    "description": "List the invitations sent for a world, newest first.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "promote_world",
+    "title": "Move world to a release",
+    "description": "Move a world onto another built release of its preset, keeping its map. A running world is stopped, backed up and started again.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "release": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "The release to move to"
+        },
+        "startAfter": {
+          "type": "boolean",
+          "description": "Start the world afterwards (the default)"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "release"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "purge_world",
+    "title": "Delete world permanently",
+    "description": "Delete an archived world and every backup of it, permanently.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "confirmation": {
+          "type": "string",
+          "description": "The world's id again, to confirm"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "confirmation"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_config_file",
+    "title": "Read config file",
+    "description": "Read one config file as the world's next start will write it, with its SHA-256 digest.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The file's path from list_config_files, for example config/claims.toml"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_world_log",
+    "title": "Read world log",
+    "description": "Ask a running world's host for the game's recent log, about its last 200 lines. Returns the read's id; read the lines with get_world_log_result. Addresses, ids and player names are replaced by tokens.",
+    "effect": "read",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "reset_config_file",
+    "title": "Reset config file",
+    "description": "Drop the world's own version of a config file, so the next start takes the release's file.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The file's path from list_config_files, for example config/claims.toml"
+        },
+        "expected": {
+          "type": "string",
+          "description": "The world's version's digest from list_config_files"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "restore_backup",
+    "title": "Restore backup",
+    "description": "Restore one of a world's backups, which opens a new wipe from it. The current map is backed up first.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "backupKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The archive's key from list_world_backups"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "backupKey"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "retire_release",
+    "title": "Retire release",
+    "description": "Retire a release so no world can move onto it, and remove its files once no world uses it.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "presetId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preset ID from get_control_plane"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Release version from get_control_plane, for example 1.2",
+          "pattern": "^\\d+\\.\\d+$"
+        },
+        "confirmation": {
+          "type": "string",
+          "description": "gameId/presetId@version, to confirm"
+        }
+      },
+      "required": [
+        "gameId",
+        "presetId",
+        "version",
+        "confirmation"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "revoke_access_invitation",
+    "title": "Revoke access invitation",
+    "description": "Revoke an open invitation to the panel, so its link no longer works.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "invitationId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Access invitation ID from list_access_invitations"
+        }
+      },
+      "required": [
+        "invitationId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "save_config_file",
+    "title": "Save config file",
+    "description": "Save the whole text of one config file as the world's own version. It applies at the world's next start.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The file's path from list_config_files, for example config/claims.toml"
+        },
+        "text": {
+          "type": "string",
+          "description": "The file's whole new text"
+        },
+        "expectedSha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The digest read_config_file returned, so a file changed meanwhile is refused; null for a new file"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "path",
+        "text",
+        "expectedSha256"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "send_console_command",
+    "title": "Send console command",
+    "description": "Send one console command to a running world, as the connected person. Commands that stop the game outside its lifecycle are refused. The command is recorded with the person's and this client's names. Returns the command's id; read its answer with get_console_result.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One line, as typed in the game's console"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "command"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "set_default_role",
+    "title": "Set default role",
+    "description": "Choose the role every newly approved person gets.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "defaultRoleId": {
+          "type": "string",
+          "description": "Role ID from list_roles"
+        }
+      },
+      "required": [
+        "defaultRoleId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "set_whitelist",
+    "title": "Set whitelist",
+    "description": "Replace a world's whitelist with this whole list of names. A running world reloads it at once.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 200,
+          "description": "Every player name that may join, as the players type them"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "names"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "start_world",
+    "title": "Start world",
+    "description": "Request that Spawnpoint start one world. The returned operation is asynchronous; poll get_control_plane for completion.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "stop_world",
+    "title": "Stop world",
+    "description": "Request a verified backup and stop for one world. The returned operation is asynchronous; poll get_control_plane for completion.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "players": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "disconnect"
+          ],
+          "description": "With players online: refuse to stop (the default), or disconnect them"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_game_settings",
+    "title": "Change game settings",
+    "description": "Set a world's game settings, such as difficulty or the player limit, by the setting ids get_control_plane lists for its game. They apply at the next start.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Setting id to value; a setting left out keeps its default"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "values"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_role",
+    "title": "Change role",
+    "description": "Change a role's name, description and permissions. Everyone holding it is affected at once.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "roleId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Role ID from list_roles",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The role's version from list_roles, so a role changed meanwhile is refused"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "The role's name"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What the role is for"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Permission ids from list_roles' catalogue; you can give only permissions you hold"
+        }
+      },
+      "required": [
+        "roleId",
+        "version",
+        "name",
+        "permissions"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_world_settings",
+    "title": "Change world hosting",
+    "description": "Change where a stopped world runs and how players reach it. Refused while the world runs.",
+    "effect": "write",
+    "destructive": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "placement": {
+          "type": "string",
+          "enum": [
+            "configured",
+            "fleet"
+          ],
+          "description": "Where the world runs: the deployment's configured host, or a host launched for it"
+        },
+        "connectivity": {
+          "type": "string",
+          "enum": [
+            "zerotier",
+            "raw",
+            "route53"
+          ],
+          "description": "How players reach it: the ZeroTier network, the host's public address, or a DNS name"
+        },
+        "auth": {
+          "type": "string",
+          "enum": [
+            "game",
+            "external"
+          ],
+          "description": "Who checks a player: the game's own accounts, or an external whitelist; needed unless connectivity is zerotier"
+        },
+        "warm": {
+          "type": "boolean",
+          "description": "Keep its launched host stopped, not destroyed, between sessions (fleet only)"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "wipe_world",
+    "title": "Wipe world",
+    "description": "Start a new wipe of a world on a release: the current map is backed up and closed, and the next start makes a new one.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Game ID from get_control_plane, for example minecraft"
+        },
+        "worldId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World ID from get_control_plane"
+        },
+        "release": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "A release version of the world's preset, from get_control_plane"
+        }
+      },
+      "required": [
+        "gameId",
+        "worldId",
+        "release"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

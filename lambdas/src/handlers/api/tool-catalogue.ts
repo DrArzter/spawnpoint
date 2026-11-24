@@ -159,3 +159,12 @@ export function localToolsJson(tools: readonly CatalogueTool[], builtIn: readonl
   }));
   return `${JSON.stringify([...builtIn, ...derived].sort((left, right) => String(left.name) < String(right.name) ? -1 : 1), null, 2)}\n`;
 }
+
+/** Every tool as the assistant's model is offered it (ADR-0096): no route, no permission. */
+export function assistantToolsJson(tools: readonly CatalogueTool[]): string {
+  const offered = tools.map((tool) => ({
+    name: tool.facts.name, title: tool.facts.title, description: tool.facts.description,
+    effect: tool.facts.effect, destructive: tool.facts.destructive === true, inputSchema: tool.inputSchema,
+  }));
+  return `${JSON.stringify(offered, null, 2)}\n`;
+}

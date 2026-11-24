@@ -160,6 +160,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0093](0093-a-world-keeps-its-own-config-files.md) | A world keeps its own config files | Accepted | M6 |
 | [0094](0094-read-a-world-log-and-ask-a-model-about-it.md) | Read a world's log, and ask a model about it | Accepted | M6 |
 | [0095](0095-every-route-declares-its-tool-once.md) | Every route declares its tool once | Accepted | M6 |
+| [0096](0096-the-assistant-reads-as-the-owner-and-proposes-writes.md) | The assistant reads as the Owner and proposes every write | Accepted | M6 |
 
 ## Decisions still to record
 

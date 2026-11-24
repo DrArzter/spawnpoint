@@ -13,6 +13,12 @@ export type Event = Readonly<{
   cookies?: string[];
   body?: string;
   isBase64Encoded?: boolean;
+  /**
+   * The agent a tool call came through (ADR-0095): an MCP client or the
+   * assistant. Only a call the API builds itself sets it; API Gateway's
+   * events carry no such field.
+   */
+  agent?: Readonly<{ clientId: string; name: string }>;
 }>;
 
 export type Response = Readonly<{ statusCode: number; headers: Record<string, string>; body: string; cookies?: string[] }>;

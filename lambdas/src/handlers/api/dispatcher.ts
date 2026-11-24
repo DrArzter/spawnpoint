@@ -10,6 +10,18 @@ type Authority = Readonly<{
   panelOrigins: readonly string[];
 }>;
 
+/**
+ * The one gate between a resolved identity and a route: what its declared
+ * authority asks of the identity. The dispatcher and a tool call (ADR-0095)
+ * both pass it; a public or session route is no tool, so a tool call to one is
+ * refused.
+ */
+export function identityRefusal(route: Route, identity: Identity): Response | null {
+  if (route.access.kind === "identity") return null;
+  if (route.access.kind !== "permission") return errorResponse(403, "forbidden");
+  return requirePermission(identity, route.access.permission);
+}
+
 // Every HTTP feature shares this boundary; feature handlers only enforce
 // payload-dependent rules. Injectable identity resolution keeps the security
 // contract testable without AWS or login-provider configuration.
@@ -49,9 +61,6 @@ export function createDispatcher(routes: Readonly<Record<string, Route>>, author
 
     const identity = await authority.resolveIdentity(account);
     if (identity === null) return errorResponse(403, "access_not_granted");
-    if (route.access.kind === "identity") return call(identity);
-
-    const forbidden = requirePermission(identity, route.access.permission);
-    return forbidden ?? call(identity);
+    return identityRefusal(route, identity) ?? call(identity);
   };
 }

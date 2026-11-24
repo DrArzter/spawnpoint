@@ -1,21 +1,16 @@
 import { type Identity, type Permission, can, permissionsOf, roleOf } from "../../access/domain.ts";
-import { type McpToolName, mcpTools } from "../../access/mcp-tools.ts";
 import { type OAuthScope, verifyOAuthAccessToken } from "../../access/oauth.ts";
 import { type Response, type JsonObject, InvalidBodyError, parseJsonObject, parseJsonText, response, responseWithHeaders, type Event } from "./http.ts";
-import { type ConsoleAgent } from "./console.ts";
-import { deployedConsole } from "./console-wiring.ts";
 import { oauthClient, oauthProtectedResourceMetadata, oauthIssuer, oauthResource } from "./oauth.ts";
-import { controlPlane } from "./control-plane.ts";
-import { hostMetrics } from "./metrics.ts";
-import { METRIC_RANGE_NAMES } from "../../control-plane/metric-ranges.ts";
-import { deployedBackups } from "./backups-wiring.ts";
-import { deployedReleases } from "./releases-wiring.ts";
-import { deployedWorlds } from "./worlds-wiring.ts";
-import { deployedWorldLog } from "./world-log-wiring.ts";
 import { sessionSigningSecret } from "./aws-secrets.ts";
 import { identityById } from "./identity-store.ts";
+import { type CatalogueTool, runTool } from "./tool-catalogue.ts";
+import { type Route } from "./routing.ts";
 
 type McpRequest = Readonly<{ jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown }>;
+
+/** The route table and its tools, handed in by the composition root (ADR-0095). */
+export type McpCatalogue = Readonly<{ routes: Readonly<Record<string, Route>>; tools: readonly CatalogueTool[] }>;
 
 function mcpJson(id: unknown, result: unknown): Response {
   return response(200, { jsonrpc: "2.0", id, result });
@@ -33,114 +28,58 @@ function mcpToolError(message: string): Response {
   return response(200, { ...mcpResult({ error: message }), isError: true });
 }
 
-function hasMcpToolPermission(identity: Identity, permission: Permission | null): boolean {
-  return permission === null || can(identity, permission);
-}
-
-function worldToolArguments(args: Record<string, unknown>): readonly [string, string] | null {
-  return typeof args.gameId === "string" && args.gameId.length > 0 && typeof args.worldId === "string" && args.worldId.length > 0
-    ? [args.gameId, args.worldId]
-    : null;
-}
-
-/** A host by `hostId`, or by `instanceId`, its old name (review R43), which clients configured before it still send. */
-export function metricsToolArguments(args: Record<string, unknown>): readonly [string, string] | null {
-  const range = args.range ?? "24h";
-  const hostId = args.hostId ?? args.instanceId;
-  return typeof hostId === "string" && typeof range === "string" && METRIC_RANGE_NAMES.includes(range)
-    ? [hostId, range]
-    : null;
-}
-
-// The handlers check each value's format; here a value only has to be text.
-function releaseToolArguments(args: Record<string, unknown>): readonly [string, string, string] | null {
-  const { gameId, presetId, version } = args;
-  return typeof gameId === "string" && typeof presetId === "string" && typeof version === "string" ? [gameId, presetId, version] : null;
-}
-
 /** The connected identity as an agent sees it: the same permissions the panel shows, the role's and the direct grants. */
 export function mcpProfile(identity: Identity): Readonly<{ id: string; name: string; role: string; permissions: readonly Permission[] }> {
   return { id: identity.id, name: identity.displayName, role: roleOf(identity)?.name ?? identity.roleId, permissions: [...permissionsOf(identity)] };
 }
 
-function profileToolResponse(identity: Identity): Response {
-  const profile = mcpProfile(identity);
-  return response(200, { structuredContent: profile, content: [{ type: "text", text: JSON.stringify(profile, null, 2) }] });
-}
-
 /** Who the call came through: the OAuth client the person connected. */
 type McpCaller = Readonly<{ identity: Identity; clientId: string }>;
 
-type McpToolCall = (identity: Identity, args: Record<string, unknown>, caller: McpCaller) => Promise<Response> | Response | null;
+/** One tool as MCP offers it. A read needs the read scope; a write, the operate scope (ADR-0061). */
+type McpTool = Readonly<{
+  name: string; title: string; description: string; inputSchema: Readonly<Record<string, unknown>>;
+  readOnly: boolean; destructive: boolean; scope: OAuthScope; permission: Permission | null;
+  call: (caller: McpCaller, args: Record<string, unknown>) => Promise<Response | null>;
+}>;
 
-async function consoleAgent(clientId: string): Promise<ConsoleAgent> {
+/** The one tool that is no route: the connected identity itself. */
+export const PROFILE_TOOL = {
+  name: "get_profile", title: "Get Spawnpoint profile", description: "Read the connected Spawnpoint identity and role.",
+  readOnly: true, destructive: false, route: "GET /me", inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
+} as const;
+
+async function agentOf(clientId: string): Promise<Readonly<{ clientId: string; name: string }>> {
   return { clientId, name: (await oauthClient(clientId))?.name ?? clientId };
 }
 
-// Each tool runs the handler its web route runs; null means invalid arguments.
-const mcpToolCalls: Readonly<Record<McpToolName, McpToolCall>> = {
-  get_profile: (identity) => profileToolResponse(identity),
-  get_control_plane: (identity) => controlPlane(identity),
-  get_host_metrics: (_identity, args) => {
-    const metricsArgs = metricsToolArguments(args);
-    return metricsArgs === null ? null : hostMetrics(...metricsArgs);
-  },
-  list_world_backups: (_identity, args) => {
-    const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : deployedBackups.backups(...worldArgs);
-  },
-  get_world_pack: (_identity, args) => {
-    const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : deployedReleases.packDownload(...worldArgs);
-  },
-  get_release: (_identity, args) => {
-    const releaseArgs = releaseToolArguments(args);
-    return releaseArgs === null ? null : deployedReleases.releaseManifest(...releaseArgs);
-  },
-  get_release_mod_link: (_identity, args) => {
-    const releaseArgs = releaseToolArguments(args);
-    return releaseArgs === null || typeof args.sha256 !== "string" ? null : deployedReleases.releaseModDownload(...releaseArgs, args.sha256);
-  },
-  get_backup_download_link: (identity, args) => {
-    const worldArgs = worldToolArguments(args);
-    return worldArgs === null || typeof args.key !== "string" ? null : deployedBackups.backupDownload(identity, ...worldArgs, JSON.stringify({ key: args.key }));
-  },
-  send_console_command: (identity, args, caller) => {
-    const worldArgs = worldToolArguments(args);
-    if (worldArgs === null || typeof args.command !== "string") return null;
-    const body = JSON.stringify({ command: args.command });
-    return consoleAgent(caller.clientId).then((agent) => deployedConsole.runConsoleCommand(identity, ...worldArgs, body, agent));
-  },
-  get_console_result: (_identity, args) => {
-    const worldArgs = worldToolArguments(args);
-    return worldArgs === null || typeof args.commandId !== "string" ? null : deployedConsole.consoleCommandResult(...worldArgs, args.commandId);
-  },
-  read_world_log: (identity, args) => {
-    const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : deployedWorldLog.requestLog(identity, ...worldArgs);
-  },
-  get_world_log_result: (_identity, args) => {
-    const worldArgs = worldToolArguments(args);
-    return worldArgs === null || typeof args.readId !== "string" ? null : deployedWorldLog.logResult(...worldArgs, args.readId);
-  },
-  start_world: (identity, args) => {
-    const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : deployedWorlds.controlSession(identity, "start", ...worldArgs);
-  },
-  stop_world: (identity, args) => {
-    const worldArgs = worldToolArguments(args);
-    return worldArgs === null ? null : deployedWorlds.controlSession(identity, "stop", ...worldArgs);
-  },
-};
+/** The tools MCP offers: the profile, and each catalogue tool a feature offered to MCP. */
+export function mcpTools(catalogue: McpCatalogue): readonly McpTool[] {
+  const profile: McpTool = {
+    ...PROFILE_TOOL, scope: "spawnpoint.read", permission: null,
+    call: async (caller) => {
+      const value = mcpProfile(caller.identity);
+      return response(200, { structuredContent: value, content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
+    },
+  };
+  return [profile, ...catalogue.tools.filter((tool) => tool.facts.mcp === true).map((tool): McpTool => ({
+    name: tool.facts.name, title: tool.facts.title, description: tool.facts.description, inputSchema: tool.inputSchema,
+    readOnly: tool.facts.effect === "read", destructive: tool.facts.destructive === true,
+    scope: tool.facts.effect === "read" ? "spawnpoint.read" : "spawnpoint.operate",
+    permission: tool.permission,
+    // The record names the client as well as the person.
+    call: async (caller, args) => runTool(catalogue.routes, tool, caller.identity, args, await agentOf(caller.clientId)),
+  }))];
+}
 
-async function callMcpTool(caller: McpCaller, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
-  const { identity } = caller;
-  const tool = mcpTools.find((candidate) => candidate.name === name);
+async function callMcpTool(catalogue: McpCatalogue, caller: McpCaller, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
+  const tool = mcpTools(catalogue).find((candidate) => candidate.name === name);
   if (tool === undefined) return mcpToolError(`Unknown tool: ${name}`);
   if (!scopes.includes(tool.scope)) return response(403, { error: "insufficient_scope" });
-  if (!hasMcpToolPermission(identity, tool.permission)) return response(403, { error: "forbidden" });
-  const apiResponse = await mcpToolCalls[tool.name](identity, args, caller);
+  if (tool.permission !== null && !can(caller.identity, tool.permission)) return response(403, { error: "forbidden" });
+  const apiResponse = await tool.call(caller, args);
   if (apiResponse === null) return mcpToolError("Invalid tool arguments");
+  if (name === PROFILE_TOOL.name) return apiResponse;
   const data = parseJsonText(apiResponse.body || "null");
   return apiResponse.statusCode >= 200 && apiResponse.statusCode < 300
     ? response(200, mcpResult(data))
@@ -173,8 +112,8 @@ function initializeMcp(request: McpRequest): Response {
   });
 }
 
-function listMcpTools(id: unknown): Response {
-  return mcpJson(id, { tools: mcpTools.map((tool) => ({
+function listMcpTools(catalogue: McpCatalogue, id: unknown): Response {
+  return mcpJson(id, { tools: mcpTools(catalogue).map((tool) => ({
     name: tool.name, title: tool.title, description: tool.description, inputSchema: tool.inputSchema,
     annotations: { readOnlyHint: tool.readOnly, destructiveHint: tool.destructive, openWorldHint: false },
     securitySchemes: [{ type: "oauth2", scopes: [tool.scope] }],
@@ -182,16 +121,16 @@ function listMcpTools(id: unknown): Response {
   })) });
 }
 
-async function callRemoteMcpTool(request: McpRequest, caller: McpCaller, scopes: readonly OAuthScope[]): Promise<Response> {
+async function callRemoteMcpTool(catalogue: McpCatalogue, request: McpRequest, caller: McpCaller, scopes: readonly OAuthScope[]): Promise<Response> {
   const params = request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
   const args = params.arguments !== null && typeof params.arguments === "object" ? params.arguments as Record<string, unknown> : {};
   const name = typeof params.name === "string" ? params.name : "";
-  const called = await callMcpTool(caller, scopes, name, args);
+  const called = await callMcpTool(catalogue, caller, scopes, name, args);
   const payload = parseJsonText(called.body || "null");
   return called.statusCode === 200 ? mcpJson(request.id, payload) : mcpJson(request.id, { ...mcpResult(payload), isError: true });
 }
 
-export async function remoteMcp(event: Event): Promise<Response> {
+export async function remoteMcp(event: Event, catalogue: McpCatalogue): Promise<Response> {
   const authenticated = await authenticateRemoteMcp(event);
   if (authenticated === null) return mcpUnauthorized();
   let body: JsonObject;
@@ -203,7 +142,7 @@ export async function remoteMcp(event: Event): Promise<Response> {
   if (request.jsonrpc !== "2.0" || typeof request.method !== "string") return mcpError(request.id ?? null, -32600, "Invalid Request");
   if (request.method === "notifications/initialized") return response(202, null);
   if (request.method === "initialize") return initializeMcp(request);
-  if (request.method === "tools/list") return listMcpTools(request.id);
-  if (request.method === "tools/call") return callRemoteMcpTool(request, authenticated, authenticated.scopes);
+  if (request.method === "tools/list") return listMcpTools(catalogue, request.id);
+  if (request.method === "tools/call") return callRemoteMcpTool(catalogue, request, authenticated, authenticated.scopes);
   return mcpError(request.id, -32601, "Method not found");
 }

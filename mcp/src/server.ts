@@ -8,36 +8,27 @@ import { z } from "zod";
 import { SpawnpointClient } from "./client.js";
 import tools from "./tools.generated.json" with { type: "json" };
 
-type Args = Record<string, string>;
-type Call = (client: SpawnpointClient, args: Args) => Promise<unknown>;
+type Args = Record<string, unknown>;
+type Tool = (typeof tools)[number] & { route: string; pathNames?: Record<string, string> };
 
-const world = (args: Args) => `/games/${encodeURIComponent(args.gameId!)}/worlds/${encodeURIComponent(args.worldId!)}`;
-const release = (args: Args) => `/games/${encodeURIComponent(args.gameId!)}/presets/${encodeURIComponent(args.presetId!)}/releases/${encodeURIComponent(args.version!)}`;
-const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
-
-// The API call each tool makes. Names and schemas come from tools.generated.json.
-export const toolCalls: Readonly<Record<string, Call>> = {
-  get_profile: (client) => client.request("/me"),
-  get_control_plane: (client) => client.request("/control-plane"),
-  // instanceId is hostId's old name.
-  get_host_metrics: (client, args) => client.request(`/hosts/${encodeURIComponent((args.hostId ?? args.instanceId)!)}/metrics?range=${args.range ?? "24h"}`),
-  list_world_backups: (client, args) => client.request(`${world(args)}/backups`),
-  get_world_pack: (client, args) => client.request(`${world(args)}/pack`),
-  get_release: (client, args) => client.request(release(args)),
-  get_release_mod_link: (client, args) => client.request(`${release(args)}/mods/${args.sha256}`),
-  get_backup_download_link: (client, args) => client.request(`${world(args)}/backups/download`, post({ key: args.key })),
-  send_console_command: (client, args) => client.request(`${world(args)}/console`, post({ command: args.command })),
-  // The API answers a world's recent commands; this picks the one asked for.
-  get_console_result: async (client, args) => {
-    const history = await client.request(`${world(args)}/console`) as { entries?: { id?: unknown }[] };
-    const entry = history.entries?.find((candidate) => candidate.id === args.commandId);
-    return entry === undefined ? { error: "unknown_command" } : { entry };
-  },
-  read_world_log: (client, args) => client.request(`${world(args)}/log`, { method: "POST", body: "{}" }),
-  get_world_log_result: (client, args) => client.request(`${world(args)}/log/${encodeURIComponent(args.readId!)}`),
-  start_world: (client, args) => client.request(`${world(args)}/start`, { method: "POST", body: "{}" }),
-  stop_world: (client, args) => client.request(`${world(args)}/stop`, { method: "POST", body: "{}" }),
-};
+/**
+ * The API call a tool makes, from its route (ADR-0095): the path's parameters
+ * from the arguments, and the rest as a POST or PUT body or a GET query.
+ */
+export function apiCall(tool: Pick<Tool, "route" | "pathNames">, args: Args): Readonly<{ path: string; init?: RequestInit }> {
+  const [method = "GET", template = "/"] = tool.route.split(" ");
+  const used = new Set<string>();
+  const path = template.replaceAll(/\{([A-Za-z0-9]+)\}/g, (_match, parameter: string) => {
+    const name = tool.pathNames?.[parameter] ?? parameter;
+    used.add(name).add(parameter);
+    return encodeURIComponent(String(args[name] ?? args[parameter] ?? ""));
+  });
+  const rest = Object.fromEntries(Object.entries(args).filter(([name, value]) => !used.has(name) && value !== undefined));
+  if (method === "POST" || method === "PUT") return { path, init: { method, body: JSON.stringify(rest) } };
+  const query = new URLSearchParams(Object.entries(rest).map(([name, value]) => [name, typeof value === "string" ? value : JSON.stringify(value)]));
+  const withQuery = query.size > 0 ? `${path}?${query}` : path;
+  return method === "GET" ? { path: withQuery } : { path: withQuery, init: { method } };
+}
 
 function result(data: unknown, isError: boolean) {
   return {
@@ -57,9 +48,7 @@ export function createServer(client: SpawnpointClient): McpServer {
     },
   );
 
-  for (const tool of tools) {
-    const call = toolCalls[tool.name];
-    if (call === undefined) throw new Error(`No API call for tool ${tool.name}`);
+  for (const tool of tools as readonly Tool[]) {
     // The schema is built from the shared JSON, so it is never typed again here.
     const schema = z.fromJSONSchema(tool.inputSchema as z.core.JSONSchema.JSONSchema) as z.ZodObject;
     server.registerTool(tool.name, {
@@ -69,8 +58,12 @@ export function createServer(client: SpawnpointClient): McpServer {
       outputSchema: { data: z.unknown() },
       annotations: { readOnlyHint: tool.readOnly, destructiveHint: tool.destructive, openWorldHint: false },
     }, async (args: Args) => {
-      const data = await call(client, args);
-      return result(data, (data as { error?: unknown } | null)?.error === "unknown_command");
+      const call = apiCall(tool, args);
+      try {
+        return result(await client.request(call.path, call.init), false);
+      } catch (error) {
+        return result({ error: error instanceof Error ? error.message : String(error) }, true);
+      }
     });
   }
 

@@ -468,6 +468,7 @@ locals {
     "GET /games/{gameId}/worlds/{worldId}/console",
     "GET /games/{gameId}/worlds/{worldId}/metrics",
     "POST /games/{gameId}/worlds/{worldId}/console",
+    "GET /games/{gameId}/worlds/{worldId}/console/{commandId}",
     "GET /hosts/{instanceId}/metrics",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",

@@ -9,7 +9,9 @@ import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import type { ControlPlaneSources, OperationObservation } from "../src/control-plane/read-model.ts";
 import type { WorldRecord } from "../src/control-plane/world-registry.ts";
 import { InvalidBodyError } from "../src/handlers/api/http.ts";
-import { promoteWorld } from "../src/handlers/api/promotion.ts";
+import { deployedPromotion } from "../src/handlers/api/promotion-wiring.ts";
+
+const { promoteWorld } = deployedPromotion;
 
 process.env.OPERATION_STATE_MACHINES = JSON.stringify(["start", "stop", "promote", "world"].map((type) => ({ type, arn: `arn:aws:states:eu-central-1:123456789012:stateMachine:${type}` })));
 

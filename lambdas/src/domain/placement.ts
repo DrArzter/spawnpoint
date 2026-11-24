@@ -52,7 +52,8 @@ export const SLOT_PORT_RANGE_START = 30000;
 export const SLOT_PORT_WINDOW = 10;
 export const MAX_SLOTS = 256;
 
-export type GamePorts = Readonly<{ game: number; rcon: number }>;
+/** A session's ports: the one a player types, and the one the player probe speaks to (GAME_PROBE_PORT). */
+export type GamePorts = Readonly<{ game: number; probe: number }>;
 
 export type SessionPolicy = "cold" | "warm";
 export type HostState = "provisioning" | "ready" | "draining" | "stopped" | "terminating";
@@ -380,5 +381,5 @@ export function portsForSlot(gameDefaults: GamePorts, slot: number): GamePorts {
   if (!Number.isSafeInteger(slot) || slot < 0 || slot >= MAX_SLOTS) throw new Error(`slot must be 0..${MAX_SLOTS - 1}`);
   if (slot === 0) return gameDefaults;
   const window = SLOT_PORT_RANGE_START + slot * SLOT_PORT_WINDOW;
-  return { game: window, rcon: window + 1 };
+  return { game: window, probe: window + 1 };
 }

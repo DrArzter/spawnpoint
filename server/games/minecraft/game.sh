@@ -15,9 +15,9 @@ GAME_COMPOSE_SERVICE="mc"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="25565"
 GAME_CONNECT_PROTOCOL="tcp"
-# RCON is spoken inside the container (rcon-cli), so no host port is published;
-# the constant names the window layout all the same.
-GAME_RCON_PORT="25575"
+# The probe speaks RCON inside the container (rcon-cli), so no host port is
+# published; the constant names the window layout all the same.
+GAME_PROBE_PORT="25575"
 # The client connects to whatever port the address names and the server
 # announces none, so a slot's host port forwards cleanly.
 GAME_SLOTTABLE="true"

@@ -11,7 +11,7 @@ services:
       - "${SPAWNPOINT_GAME_BIND:-0.0.0.0}:${SPAWNPOINT_GAME_PORT:-2456}:2456/udp"
       # The Steam query port stays host-local: the probe's transport (ADR-0075),
       # never a player surface. It takes the slot's RCON port, the game port + 1.
-      - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-2457}:2457/udp"
+      - "127.0.0.1:${SPAWNPOINT_PROBE_PORT:-2457}:2457/udp"
     environment:
       # Game settings (ADR-0064): no value, so one a world never set never
       # reaches the container. See settings.json.

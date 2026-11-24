@@ -101,23 +101,23 @@ test("reservations take the lowest free slot, and a slot names the ports", () =>
   host = reserve(host, { sessionId: "s3", worldId: "c", footprint: FACTORIO, policy: "cold" }, NOW + 5);
   assert.deepEqual(host.reservations.map((reservation) => [reservation.sessionId, reservation.slot]), [["s2", 1], ["s3", 0]]);
 
-  const minecraft = { game: 25565, rcon: 25575 };
-  const factorio = { game: 34197, rcon: 27015 };
+  const minecraft = { game: 25565, probe: 25575 };
+  const factorio = { game: 34197, probe: 27015 };
   assert.deepEqual(portsForSlot(minecraft, 0), minecraft);
   assert.deepEqual(portsForSlot(factorio, 0), factorio);
-  assert.deepEqual(portsForSlot(minecraft, 1), { game: 30010, rcon: 30011 });
-  assert.deepEqual(portsForSlot(factorio, 2), { game: 30020, rcon: 30021 });
+  assert.deepEqual(portsForSlot(minecraft, 1), { game: 30010, probe: 30011 });
+  assert.deepEqual(portsForSlot(factorio, 2), { game: 30020, probe: 30021 });
   assert.throws(() => portsForSlot(minecraft, MAX_SLOTS), /slot must be/);
 });
 
 test("every port on a host is distinct, across slots and across games", () => {
-  const games = [{ game: 25565, rcon: 25575 }, { game: 34197, rcon: 27015 }, { game: 16261, rcon: 27015 }];
+  const games = [{ game: 25565, probe: 25575 }, { game: 34197, probe: 27015 }, { game: 16261, probe: 27015 }];
   const seen = new Map<number, string>();
   for (let slot = 0; slot < MAX_SLOTS; slot += 1) {
     // Slot zero is one game's defaults; every other slot's window is game-independent.
     const ports = slot === 0 ? [portsForSlot(games[0]!, 0)] : games.map((game) => portsForSlot(game, slot));
     for (const pair of ports) {
-      for (const port of [pair.game, pair.rcon]) {
+      for (const port of [pair.game, pair.probe]) {
         assert.equal(seen.has(port) && seen.get(port) !== `slot ${slot}`, false, `port ${port} reused by slot ${slot}`);
         seen.set(port, `slot ${slot}`);
         assert.ok(port < 65536);

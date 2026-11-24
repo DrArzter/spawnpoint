@@ -506,12 +506,12 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 (
-  unset FACTORIO_RCON_PORT SPAWNPOINT_RCON_PORT
+  unset FACTORIO_RCON_PORT SPAWNPOINT_PROBE_PORT
   export FACTORIO_DATA_DIR="${fixture}/factorio-save"
   source "${GAMES}/factorio/game.sh"
   # What configure_game_compose does for a slot, after the module has loaded.
-  export SPAWNPOINT_RCON_PORT
-  SPAWNPOINT_RCON_PORT="$(cat "${fixture}/console-rcon-port")"
+  export SPAWNPOINT_PROBE_PORT
+  SPAWNPOINT_PROBE_PORT="$(cat "${fixture}/console-rcon-port")"
   [[ "$(game_console "/players online")" == "Alice (online)" ]]
 )
 wait "${console_rcon_pid}"
@@ -544,7 +544,7 @@ player_entries=0' >/dev/null 2>&1; then exit 1; fi
 (
   source "${GAMES}/valheim/game.sh"
   [[ "${GAME_CONNECT_PORT}" == "2456" && "${GAME_CONNECT_PROTOCOL}" == "udp" ]]
-  [[ "${GAME_RCON_PORT}" == "$((GAME_CONNECT_PORT + 1))" ]]
+  [[ "${GAME_PROBE_PORT}" == "$((GAME_CONNECT_PORT + 1))" ]]
   [[ "${GAME_DEFAULT_AUTH}" == "none" ]]
   if declare -F game_console >/dev/null; then exit 1; fi
   status=0
@@ -577,16 +577,16 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 (
-  unset VALHEIM_QUERY_PORT SPAWNPOINT_RCON_PORT
+  unset VALHEIM_QUERY_PORT SPAWNPOINT_PROBE_PORT
   source "${GAMES}/valheim/game.sh"
-  export SPAWNPOINT_RCON_PORT
-  SPAWNPOINT_RCON_PORT="$(cat "${fixture}/valheim-a2s-port")"
+  export SPAWNPOINT_PROBE_PORT
+  SPAWNPOINT_PROBE_PORT="$(cat "${fixture}/valheim-a2s-port")"
   [[ "$(game_query_players_raw | game_parse_player_count)" == "1" ]]
   game_ready none
   game_ready healthy
   if game_ready unhealthy; then exit 1; fi
   # Nothing answers on this port: not ready, and no count.
-  SPAWNPOINT_RCON_PORT="$(python3 -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+  SPAWNPOINT_PROBE_PORT="$(python3 -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
   if game_ready none; then exit 1; fi
 )
 kill "${valheim_a2s_pid}" 2>/dev/null || true
@@ -600,7 +600,7 @@ output="$(WORLD_ID=valheim SPAWNPOINT_WORLD_CATALOG="${fixture}/valheim-catalog.
 [[ "${output}" == "valheim
 valheim
 ${REPOSITORY_ROOT}/server/observability/compose.yaml:${REPOSITORY_ROOT}/server/games/valheim/compose.yaml" ]]
-output="$(WORLD_ID=valheim WORLD_FOOTPRINT_MEMORY_MIB=4096 SPAWNPOINT_SLOT=3 SPAWNPOINT_WORLD_CATALOG="${fixture}/valheim-catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s %s %s\n' \"\${SPAWNPOINT_GAME_PORT}\" \"\${SPAWNPOINT_RCON_PORT}\" \"\${SERVER_COMPOSE_FILES}\"")"
+output="$(WORLD_ID=valheim WORLD_FOOTPRINT_MEMORY_MIB=4096 SPAWNPOINT_SLOT=3 SPAWNPOINT_WORLD_CATALOG="${fixture}/valheim-catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s %s %s\n' \"\${SPAWNPOINT_GAME_PORT}\" \"\${SPAWNPOINT_PROBE_PORT}\" \"\${SERVER_COMPOSE_FILES}\"")"
 [[ "${output}" == "30030 30031 ${REPOSITORY_ROOT}/server/games/valheim/compose.yaml:${REPOSITORY_ROOT}/server/games/valheim/compose.footprint.yaml" ]]
 
 # The save is the world's two files, named by the server's own setting and
@@ -703,7 +703,7 @@ listed_players=0' >/dev/null 2>&1; then exit 1; fi
 (
   source "${GAMES}/palworld/game.sh"
   [[ "${GAME_CONNECT_PORT}" == "8211" && "${GAME_CONNECT_PROTOCOL}" == "udp" ]]
-  [[ "${GAME_RCON_PORT}" == "8212" && "${GAME_SLOTTABLE}" == "true" ]]
+  [[ "${GAME_PROBE_PORT}" == "8212" && "${GAME_SLOTTABLE}" == "true" ]]
   [[ "${GAME_DEFAULT_AUTH}" == "none" ]]
   # The documented footprint, not one shrunk to fit a host.
   [[ "${GAME_FOOTPRINT_MEMORY_MIB}" == "16384" ]]
@@ -778,14 +778,14 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 (
-  unset PALWORLD_REST_PORT SPAWNPOINT_RCON_PORT PALWORLD_ADMIN_PASSWORD
+  unset PALWORLD_REST_PORT SPAWNPOINT_PROBE_PORT PALWORLD_ADMIN_PASSWORD
   # The password comes from the host's runtime .env, as compose reads it.
   printf 'PALWORLD_ADMIN_PASSWORD=pal-secret\n' >"${fixture}/palworld.env"
   export SERVER_ENV_FILE="${fixture}/palworld.env"
   source "${GAMES}/palworld/game.sh"
   # The probe reads the slot's port when it runs, after the module has loaded.
-  export SPAWNPOINT_RCON_PORT
-  SPAWNPOINT_RCON_PORT="$(cat "${fixture}/palworld-port")"
+  export SPAWNPOINT_PROBE_PORT
+  SPAWNPOINT_PROBE_PORT="$(cat "${fixture}/palworld-port")"
 
   raw="$(game_query_players_raw)"
   [[ "${raw}" == "current_players=2
@@ -843,7 +843,7 @@ listed_players=2" ]]
   [[ "${status}" == 2 ]]
   # Nothing answers on this port: not ready, and no count.
   printf 'PALWORLD_ADMIN_PASSWORD=pal-secret\n' >"${fixture}/palworld.env"
-  SPAWNPOINT_RCON_PORT="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+  SPAWNPOINT_PROBE_PORT="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
   if game_ready none; then exit 1; fi
 )
 kill "${palworld_rest_pid}" 2>/dev/null || true
@@ -857,7 +857,7 @@ output="$(WORLD_ID=palworld SPAWNPOINT_WORLD_CATALOG="${fixture}/palworld-catalo
 [[ "${output}" == "palworld
 palworld
 ${REPOSITORY_ROOT}/server/observability/compose.yaml:${REPOSITORY_ROOT}/server/games/palworld/compose.yaml" ]]
-output="$(WORLD_ID=palworld WORLD_FOOTPRINT_MEMORY_MIB=16384 SPAWNPOINT_SLOT=2 SPAWNPOINT_WORLD_CATALOG="${fixture}/palworld-catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s %s %s\n' \"\${SPAWNPOINT_GAME_PORT}\" \"\${SPAWNPOINT_RCON_PORT}\" \"\${SERVER_COMPOSE_FILES}\"")"
+output="$(WORLD_ID=palworld WORLD_FOOTPRINT_MEMORY_MIB=16384 SPAWNPOINT_SLOT=2 SPAWNPOINT_WORLD_CATALOG="${fixture}/palworld-catalog.json" bash -c "source '${GAMES}/_dispatch.sh'; resolve_game; configure_game_compose; printf '%s %s %s\n' \"\${SPAWNPOINT_GAME_PORT}\" \"\${SPAWNPOINT_PROBE_PORT}\" \"\${SERVER_COMPOSE_FILES}\"")"
 [[ "${output}" == "30020 30021 ${REPOSITORY_ROOT}/server/games/palworld/compose.yaml:${REPOSITORY_ROOT}/server/games/palworld/compose.footprint.yaml" ]]
 
 # The save is the world GameUserSettings.ini names, with that file, and never

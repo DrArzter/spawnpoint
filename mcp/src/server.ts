@@ -19,7 +19,8 @@ const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) })
 export const toolCalls: Readonly<Record<string, Call>> = {
   get_profile: (client) => client.request("/me"),
   get_control_plane: (client) => client.request("/control-plane"),
-  get_host_metrics: (client, args) => client.request(`/hosts/${encodeURIComponent(args.instanceId!)}/metrics?range=${args.range}`),
+  // instanceId is hostId's old name.
+  get_host_metrics: (client, args) => client.request(`/hosts/${encodeURIComponent((args.hostId ?? args.instanceId)!)}/metrics?range=${args.range ?? "24h"}`),
   list_world_backups: (client, args) => client.request(`${world(args)}/backups`),
   get_world_pack: (client, args) => client.request(`${world(args)}/pack`),
   get_release: (client, args) => client.request(release(args)),

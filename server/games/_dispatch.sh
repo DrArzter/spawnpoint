@@ -25,7 +25,9 @@
 #   GAME_FOOTPRINT_MEMORY_MIB  what a session is placed with and limited to when
 #   GAME_FOOTPRINT_CORES       the world's catalog entry states nothing (ADR-0054):
 #                              the container's memory, not the heap, and a core weight
-#   GAME_RCON_PORT             the container's RCON port; the host side follows the slot
+#   GAME_PROBE_PORT            the container port the player probe speaks to: RCON,
+#                              a Steam query or a REST API; the host side follows
+#                              the slot. GAME_RCON_PORT is read as its old name
 #   GAME_SLOTTABLE             true when the game can run on a slot other than zero:
 #                              its client connects to the port the address names and
 #                              the server announces no other. false refuses such a slot
@@ -158,7 +160,7 @@ prepare_game_runtime() {
 
 # The slot is the port allocator (ADR-0054). Slot zero, and an unplaced
 # session, keep the game's own ports; every other slot owns a window of ten
-# ports in one host-wide range: +0 the game port, +1 RCON, +2 onward any
+# ports in one host-wide range: +0 the game port, +1 the probe port, +2 onward any
 # further port the game publishes. The same layout is lambdas/src/domain/placement.ts.
 SLOT_PORT_RANGE_START=30000
 SLOT_PORT_WINDOW=10
@@ -168,14 +170,16 @@ configure_slot_ports() {
   local slot="$1" window
   if (( slot == 0 )); then
     export SPAWNPOINT_GAME_PORT="${GAME_CONNECT_PORT}"
-    export SPAWNPOINT_RCON_PORT="${GAME_RCON_PORT:-}"
+    export SPAWNPOINT_PROBE_PORT="${GAME_PROBE_PORT:-${GAME_RCON_PORT:-}}"
     unset SPAWNPOINT_GAME_PORT_2
   else
     window=$((SLOT_PORT_RANGE_START + slot * SLOT_PORT_WINDOW))
     export SPAWNPOINT_GAME_PORT="${window}"
-    export SPAWNPOINT_RCON_PORT="$((window + 1))"
+    export SPAWNPOINT_PROBE_PORT="$((window + 1))"
     export SPAWNPOINT_GAME_PORT_2="$((window + 2))"
   fi
+  # The old name, for a module that still reads it.
+  export SPAWNPOINT_RCON_PORT="${SPAWNPOINT_PROBE_PORT}"
   # What the summary tells a player: the host side of the game port.
   export SPAWNPOINT_CONNECT_PORT="${SPAWNPOINT_GAME_PORT}"
   return 0

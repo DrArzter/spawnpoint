@@ -16,7 +16,7 @@ GAME_COMPOSE_SERVICE="factorio"
 # The port a player types after the address the connectivity strategy publishes.
 GAME_CONNECT_PORT="34197"
 GAME_CONNECT_PROTOCOL="udp"
-GAME_RCON_PORT="27015"
+GAME_PROBE_PORT="27015"
 # A direct UDP connection to the port the address names; nothing in the
 # protocol tells the client another port.
 GAME_SLOTTABLE="true"
@@ -41,7 +41,7 @@ source "${FACTORIO_GAME_DIR}/../_probes/rcon.sh"
 # when a command is sent, not when the module loads: every entry script loads
 # the game first and exports the slot's ports after, in configure_game_compose.
 factorio_rcon_port() {
-  printf '%s' "${FACTORIO_RCON_PORT:-${SPAWNPOINT_RCON_PORT:-27015}}"
+  printf '%s' "${FACTORIO_RCON_PORT:-${SPAWNPOINT_PROBE_PORT:-27015}}"
   return 0
 }
 

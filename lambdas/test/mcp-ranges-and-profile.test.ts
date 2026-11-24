@@ -11,7 +11,7 @@ process.env.PANEL_URL ??= "https://spawnpoint.example";
 
 const { METRIC_RANGE_NAMES } = await import("../src/control-plane/metric-ranges.ts");
 const { mcpTools } = await import("../src/access/mcp-tools.ts");
-const { mcpProfile } = await import("../src/handlers/api/mcp.ts");
+const { mcpProfile, metricsToolArguments } = await import("../src/handlers/api/mcp.ts");
 const { hostMetrics } = await import("../src/handlers/api/metrics.ts");
 
 test("every MCP surface offers exactly the ranges the metrics API answers", async () => {
@@ -26,4 +26,10 @@ test("an agent's profile carries the direct grants the panel shows", () => {
   assert.equal(profile.role, "Operator");
   assert.ok(profile.permissions.includes("session.start"), "the role's permissions");
   assert.ok(profile.permissions.includes("release.promote"), "and the direct grant");
+});
+
+test("the host metrics tool names a host by hostId, and still by instanceId, its old name", () => {
+  assert.deepEqual(metricsToolArguments({ hostId: "i-0123456789abcdef0", range: "6h" }), ["i-0123456789abcdef0", "6h"]);
+  assert.deepEqual(metricsToolArguments({ instanceId: "i-0123456789abcdef0" }), ["i-0123456789abcdef0", "24h"]);
+  assert.equal(metricsToolArguments({ range: "6h" }), null, "a call that names no host is refused");
 });

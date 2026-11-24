@@ -66,8 +66,8 @@ A transport that more than one game speaks lives in [`_probes/`](_probes), with 
 `a2s-client.py` and `a2s.sh` ([ADR-0075](../../docs/adr/0075-a2s-as-a-probe-transport.md)), HTTP in `http-client.py`
 and `http.sh` ([ADR-0076](../../docs/adr/0076-http-and-telnet-probe-transports.md)), Source RCON in `rcon-client.py`
 and `rcon.sh` (Factorio and Project Zomboid). Its parser makes two
-readings agree before it prints a count. A game with no RCON names its query or API port as `GAME_RCON_PORT`, so the
-port takes the slot's RCON place and stays on `127.0.0.1`. A transport's credential lives in the host's runtime
+readings agree before it prints a count. Every game names the port its probe speaks to as `GAME_PROBE_PORT`: RCON, a Steam query or a REST API. The
+port takes the slot's probe place and stays on `127.0.0.1`. A transport's credential lives in the host's runtime
 `.env`, never in a world setting or a world's archive, and an HTTP game's transport reduces its replies to counts, so
 no player name or address reaches the probe's log.
 
@@ -81,13 +81,14 @@ value or its defaults unchecked, and keep the MIT notice beside any text copied 
 
 A placed session ([ADR-0054](../../docs/adr/0054-place-a-session-on-a-host-with-room.md)) arrives with
 `SPAWNPOINT_SLOT`. The dispatcher gives it a Compose project named for its world, the ports of its slot
-(`SPAWNPOINT_GAME_PORT`, `SPAWNPOINT_RCON_PORT`, `SPAWNPOINT_GAME_PORT_2`) and the memory limit of its footprint; a
+(`SPAWNPOINT_GAME_PORT`, `SPAWNPOINT_PROBE_PORT`, `SPAWNPOINT_GAME_PORT_2`) and the memory limit of its footprint; a
 module takes part by:
 
 - publishing its host ports from those variables, defaulting to the game's own so an unplaced session is unchanged —
   the container side never changes;
-- naming `GAME_RCON_PORT`, and reading the host side of RCON from `SPAWNPOINT_RCON_PORT` where the probe speaks from
-  the host;
+- naming `GAME_PROBE_PORT`, and reading its host side from `SPAWNPOINT_PROBE_PORT` where the probe speaks from the
+  host. The dispatcher still reads `GAME_RCON_PORT` and exports `SPAWNPOINT_RCON_PORT`, the old names, for a module
+  that has not moved;
 - shipping `GAME_FOOTPRINT_COMPOSE_FILE`, a two-line overlay that turns `SPAWNPOINT_FOOTPRINT_MEMORY_MIB` into the
   game container's `mem_limit`;
 - keeping its observability part in two files: `GAME_OBSERVABILITY_COMPOSE_FILES` carries the tier inside an unplaced

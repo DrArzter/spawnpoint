@@ -4,10 +4,9 @@
  * only surface that may want to know.
  */
 
-export type AppearancePreference = {
-  theme: "light" | "dark" | "system";
-  accent: string;
-};
+import type { AppearancePreference } from "../../../contract/access.ts";
+
+export type { AppearancePreference };
 
 const THEMES = ["light", "dark", "system"] as const;
 

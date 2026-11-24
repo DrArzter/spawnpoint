@@ -11,6 +11,7 @@ import { proofLinkProviders } from "./login-providers.ts";
 import { passwordLoginEnabled } from "./auth-config.ts";
 import { emailDeliveryProvider } from "./mail.ts";
 import { document, tableName } from "./access-store.ts";
+import type { LinkedLoginAccount, LinkedLoginAccounts } from "../../../../contract/access.ts";
 
 export async function linkedAccounts(identity: Identity): Promise<Response> {
   const accounts = await identityAccounts(identity);
@@ -31,11 +32,12 @@ export async function linkedAccounts(identity: Identity): Promise<Response> {
       verified,
     };
   }));
-  return response(200, {
+  const body: LinkedLoginAccounts = {
     accounts: linked,
     linkableProviders: [...proofLinkProviders.keys()],
     passwordManagementAvailable: passwordLoginEnabled && emailDeliveryProvider !== "none",
-  });
+  };
+  return response(200, body);
 }
 
 export async function linkProofAccount(identity: Identity, provider: LoginProvider, event: Event): Promise<Response> {
@@ -87,7 +89,7 @@ export async function linkProofAccount(identity: Identity, provider: LoginProvid
     }
     throw error;
   }
-  return response(201, { account: {
+  const account: LinkedLoginAccount = {
     provider: principal.provider,
     subject: principal.subject,
     displayName: principal.displayName,
@@ -95,5 +97,6 @@ export async function linkProofAccount(identity: Identity, provider: LoginProvid
     email: principal.email,
     photoUrl: principal.photoUrl,
     verified: true,
-  } });
+  };
+  return response(201, { account });
 }

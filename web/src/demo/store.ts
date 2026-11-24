@@ -948,6 +948,7 @@ export function approveCandidate(platform: string, platformUserId: string, chose
   const identity: Mutable<Omit<AccessIdentity, "canDelete">> = {
     id: `identity-${platformUserId}`,
     displayName: candidate.displayName,
+    photoUrl: candidate.photoUrl,
     roleId,
     directGrants: [],
     links: [{ platform, value: platformUserId, handle: candidate.username ?? candidate.email, verified: platform !== "password" }],

@@ -1,3 +1,4 @@
+import { isLoginProviderId } from "../../../../contract/login.ts";
 import { removeAvatar, uploadAvatar } from "./avatars.ts";
 import { identityRoute, type Route } from "./routing.ts";
 import { me, subscriptions, updateSubscriptions, appearance, updateAppearance } from "./profile.ts";
@@ -12,7 +13,8 @@ export const profileRoutes: Readonly<Record<string, Route>> = {
   "GET /me": identityRoute((identity) => me(identity)),
   "GET /me/accounts": identityRoute((identity) => linkedAccounts(identity)),
   "POST /me/accounts/{provider}": identityRoute((identity, event) => {
-    const provider = proofLinkProviders.get(parameter(event, "provider"));
+    const named = parameter(event, "provider");
+    const provider = isLoginProviderId(named) ? proofLinkProviders.get(named) : undefined;
     return provider === undefined ? errorResponse(404, "not_found") : linkProofAccount(identity, provider, event);
   }),
   "POST /me/password": identityRoute((identity, event) => (

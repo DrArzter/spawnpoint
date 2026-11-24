@@ -429,6 +429,7 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readOperationProgress: createOperationProgressReader({ sfn, hostLog: createHostLogReader({ ssm, logs }), machines: operationMachines, expectation: expectedDuration }),
   readWorldSessionHosts: createSessionHostReader({ sfn, document, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines }),
   listWorldRecords,
+  findSessionPlacement: (sessionId) => findSessionPlacement(sessionId),
 };
 
 async function readDynamicProjection() {
@@ -464,7 +465,7 @@ export function dashboardControlPlaneSources(): ControlPlaneSources {
 // --- Where a session runs (ADR-0054) ------------------------------------------
 
 /** Which host and slot a session holds, from the host records beside the lifecycle. */
-export async function findSessionPlacement(sessionId: string): Promise<Readonly<{ hostId: string; slot: number }> | null> {
+async function findSessionPlacement(sessionId: string): Promise<Readonly<{ hostId: string; slot: number }> | null> {
   let exclusiveStartKey: Record<string, unknown> | undefined;
   do {
     const page = await document.send(new ScanCommand({

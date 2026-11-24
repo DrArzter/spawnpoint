@@ -43,6 +43,7 @@ const ROUTES = [
   ["world-backups", `${WORLD}/backups`],
   ["world-releases", `${WORLD}/releases`],
   ["world-whitelist", `${WORLD}/whitelist`],
+  ["world-config", `${WORLD}/config`],
   ["world-console", `${WORLD}/console`],
   ["world-metrics", `${WORLD}/metrics`],
   ["world-factorio", "/?demo&latency=0#/worlds/factorio/factorio"],

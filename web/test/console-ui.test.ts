@@ -16,7 +16,7 @@ import { Copy } from "../src/skins/console/ui/Copy.tsx";
 import { DetailList } from "../src/skins/console/ui/DetailList.tsx";
 import { Dialog } from "../src/skins/console/ui/Dialog.tsx";
 import { Empty, LoadError } from "../src/skins/console/ui/Empty.tsx";
-import { Checkbox, Field, RadioCards, Select, TextInput, Toggle } from "../src/skins/console/ui/Fields.tsx";
+import { Checkbox, Field, RadioCards, Select, TextArea, TextInput, Toggle } from "../src/skins/console/ui/Fields.tsx";
 import { applyFilter, FilterBar } from "../src/skins/console/ui/FilterBar.tsx";
 import { elapsed } from "../src/skins/console/ui/Flashbar.tsx";
 import { frameItems } from "../src/skins/console/ui/Frame.tsx";
@@ -329,6 +329,16 @@ test("Segmented and Tabs: one value chosen, tied to its panel", () => {
   assert.match(tabs, /aria-controls="w-panel-wipes" aria-selected="true" class="c-tab" id="w-tab-wipes" role="tab" tabindex="0"/);
   assert.match(tabs, /c-tab-count">2/);
   assert.match(html(createElement(TabPanel, { prefix: "w", id: "wipes" }, "x")), /aria-labelledby="w-tab-wipes" class="c-tabpanel" id="w-panel-wipes" role="tabpanel"/);
+});
+
+test("TextArea: a monospaced block that never wraps, tied to its Field like any control", () => {
+  const markup = html(createElement(Field, { label: "Contents", error: "Too long." }, createElement(TextArea, { value: "a = 1", onChange: noop })));
+  const id = markup.match(/<label class="c-field-label" for="([^"]+)"/)?.[1];
+  assert.ok(id);
+  assert.match(markup, /<textarea class="c-textarea c-mono"/);
+  assert.match(markup, new RegExp(`id="${id}" aria-invalid="true" aria-describedby="${id}-error"`));
+  assert.match(markup, /spellCheck|spellcheck="false"/i);
+  assert.match(html(createElement(TextArea, { "aria-label": "Contents of config/a.toml", value: "", onChange: noop })), /aria-label="Contents of config\/a\.toml"/);
 });
 
 test("Fields: a label tied to its control, an error tied with aria-describedby", () => {

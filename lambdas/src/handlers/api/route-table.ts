@@ -11,6 +11,7 @@ import { releasesRoutes } from "./releases-routes.ts";
 import { backupsRoutes } from "./backups-routes.ts";
 import { promotionRoutes } from "./promotion-routes.ts";
 import { consoleRoutes } from "./console-routes.ts";
+import { worldConfigRoutes } from "./world-config-routes.ts";
 import { invitationsRoutes } from "./invitations-routes.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
 import { mcpRoutes } from "./mcp-routes.ts";
@@ -33,6 +34,7 @@ export const routes = composeRoutes(
   backupsRoutes,
   promotionRoutes,
   consoleRoutes,
+  worldConfigRoutes,
   invitationsRoutes,
   oauthRoutes,
   mcpRoutes,

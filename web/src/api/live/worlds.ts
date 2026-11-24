@@ -1,5 +1,5 @@
 import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../../model";
-import type { ApiErrorBody, FileLink, ReleaseDiff, ReleaseModPage, ReleaseModQuery, ReleasePackName, SavedWhitelist, SessionOperation, SpawnpointApi, StopPlayersPolicy, WorldLifecycleAction, WorldWhitelist } from "../contract";
+import { ApiError, type ApiErrorBody, type ConfigFileContent, type ConfigFileList, type SavedConfigFile, type FileLink, type ReleaseDiff, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type StopPlayersPolicy, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { API_ERROR_TEXT } from "../error-text";
 import { request, requestOrNull } from "./request";
 
@@ -192,6 +192,51 @@ export const worldsApi = {
       valid: (answer) => answer.names !== undefined,
     });
     return { managed: true, names: body.names ?? [], updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null, applied: body.applied === "reloading" ? "reloading" : "next_start" };
+  },
+
+  async loadConfigFiles(gameId: string, worldId: string): Promise<ConfigFileList> {
+    try {
+      const body = await request<Partial<ConfigFileList>>(`${worldPath(gameId, worldId)}/config-files`, {
+        failure: "The config files could not be read.",
+        refusals: { forbidden: "Your role cannot edit config files." },
+        valid: (answer) => Array.isArray(answer.files),
+      });
+      return { release: body.release ?? null, roots: body.roots ?? [], maxBytes: body.maxBytes ?? 0, files: body.files ?? [] };
+    } catch (error) {
+      // A game with no config rules has nothing to list, which is not a failure.
+      if (error instanceof ApiError && error.code === "game_has_no_config_files") return { release: null, roots: [], maxBytes: 0, files: [] };
+      throw error;
+    }
+  },
+
+  async loadConfigFile(gameId: string, worldId: string, path: string): Promise<ConfigFileContent> {
+    return request<ConfigFileContent>(`${worldPath(gameId, worldId)}/config-files/content?${new URLSearchParams({ path })}`, {
+      failure: "The file could not be read.",
+      refusals: { forbidden: "Your role cannot edit config files." },
+      valid: (answer) => typeof answer.text === "string" && typeof answer.sha256 === "string",
+    });
+  },
+
+  async saveConfigFile(gameId: string, worldId: string, path: string, text: string, expectedSha256: string | null): Promise<SavedConfigFile> {
+    return request<SavedConfigFile>(`${worldPath(gameId, worldId)}/config-files`, {
+      method: "PUT", body: { path, text, expectedSha256 },
+      failure: "The file could not be saved.",
+      refusals: {
+        forbidden: "Your role cannot edit config files.",
+        world_archived: "This world is archived. Restore a backup before changing its files.",
+      },
+      valid: (answer) => typeof answer.sha256 === "string",
+    });
+  },
+
+  async resetConfigFile(gameId: string, worldId: string, path: string, expected: string | null): Promise<void> {
+    const params = new URLSearchParams({ path });
+    if (expected !== null) params.set("expected", expected);
+    await request<unknown>(`${worldPath(gameId, worldId)}/config-files?${params}`, {
+      method: "DELETE",
+      failure: "The file could not be reset.",
+      refusals: { forbidden: "Your role cannot edit config files." },
+    });
   },
 
   async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage> {

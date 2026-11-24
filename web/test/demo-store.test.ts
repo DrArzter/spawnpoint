@@ -205,3 +205,35 @@ test("a never-started world switches its release at once, with no operation, and
   assert.deepEqual([sandbox().release.activeRelease, sandbox().release.runCount], ["1.1", 1]);
   assert.equal(store.promoteWorld(GAME, created, "1.3").result, "requested", "once it ran, the promotion path applies");
 });
+
+test("a world's config files list the release's files and the world's edit, and keep a save, a reset and a stale save honest (ADR-0093)", () => {
+  const listed = store.configFiles(GAME, ROSTIK);
+  assert.equal(listed.release, "1.3");
+  const claims = listed.files.find((file) => file.path === "config/claims.toml")!;
+  assert.equal(claims.source, "world", "the seeded world edit");
+  assert.equal(claims.releaseChanged, true);
+  assert.equal(listed.files.find((file) => file.path === "config/large.bin")!.editable, false);
+  assert.throws(() => store.configFile(GAME, ROSTIK, "config/large.bin"), { code: "config_file_not_editable" });
+  const server = store.configFile(GAME, ROSTIK, "config/mod/server.toml");
+  assert.equal(server.source, "release");
+  // A save names the digest it loaded; the next one with that digest is stale.
+  const saved = store.saveConfigFile(GAME, ROSTIK, server.path, `${server.text}# tuned\n`, server.sha256);
+  assert.throws(() => store.saveConfigFile(GAME, ROSTIK, server.path, "other", server.sha256), { code: "config_file_changed" });
+  const edited = store.configFiles(GAME, ROSTIK).files.find((file) => file.path === server.path)!;
+  assert.equal(edited.source, "world");
+  assert.equal(edited.worldSha256, saved.sha256);
+  assert.throws(() => store.resetConfigFile(GAME, ROSTIK, server.path, "stale"), { code: "config_file_changed" });
+  store.resetConfigFile(GAME, ROSTIK, server.path, saved.sha256);
+  assert.equal(store.configFiles(GAME, ROSTIK).files.find((file) => file.path === server.path)!.source, "release");
+  // Saving the release's own text removes the edit; a new file under a root is the world's own.
+  const reloaded = store.configFile(GAME, ROSTIK, claims.path);
+  store.saveConfigFile(GAME, ROSTIK, claims.path, "[claims]\nmax_chunks = 100\nallow_pvp = true\n", reloaded.sha256);
+  assert.equal(store.configFiles(GAME, ROSTIK).files.find((file) => file.path === claims.path)!.source, "release");
+  store.saveConfigFile(GAME, ROSTIK, "config/new.toml", "a = 1\n", null);
+  assert.equal(store.configFiles(GAME, ROSTIK).files.find((file) => file.path === "config/new.toml")!.source, "world_only");
+  assert.throws(() => store.saveConfigFile(GAME, ROSTIK, "elsewhere/new.toml", "a", null), { code: "invalid_config_path" });
+});
+
+test("a game with no config rules lists no files in the demo", () => {
+  assert.deepEqual(store.configFiles("factorio", "factorio"), { release: null, roots: [], maxBytes: 0, files: [] });
+});

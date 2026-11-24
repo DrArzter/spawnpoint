@@ -1,6 +1,7 @@
 import type { SettingValue } from "./game-settings.ts";
 import { checkWhitelist } from "./whitelist.ts";
 import { findGameModule } from "./game-modules.ts";
+import { configPathValid, type WorldConfigFile, type WorldConfigFiles } from "./world-config.ts";
 import { usableByNewWipe, type PresetObservation } from "./preset-catalog.ts";
 
 export type GenerationSource =
@@ -51,6 +52,8 @@ export type WorldRecord = Readonly<{
   gameSettings?: WorldGameSettings;
   /** Absent: Spawnpoint does not keep this world's whitelist. Empty: nobody may join. */
   whitelist?: WorldWhitelist;
+  /** The config files the world keeps its own version of (ADR-0093), by path. They outlive wipes. */
+  configFiles?: WorldConfigFiles;
 }>;
 
 type ObjectValue = Record<string, unknown>;
@@ -106,6 +109,36 @@ function parseWhitelist(value: unknown, gameId: unknown): WorldWhitelist | null 
     typeof by.identity_id !== "string" || by.identity_id.length === 0 || typeof by.display_name !== "string"
   ) return null;
   return { names: check.names, updatedAt: root.updated_at, updatedBy: { identityId: by.identity_id, displayName: by.display_name } };
+}
+
+// Stored config files are held to their game's rules; a game that allows none has no valid set.
+function parseConfigFiles(value: unknown, gameId: unknown): WorldConfigFiles | null {
+  const rules = typeof gameId === "string" ? findGameModule(gameId)?.configFileRules ?? null : null;
+  const root = object(value);
+  if (rules === null || root === null) return null;
+  const files: Record<string, WorldConfigFile> = {};
+  for (const [path, entry] of Object.entries(root)) {
+    const file = object(entry);
+    const by = object(file?.updated_by);
+    if (
+      !configPathValid(path, rules) || file === null || by === null ||
+      typeof file.sha256 !== "string" || !SHA256.test(file.sha256) ||
+      typeof file.bytes !== "number" || !Number.isSafeInteger(file.bytes) || file.bytes < 0 || file.bytes > rules.maxBytes ||
+      (file.base_sha256 !== null && (typeof file.base_sha256 !== "string" || !SHA256.test(file.base_sha256))) ||
+      typeof file.updated_at !== "string" || Number.isNaN(Date.parse(file.updated_at)) ||
+      typeof by.identity_id !== "string" || by.identity_id.length === 0 || typeof by.display_name !== "string"
+    ) return null;
+    files[path] = {
+      sha256: file.sha256, bytes: file.bytes, baseSha256: file.base_sha256 as string | null, updatedAt: file.updated_at,
+      updatedBy: { identityId: by.identity_id, displayName: by.display_name },
+    };
+  }
+  return files;
+}
+
+export function withConfigFiles(record: WorldRecord, configFiles: WorldConfigFiles): WorldRecord {
+  const { configFiles: _previous, ...rest } = record;
+  return Object.keys(configFiles).length === 0 ? rest : { ...rest, configFiles };
 }
 
 export function withWhitelist(record: WorldRecord, whitelist: WorldWhitelist): WorldRecord {
@@ -336,6 +369,10 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
       updated_at: record.whitelist.updatedAt,
       updated_by: { identity_id: record.whitelist.updatedBy.identityId, display_name: record.whitelist.updatedBy.displayName },
     } }),
+    ...(record.configFiles === undefined ? {} : { config_files: Object.fromEntries(Object.entries(record.configFiles).map(([path, file]) => [path, {
+      sha256: file.sha256, bytes: file.bytes, base_sha256: file.baseSha256, updated_at: file.updatedAt,
+      updated_by: { identity_id: file.updatedBy.identityId, display_name: file.updatedBy.displayName },
+    }])) }),
   };
 }
 
@@ -379,6 +416,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
   const previous = Array.isArray(previousValues) ? previousValues.map((value) => parseGeneration(value, true)) : null;
   const gameSettings = root?.game_settings === undefined ? undefined : parseGameSettings(root.game_settings);
   const whitelist = root?.whitelist === undefined ? undefined : parseWhitelist(root.whitelist, root.game);
+  const configFiles = root?.config_files === undefined ? undefined : parseConfigFiles(root.config_files, root.game);
   if (
     root?.schema_version !== 1 || root.storage_layout !== "generation" ||
     typeof root.world_id !== "string" || !ID.test(root.world_id) ||
@@ -393,7 +431,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     placementConflicts(root.placement, root.connectivity) ||
     preset === null ||
     generation === null || previous === null || previous.includes(null) ||
-    gameSettings === null || whitelist === null
+    gameSettings === null || whitelist === null || configFiles === null
   ) return null;
   const current = generation as WorldGeneration;
   const history = previous as ClosedWorldGeneration[];
@@ -418,5 +456,6 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     previousGenerations: history,
     ...(gameSettings === undefined ? {} : { gameSettings }),
     ...(whitelist === undefined ? {} : { whitelist }),
+    ...(configFiles === undefined ? {} : { configFiles }),
   };
 }

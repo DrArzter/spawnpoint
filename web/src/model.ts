@@ -11,7 +11,7 @@ export type AccessTab = "users" | "roles" | "notifications";
 export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unknown";
 
 /** A world's console and metrics are its own: several worlds of a game can run at once (ADR-0062). */
-export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "console" | "metrics";
+export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "config" | "console" | "metrics";
 
 /** A role as the API serves it; `assignable` is the caller's own reading, so a skin never works out who may give what. */
 export type Role = AccessRole;

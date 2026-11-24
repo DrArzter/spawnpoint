@@ -6,6 +6,7 @@ import type { BackupEntry, BackupInventory } from "../../../contract/backups";
 import type { ApiErrorCode } from "../../../contract/errors";
 import type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermission, AccessRole, AccessRoleDirectory, AccountProfile, AppearancePreference, ApprovedIdentity, InvitationRecipient, InvitationSummary, IssuedAccessInvitation, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, RoleDefinition, SubscriptionState, VisitorSession, ActiveSession as ServedSession } from "../../../contract/access";
 import type { HostLogLine, OperationProgress, OperationStep } from "../../../contract/operations";
+import type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../contract/config-files";
 
 // Shapes the API and the panel share live in ../contract (review X2).
 export type { ApiErrorCode };
@@ -13,6 +14,8 @@ export type { ApiErrorCode };
 export type { AccessCandidate, AccessIdentity, AccessInvitation, AccessPermission, AccessRole, AccessRoleDirectory, AccountProfile, AppearancePreference, ApprovedIdentity, InvitationRecipient, InvitationSummary, IssuedAccessInvitation, LinkedLoginAccount, LinkedLoginAccounts, LoginOptions, RoleDefinition, SubscriptionState, VisitorSession };
 /** A signed-in session; `demo` is set by a transport whose data is not real, so the panel can say so. */
 export type ActiveSession = ServedSession & Readonly<{ demo?: boolean }>;
+/** A world's own config files (contract/config-files.ts). */
+export type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../contract/config-files";
 export type { BackupEntry, BackupInventory, ConsoleEntry, HostLogLine, HostMetricPoint, HostMetrics, HostMetricSeries, MetricRange, OperationProgress, OperationStep };
 
 export type PromotionResult = { result: "requested"; operationId: string } | { result: "switched" };
@@ -246,6 +249,13 @@ export type SpawnpointApi = Readonly<{
   loadWhitelist(gameId: string, worldId: string): Promise<WorldWhitelist>;
   /** The whole list; a running world is asked to reload it, any start writes it. */
   updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist>;
+  /** The files the world may edit, as the next start finds them (ADR-0093). A game with no config rules answers an empty list. */
+  loadConfigFiles(gameId: string, worldId: string): Promise<ConfigFileList>;
+  loadConfigFile(gameId: string, worldId: string, path: string): Promise<ConfigFileContent>;
+  /** `expectedSha256` is the digest the editor loaded, or null for a new file; a changed file is refused. */
+  saveConfigFile(gameId: string, worldId: string, path: string, text: string, expectedSha256: string | null): Promise<SavedConfigFile>;
+  /** Drops the world's edit so the next start takes the release's file; `expected` is the world's digest. */
+  resetConfigFile(gameId: string, worldId: string, path: string, expected: string | null): Promise<void>;
   /** A release's server mods, from its manifest. */
   loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage>;
   /** What a release changes: against `from`, or, with null, against what its build compared it with; null when that build kept no plan. */

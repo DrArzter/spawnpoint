@@ -157,6 +157,11 @@ if [[ -n "${release_bucket}" ]]; then
     if declare -F game_apply_release_overrides >/dev/null; then
       game_apply_release_overrides "${payload_dir}/manifest.json" >&2
     fi
+    # The world's own config files (ADR-0093) go over the release's.
+    world_config_files="${WORLD_CONFIG_FILES:-}"
+    [[ -n "${world_config_files}" ]] || world_config_files='{}'
+    "${SCRIPT_DIR}/apply-world-config.sh" "${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${SERVER_DIR}/data}" \
+      "${GAME_ID}" "${WORLD_ID:-${world_name}}" "${world_config_files}" >&2
     if declare -F game_prepare_runtime >/dev/null; then
       game_prepare_runtime "${payload_dir}/manifest.json"
     fi

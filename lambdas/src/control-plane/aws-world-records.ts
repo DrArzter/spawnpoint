@@ -9,8 +9,8 @@ import { type ReleaseState } from "./release-state.ts";
 import { switchBeforeFirstStart } from "./release-switch.ts";
 import { S3ReleaseStateStore } from "./s3-release-state-store.ts";
 import { S3WorldReader, S3WorldRepository } from "./s3-world-repository.ts";
-import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
-import type { WorldRecords } from "./world-records.ts";
+import { newWorldRecord, withConfigFiles, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
+import type { ConfigFilesUpdate, WorldRecords } from "./world-records.ts";
 import type { SwitchOutcome, SwitchRequest } from "./release-switch.ts";
 
 // A world's record and its release pointer in the release bucket, with the
@@ -124,6 +124,22 @@ async function replaceWorldGameSettings(
 }
 
 /** A world's whitelist (ADR-0066). The world keeps it from now on, on every host it lands. */
+async function updateWorldConfigFiles(gameId: string, worldId: string, update: ConfigFilesUpdate) {
+  const worlds = worldRepository();
+  const stored = await worlds.read(worldId);
+  if (stored?.record.gameId !== gameId) return "missing" as const;
+  if (stored.record.status !== "active") return "archived" as const;
+  const next = update(stored.record.configFiles ?? {});
+  if ("refused" in next) return next.refused;
+  try {
+    await worlds.replace(withConfigFiles(stored.record, next.files), stored.etag);
+    return "updated" as const;
+  } catch (error) {
+    if (preconditionFailed(error)) return "conflict" as const;
+    throw error;
+  }
+}
+
 async function replaceWorldWhitelist(
   gameId: string,
   worldId: string,
@@ -167,6 +183,7 @@ export const awsWorldRecords: WorldRecords = {
   materialize: materializePresetWorld,
   replaceGameSettings: replaceWorldGameSettings,
   replaceWhitelist: replaceWorldWhitelist,
+  updateConfigFiles: updateWorldConfigFiles,
   replaceAccess: replaceWorldAccess,
   switchReleaseBeforeFirstStart,
 };

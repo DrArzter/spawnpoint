@@ -36,8 +36,9 @@ function crowdPeople(state: DemoState): void {
   for (const candidate of state.candidates) candidate.displayName = stretch(`${candidate.displayName}`, 80);
 }
 
-/** Long whitelists and console lines. */
+/** Long whitelists, console lines and config file paths. */
 function crowdRecords(state: DemoState): void {
+  for (const edits of Object.values(state.configEdits)) edits[`config/${"a-very-long-folder-name/".repeat(4)}added-by-the-world.toml`] = { text: "a = 1\n", base: null, updatedAt: "2026-11-20T19:05:00.000Z", updatedBy: "DrArzter" };
   for (const list of Object.values(state.whitelists)) list.names = Array.from({ length: 24 }, (_, index) => `Player_${String(index).padStart(2, "0")}_long_name`.slice(0, 16));
   for (const [key, entries] of Object.entries(state.console)) state.console[key] = entries.map((entry) => ({ ...entry, output: stretch(`${entry.output} `, 240) }));
 }

@@ -948,6 +948,8 @@ for module in "${GAMES}"/*/game.sh; do
     (.console.suggestions | type == "array" and all(.[]; type == "string")) and
     # Whitelist rules exist exactly when the game keeps a whitelist (ADR-0090).
     ((has("whitelist")) == .capabilities.whitelist) and
+    (.config_files == null or ((.config_files.roots | type == "array" and length > 0 and all(.[]; type == "string")) and
+      (.config_files.max_bytes | type == "number" and . > 0) and (.config_files.text_extensions | type == "array" and length > 0))) and
     (.whitelist == null or ((.whitelist.name_pattern | type == "string") and (.whitelist.name_hint | type == "string"))) and
     (.release == null or (.release | (.version_field | type == "string") and (.loader_versioned | type == "boolean")
       and (.runtime_image_required | type == "boolean")

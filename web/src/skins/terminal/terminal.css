@@ -908,29 +908,48 @@ html[data-skin="terminal"] .t-field {
   min-width: 0;
 }
 
-html[data-skin="terminal"] .t-input {
+html[data-skin="terminal"] .t-input,
+html[data-skin="terminal"] .t-textarea {
   box-sizing: border-box;
   width: 100%;
-  height: var(--t-field);
-  padding: 0 12px;
   border: 1px solid var(--outline-strong);
   border-radius: 0;
   background: var(--surface);
   color: var(--ink);
+}
+
+html[data-skin="terminal"] .t-input {
+  height: var(--t-field);
+  padding: 0 12px;
   font-size: 14px;
   line-height: 20px;
+}
+
+/* A file's contents: a monospaced block whose lines keep their columns. */
+html[data-skin="terminal"] .t-textarea {
+  display: block;
+  min-height: 320px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  overflow: auto;
+  resize: vertical;
+  tab-size: 2;
+  white-space: pre;
 }
 
 html[data-skin="terminal"] .t-input::placeholder {
   color: var(--ink-secondary);
 }
 
-html[data-skin="terminal"] .t-input:disabled {
+html[data-skin="terminal"] .t-input:disabled,
+html[data-skin="terminal"] .t-textarea:disabled {
   color: var(--ink-disabled);
   background: var(--surface-variant);
 }
 
-html[data-skin="terminal"] .t-input:focus-visible {
+html[data-skin="terminal"] .t-input:focus-visible,
+html[data-skin="terminal"] .t-textarea:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -1px;
 }
@@ -1000,7 +1019,8 @@ html[data-skin="terminal"] .t-field-error {
 }
 
 @media (max-width: 959px) {
-  html[data-skin="terminal"] .t-input {
+  html[data-skin="terminal"] .t-input,
+  html[data-skin="terminal"] .t-textarea {
     font-size: 16px;
   }
 }

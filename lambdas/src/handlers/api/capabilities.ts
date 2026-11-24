@@ -16,6 +16,7 @@ const capabilityRoutes: Readonly<Record<string, string>> = {
   releaseDiff: "GET /games/{gameId}/presets/{presetId}/releases/{version}/diff",
   backupDownloads: "POST /games/{gameId}/worlds/{worldId}/backups/download",
   whitelist: "PUT /games/{gameId}/worlds/{worldId}/whitelist",
+  configFiles: "PUT /games/{gameId}/worlds/{worldId}/config-files",
   releaseBuilds: "POST /games/{gameId}/presets/{presetId}/builds",
   releasePromotion: "POST /games/{gameId}/worlds/{worldId}/promote",
   operationProgress: "GET /games/{gameId}/worlds/{worldId}/operations/{operationId}",

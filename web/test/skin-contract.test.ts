@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { actionsOf } from "../src/core/actions.ts";
 import { roleChoice } from "../src/core/roles.ts";
-import type { AccessModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
+import type { AccessModel, ConfigEditorModel, ConfigFilesModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
 import { SKINS } from "../src/skins/index.ts";
 import { aGame, aMember, aPermission, aPreset, aRole, aRolesModel, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
 
@@ -77,7 +77,7 @@ const worldPage: WorldModel = {
   availability: { kind: "ready", label: "Ready" },
   sessionStatus: { kind: "ok", label: "Online" },
   notices: [{ id: "archived", tone: "warning", title: "This world is archived" }],
-  tabs: [{ id: "details", label: "Details" }, { id: "wipes", label: "Wipes", count: 1 }, { id: "backups", label: "Backups" }, { id: "releases", label: "Releases" }, { id: "console", label: "Console" }, { id: "metrics", label: "Metrics" }],
+  tabs: [{ id: "details", label: "Details" }, { id: "wipes", label: "Wipes", count: 1 }, { id: "backups", label: "Backups" }, { id: "releases", label: "Releases" }, { id: "config", label: "Config" }, { id: "console", label: "Console" }, { id: "metrics", label: "Metrics" }],
   tab: "details",
   setTab: noop,
   session: spy("session.stop", "Stop", { danger: true, hint: "Save, back up and stop" }),
@@ -109,7 +109,9 @@ const worldPage: WorldModel = {
       { id: "added:Override:config/new.toml", change: "added", part: "Override", name: "config/new.toml", detail: null },
     ] } } },
   },
-  // Drawn on their own tabs below; on the details tab neither is on screen.
+  // Drawn on their own tabs below; on the details tab none is on screen.
+  whitelist: null,
+  config: null,
   console: null,
   metrics: null,
 };
@@ -193,6 +195,25 @@ const whitelist: WhitelistModel = {
   setDraft: noop,
   draftError: "3 to 16 letters, digits or underscores, as the player types it.",
   add: spy("whitelist.add", "Add player", { disabled: true }),
+};
+const configFiles: ConfigFilesModel = {
+  world,
+  editor: null,
+  list: { status: "ready", value: { release: "1.3", rows: [
+    { path: "config/claims.toml", bytes: 41, edited: true, added: false, releaseChanged: true, updatedAt: "2026-11-20T19:05:00Z", updatedBy: "DrArzter", open: spy("config.open.config/claims.toml", "Edit") },
+    { path: "config/large.bin", bytes: 6_291_456, edited: false, added: false, releaseChanged: false, updatedAt: null, updatedBy: null, open: spy("config.open.config/large.bin", "Edit", { disabled: true, hint: "6.0 MiB: not text, or too large to edit here" }) },
+  ] } },
+};
+const configEditor: ConfigEditorModel = {
+  path: "config/claims.toml",
+  content: { status: "ready", value: null },
+  text: "[claims]\nmax_chunks = 200\n",
+  setText: noop,
+  dirty: true,
+  save: spy("config.save", "Save"),
+  reset: spy("config.reset", "Reset to release"),
+  reload: spy("config.reload", "Reload"),
+  close: spy("config.close", "Close"),
 };
 const gameSettings: GameSettingsModel = {
   game, world, running: true,
@@ -343,6 +364,33 @@ for (const skin of SKINS) {
     assert.match(empty, /Nobody can join/);
     const failed = tab({ ...whitelist, list: { status: "error", error: "boom", kind: "failed", retry: spy("whitelist.retry", "Try again") } });
     assert.match(failed, /data-action="whitelist\.retry"/);
+  });
+
+  test(`${skin.name}: a world's config files list their files with the world's changes, and the open file draws its editor and every verb (ADR-0093)`, () => {
+    const tab = (model: ConfigFilesModel) => renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "config", config: model } }));
+    const list = tab(configFiles);
+    checkSurface("Config files", list, configFiles);
+    assert.match(list, /config\/claims\.toml/);
+    assert.match(list, /Edited in this world/);
+    assert.match(list, /The release changed this file after the edit/);
+    assert.match(list, /data-action="config\.open\.config\/large\.bin"/, "a file the panel cannot open is still drawn, refused");
+    assert.match(list, /Release 1\.3/);
+    const open = tab({ ...configFiles, editor: configEditor });
+    checkSurface("Config editor", open, configEditor);
+    assert.match(open, /<textarea/);
+    assert.match(open, /Contents of config\/claims\.toml/, "the editor is named by its file");
+    assert.match(open, /max_chunks = 200/);
+    assert.match(open, /next start/);
+    assert.match(open, /Someone changed this file/);
+    const quiet = tab({ ...configFiles, editor: { ...configEditor, reload: null, reset: null } });
+    assert.doesNotMatch(quiet, /Someone changed this file|data-action="config\.reset"|data-action="config\.reload"/);
+    const none = tab({ ...configFiles, list: { status: "ready", value: { release: null, rows: [] } } });
+    assert.match(none, /No config files/);
+    const failed = tab({ ...configFiles, list: { status: "error", error: "boom", kind: "failed", retry: spy("config.list.retry", "Try again") } });
+    assert.match(failed, /data-action="config\.list\.retry"/);
+    const unread = tab({ ...configFiles, editor: { ...configEditor, content: { status: "error", error: "boom", kind: "failed", retry: spy("config.retry", "Try again") } } });
+    assert.match(unread, /data-action="config\.retry"/);
+    assert.doesNotMatch(unread, /<textarea/);
   });
 
   test(`${skin.name}: the game settings sheet draws every kind of setting, its errors, save, defaults and cancel (ADR-0064)`, () => {

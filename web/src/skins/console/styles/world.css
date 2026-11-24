@@ -231,3 +231,14 @@ html[data-skin="console"] .c-strip-axis {
     max-width: none;
   }
 }
+
+html[data-skin="console"] .c-config-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html[data-skin="console"] .c-config-note {
+  margin: 12px 0 0;
+  font-size: var(--c-fs-s);
+}

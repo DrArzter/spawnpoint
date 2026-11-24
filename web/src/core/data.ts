@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
+import type { AccessCandidate, AccessInvitation, ApiFailureKind, BackupEntry, BackupInventory, ConfigFile, ConfigFileContent, ConfigFileList, ConsoleEntry, HostMetrics, InvitationRecipient, InvitationSummary, LinkedLoginAccounts, MetricRange, ReleaseDiff, ReleaseMod, ReleaseModPage, SavedWhitelist, SubscriptionState, WorldWhitelist } from "../api/contract";
 import { ApiError, failureKind } from "../api/contract";
 import { useApi, useSignInConfig } from "../api/context";
 import type { StatusKind } from "./status";
-import { formatDateTime } from "../lib/format";
+import { formatBytes, formatDateTime } from "../lib/format";
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, Member, OwnerBootstrap, Role, World } from "../model";
 import { action, type Action } from "./actions";
 import type { Notify } from "./notify";
-import type { BackupsModel, CandidateRow, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RoleEditorModel, RolesModel, UsersModel, WhitelistModel } from "./models";
+import type { BackupsModel, CandidateRow, ConfigEditorModel, ConfigFileRow, ConfigFilesModel, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RoleEditorModel, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseChangeRows } from "./release-diff";
 import { candidateKey, type AccessDirectory } from "./access-directory";
 import { defaultRoleChoice, offeredPermissions, ROLE_ID_PATTERN, roleChoice, roleDeleteRefusal, roleEditRefusal, roleIdFor } from "./roles";
@@ -128,6 +128,112 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
     },
   };
   return { world, list, draft, setDraft, draftError, add };
+}
+
+// --- config files (ADR-0093) --------------------------------------------------
+
+/** The rows of a world's config files, sorted by path; a file that is not text cannot be opened. */
+function configRows(files: readonly ConfigFile[], select: (path: string) => void): readonly ConfigFileRow[] {
+  return [...files].sort((a, b) => a.path.localeCompare(b.path)).map((file) => ({
+    path: file.path,
+    bytes: file.bytes,
+    edited: file.source !== "release",
+    added: file.source === "world_only",
+    releaseChanged: file.releaseChanged,
+    updatedAt: file.updatedAt,
+    updatedBy: file.updatedBy,
+    open: action(`config.open.${file.path}`, "Edit", () => select(file.path), {
+      icon: "edit",
+      disabled: !file.editable,
+      hint: file.editable ? `Edit ${file.path}` : `${formatBytes(file.bytes)}: not text, or too large to edit here`,
+    }),
+  }));
+}
+
+/** The open file's state as the editor shows it: its text lives in the model, a failure offers a retry. */
+function editorContent(content: LoadState<ConfigFileContent>, reload: () => void): ConfigEditorModel["content"] {
+  if (content.status === "ready") return { status: "ready", value: null };
+  if (content.status === "loading") return content;
+  return { status: "error", error: content.error, kind: content.kind, retry: action("config.retry", "Try again", reload) };
+}
+
+/**
+ * A world's config files, read only while its tab is open. One file opens at a
+ * time. A save names the digest the editor loaded, so a change made meanwhile
+ * is refused; the world reads its files at its next start.
+ */
+export function useConfigFiles(gameId: string, world: World, open: boolean, notify: Notify): ConfigFilesModel {
+  const api = useApi();
+  const [state, retry, updateList] = useLoad<ConfigFileList>(open ? () => api.loadConfigFiles(gameId, world.id) : null, [open, gameId, world.id]);
+  const [path, setPath] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [working, setWorking] = useState(false);
+  useEffect(() => { setPath(null); setDraft(null); setStale(false); }, [open, gameId, world.id]);
+  const [loaded, reloadContent, updateContent] = useLoad<ConfigFileContent>(open && path !== null ? () => api.loadConfigFile(gameId, world.id, path) : null, [open, gameId, world.id, path]);
+  // A file's text is its own: the state of the file shown before it is never the new one's.
+  const content: LoadState<ConfigFileContent> = loaded.status === "ready" && loaded.value.path !== path ? { status: "loading" } : loaded;
+
+  const refresh = async () => {
+    try {
+      const fresh = await api.loadConfigFiles(gameId, world.id);
+      updateList(() => fresh);
+    } catch {
+      // The list is shown again from the server when it is opened; a failed refresh keeps the old one.
+    }
+  };
+  const fail = (error: unknown, message: string) => {
+    if (error instanceof ApiError && error.code === "config_file_changed") setStale(true);
+    notify({ tone: "error", message: error instanceof Error ? error.message : message });
+  };
+  const when = `${world.displayName} reads it at its next start.`;
+  const close = () => { setPath(null); setDraft(null); setStale(false); };
+  const row = state.status === "ready" && path !== null ? state.value.files.find((file) => file.path === path) : undefined;
+
+  const rows = state.status === "ready"
+    ? configRows(state.value.files, (file) => { setPath(file); setDraft(null); setStale(false); })
+    : [];
+
+  const text = draft ?? (content.status === "ready" ? content.value.text : "");
+  const dirty = content.status === "ready" && draft !== null && draft !== content.value.text;
+  const shown = editorContent(content, reloadContent);
+  const editor: ConfigEditorModel | null = path === null ? null : {
+    path,
+    content: shown,
+    text,
+    setText: setDraft,
+    dirty,
+    save: action("config.save", "Save", () => {
+      if (content.status !== "ready" || !dirty || draft === null) return;
+      setWorking(true);
+      void api.saveConfigFile(gameId, world.id, path, draft, content.value.sha256)
+        .then(async (saved) => {
+          updateContent((current) => ({ ...current, text: draft, sha256: saved.sha256 }));
+          setDraft(null);
+          notify({ tone: "success", message: `${path} is saved. ${when}` });
+          await refresh();
+        })
+        .catch((error: unknown) => fail(error, "The file could not be saved."))
+        .finally(() => setWorking(false));
+    }, { icon: "check", disabled: content.status !== "ready" || !dirty || stale || working, busy: working, hint: dirty ? undefined : "Nothing to save" }),
+    reset: row?.source === "world" ? action("config.reset", "Reset to release", () => {
+      setWorking(true);
+      void api.resetConfigFile(gameId, world.id, path, row.worldSha256)
+        .then(async () => {
+          setDraft(null);
+          setStale(false);
+          notify({ tone: "success", message: `${path} is the release's file again. ${when}` });
+          reloadContent();
+          await refresh();
+        })
+        .catch((error: unknown) => fail(error, "The file could not be reset."))
+        .finally(() => setWorking(false));
+    }, { icon: "restore", disabled: working, hint: "Drop this world's version and use the release's file" }) : null,
+    reload: stale ? action("config.reload", "Reload", () => { setDraft(null); setStale(false); reloadContent(); void refresh(); }, { icon: "refresh" }) : null,
+    close: action("config.close", "Close", close, { icon: "close" }),
+  };
+  const list: ConfigFilesModel["list"] = state.status !== "ready" ? asLoading(state, retry, "config.list.retry") : { status: "ready", value: { release: state.value.release, rows } };
+  return { world, list, editor };
 }
 
 // --- release files (ADR-0065) -------------------------------------------------

@@ -1,6 +1,10 @@
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { SwitchOutcome, SwitchRequest } from "./release-switch.ts";
 import type { WorldGameSettings, WorldRecord, WorldWhitelist } from "./world-registry.ts";
+import type { WorldConfigFiles } from "./world-config.ts";
+
+/** A change to a world's config files, from the files it holds now; a refusal leaves the record as it is. */
+export type ConfigFilesUpdate = (current: WorldConfigFiles) => Readonly<{ files: WorldConfigFiles } | { refused: "config_file_changed" | "unknown_config_file" }>;
 
 /** What a change to a stored world record came to. */
 export type WorldChange = "updated" | "missing" | "archived" | "conflict";
@@ -18,6 +22,8 @@ export type WorldRecords = Readonly<{
   ) => Promise<WorldRecord>;
   replaceGameSettings: (gameId: string, worldId: string, gameSettings: WorldGameSettings) => Promise<WorldChange>;
   replaceWhitelist: (gameId: string, worldId: string, whitelist: WorldWhitelist) => Promise<WorldChange>;
+  /** Applies `update` to the record as stored, conditional on its version (ADR-0093). */
+  updateConfigFiles: (gameId: string, worldId: string, update: ConfigFilesUpdate) => Promise<WorldChange | "config_file_changed" | "unknown_config_file">;
   replaceAccess: (
     gameId: string,
     worldId: string,

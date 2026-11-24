@@ -212,6 +212,46 @@ export type WhitelistModel = Readonly<{
   add: Action;
 }>;
 
+/**
+ * One file a world may edit (ADR-0093). `edited`: the world keeps its own
+ * version, `added`: the release has no such file. `open` is refused for a
+ * file the panel cannot show (not text, or over the size limit).
+ */
+export type ConfigFileRow = Readonly<{
+  path: string;
+  bytes: number;
+  edited: boolean;
+  added: boolean;
+  /** The release's file changed after the world's edit started from it. */
+  releaseChanged: boolean;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  open: Action;
+}>;
+
+/** The one open file: its text as typed, and what may be done with it. */
+export type ConfigEditorModel = Readonly<{
+  path: string;
+  /** Whether the text has been read; the value is nothing, the text is `text`. */
+  content: Loading<null>;
+  text: string;
+  setText: (value: string) => void;
+  dirty: boolean;
+  save: Action;
+  /** Drops the world's own version; null while the world keeps none or the release has no such file. */
+  reset: Action | null;
+  /** Someone else changed the file since it was opened: reads it again, and the typed text is lost. Null otherwise. */
+  reload: Action | null;
+  close: Action;
+}>;
+
+export type ConfigFilesModel = Readonly<{
+  world: World;
+  list: Loading<Readonly<{ release: string | null; rows: readonly ConfigFileRow[] }>>;
+  /** The file being edited; null while the list shows. */
+  editor: ConfigEditorModel | null;
+}>;
+
 /** One mod of the release a world starts with, of either side, and its download (ADR-0065, ADR-0069). `source` is null for a release built before sources were recorded. */
 export type ModRow = Readonly<{ file: string; bytes: number; sha256: string; source: ModSource | null; download: Action }>;
 /** The rows of the page on screen: what the search and filter match (`total`) and the whole release (`all`). */
@@ -291,6 +331,8 @@ export type WorldModel = Readonly<{
   }>;
   /** The players who may join; null when the role, the game or the world keeps no whitelist here. */
   whitelist: WhitelistModel | null;
+  /** The files the world may edit; null when the role, the deployment or the world offers none. */
+  config: ConfigFilesModel | null;
   /** This world's console and its host's metrics; null when the role or the deployment offers neither tab. */
   console: ConsoleModel | null;
   metrics: MetricsModel | null;

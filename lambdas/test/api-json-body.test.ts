@@ -67,12 +67,15 @@ const READS_BODY = [
   "PUT /games/{gameId}/worlds/{worldId}/game-settings",
   "PUT /games/{gameId}/worlds/{worldId}/settings",
   "PUT /games/{gameId}/worlds/{worldId}/whitelist",
+  "PUT /games/{gameId}/worlds/{worldId}/config-files",
   "PUT /me/appearance",
   "PUT /me/subscriptions",
 ];
 
 // Writes that do not read a body, or that answer in a protocol's own error format.
 const OTHER_WRITES = new Set([
+  // The path and the digest it resets from are query parameters.
+  "DELETE /games/{gameId}/worlds/{worldId}/config-files",
   "POST /access/candidates/{platform}/{platformUserId}/dismiss",
   "POST /access/identities/{identityId}/delete",
   "POST /access/invitations/{invitationId}/revoke",

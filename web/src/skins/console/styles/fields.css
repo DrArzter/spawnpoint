@@ -37,15 +37,31 @@ html[data-skin="console"] .c-field-label {
   font-weight: 700;
 }
 
-html[data-skin="console"] .c-input {
+html[data-skin="console"] .c-input,
+html[data-skin="console"] .c-textarea {
   width: 100%;
-  height: var(--c-field);
-  padding: 0 14px;
   border: 1px solid var(--c-line-2);
   border-radius: var(--c-r-ctl);
   background: var(--c-surface);
   color: var(--c-ink);
   transition: border-color var(--c-d1);
+}
+
+html[data-skin="console"] .c-input {
+  height: var(--c-field);
+  padding: 0 14px;
+}
+
+html[data-skin="console"] .c-textarea {
+  display: block;
+  min-height: 320px;
+  padding: 12px 14px;
+  font-size: var(--c-fs-s);
+  line-height: 1.5;
+  overflow: auto;
+  resize: vertical;
+  tab-size: 2;
+  white-space: pre;
 }
 
 html[data-skin="console"] .c-input-colour {
@@ -54,21 +70,25 @@ html[data-skin="console"] .c-input-colour {
   cursor: pointer;
 }
 
-html[data-skin="console"] .c-input:hover {
+html[data-skin="console"] .c-input:hover,
+html[data-skin="console"] .c-textarea:hover {
   border-color: var(--c-ink-3);
 }
 
-html[data-skin="console"] .c-input:focus {
+html[data-skin="console"] .c-input:focus,
+html[data-skin="console"] .c-textarea:focus {
   border-color: var(--c-accent);
   box-shadow: 0 0 0 1px var(--c-accent);
   outline: 0;
 }
 
-html[data-skin="console"] .c-input[aria-invalid="true"] {
+html[data-skin="console"] .c-input[aria-invalid="true"],
+html[data-skin="console"] .c-textarea[aria-invalid="true"] {
   border-color: var(--c-err);
 }
 
-html[data-skin="console"] .c-input:disabled {
+html[data-skin="console"] .c-input:disabled,
+html[data-skin="console"] .c-textarea:disabled {
   cursor: not-allowed;
   opacity: .55;
 }
@@ -273,6 +293,7 @@ html[data-skin="console"] .c-radio-icon {
 
 @media (pointer: coarse) {
   html[data-skin="console"] .c-input,
+  html[data-skin="console"] .c-textarea,
   html[data-skin="console"] .c-lcol-search input,
   html[data-skin="console"] .c-filter-box input {
     font-size: 16px;

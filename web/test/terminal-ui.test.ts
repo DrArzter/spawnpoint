@@ -7,7 +7,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action } from "../src/core/actions.ts";
-import { Address, FilterRow, Indicator, LoadError, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table } from "../src/skins/terminal/ui.tsx";
+import { Address, FilterRow, Indicator, LoadError, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table, TextArea } from "../src/skins/terminal/ui.tsx";
 
 test("terminal dense status keeps one visible mark and an accessible label", () => {
   const markup = renderToStaticMarkup(createElement(Indicator, { kind: "ok", label: "Verified" }));
@@ -164,4 +164,11 @@ test("a terminal table row's link is a real anchor whose hit area is the row, an
   assert.match(css, /\.t-table \.t-row-link::after \{\s*position: absolute;\s*inset: 0;/);
   assert.match(css, /\.t-table tr \{\s*position: relative;/);
   assert.match(css, /\.t-table :is\(button, select, label, input, \.t-indicator, a:not\(\.t-row-link\)\) \{\s*position: relative;\s*z-index: 1;/);
+});
+
+test("a terminal text area is the shared monospaced block, named by its label and never spell-checked", () => {
+  const markup = renderToStaticMarkup(createElement(TextArea, { "aria-label": "Contents of config/a.toml", onChange: () => undefined, value: "a = 1" }));
+  assert.match(markup, /<textarea class="t-textarea"/);
+  assert.match(markup, /aria-label="Contents of config\/a\.toml"/);
+  assert.match(markup, /spellcheck="false"/i);
 });

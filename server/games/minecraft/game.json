@@ -36,6 +36,36 @@
     "list_reply": "There are (\\d+) whitelisted player(?:s|\\(s\\))?:\\s*(.*)",
     "list_empty": "There are no whitelisted players"
   },
+  "config_files": {
+    "roots": [
+      "config",
+      "defaultconfigs",
+      "kubejs",
+      "scripts",
+      "global_packs",
+      "openloader"
+    ],
+    "max_bytes": 262144,
+    "text_extensions": [
+      "cfg",
+      "conf",
+      "csv",
+      "ini",
+      "js",
+      "json",
+      "json5",
+      "lang",
+      "mcmeta",
+      "md",
+      "properties",
+      "snbt",
+      "toml",
+      "txt",
+      "yaml",
+      "yml",
+      "zs"
+    ]
+  },
   "release": {
     "version_field": "minecraft_version",
     "loader_type": "minecraft",

@@ -148,6 +148,15 @@ export const API_ERROR_TEXT: Readonly<Record<ApiErrorCode, string>> = {
   whitelist_too_long: "A whitelist holds at most 200 names.",
   whitelist_unreadable: "The running server did not answer with its whitelist. Try again.",
 
+  // Config files (ADR-0093)
+  config_file_changed: "Someone changed this file since you opened it. Reload it.",
+  config_file_not_editable: "This file cannot be edited here.",
+  config_file_not_text: "This file is not text.",
+  config_file_too_large: "This file is too large to edit here.",
+  game_has_no_config_files: "This game has no config files.",
+  invalid_config_path: "This path is not a config file of this game.",
+  unknown_config_file: "This file is not in the list. Refresh it.",
+
   // Promotion (a variable carries these)
   release_retired: "That release is retired or being retired. Choose another.",
   release_not_ready: "That release is not built yet. Choose another.",

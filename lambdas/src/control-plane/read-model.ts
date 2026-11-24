@@ -8,6 +8,9 @@ import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
 import { gameSettingDefinitions, type SettingDefinition, type SettingValue } from "./game-settings.ts";
+import type { HostMetricPoint, HostMetricSeries } from "../../../contract/metrics.ts";
+
+export type { HostMetricPoint, HostMetricSeries };
 
 export type HostObservation = Readonly<{
   id: string;
@@ -46,20 +49,6 @@ export type OperationObservation = Readonly<{
   expectedSamples?: number;
 }>;
 
-/** `interpolated` marks a reading drawn between two real ones (memory only, see `joinSampledSeries`). */
-export type HostMetricPoint = Readonly<{ at: string; value: number | null; interpolated?: true }>;
-export type HostMetricSeries = Readonly<{
-  id: string;
-  label: string;
-  unit: string;
-  points: readonly HostMetricPoint[];
-  /**
-   * While the world's session runs: the first slot that cannot hold a reading
-   * yet, because the newest readings arrive late. An empty slot from here on
-   * is "not reported yet", not "no host". Absent when nothing is pending.
-   */
-  pendingFrom?: string;
-}>;
 export type HostMetrics = Readonly<{
   startedAt: string;
   endedAt: string;

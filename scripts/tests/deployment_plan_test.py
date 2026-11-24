@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import re
 import unittest
+from pathlib import Path
 
-from scripts.deployment_plan import make_plan, validated_revision
+from scripts.deployment_plan import BUNDLED_BY_LAMBDAS, BUNDLED_BY_WEB, make_plan, validated_revision
+
+REPOSITORY = Path(__file__).resolve().parents[2]
 
 
 class DeploymentPlanTest(unittest.TestCase):
@@ -32,6 +36,29 @@ class DeploymentPlanTest(unittest.TestCase):
         self.assertEqual(plan["terraform_roots"], [])
         self.assertEqual(plan["terraform_plan_roots"], [])
         self.assertEqual(plan["manual_review"], [])
+
+    def test_a_shared_contract_change_deploys_both_bundles(self) -> None:
+        plan = make_plan(["contract/operations.ts"])
+        self.assertTrue(plan["web"])
+        self.assertTrue(plan["lambdas"])
+
+    def test_a_file_a_lambda_bundles_from_the_host_tree_deploys_the_lambdas(self) -> None:
+        for path in ("server/games/minecraft/settings.json", "server/scripts/host-output.json"):
+            with self.subTest(path=path):
+                self.assertTrue(make_plan([path])["lambdas"])
+
+    def test_every_import_from_outside_a_bundle_has_a_rule(self) -> None:
+        pattern = re.compile(r"""from ["']((?:\.\./)+[^"']+)["']""")
+        for tree, prefixes in (("lambdas/src", BUNDLED_BY_LAMBDAS), ("web/src", BUNDLED_BY_WEB)):
+            bundle = REPOSITORY / tree.split("/")[0]
+            for source in (REPOSITORY / tree).rglob("*.ts*"):
+                for specifier in pattern.findall(source.read_text(encoding="utf-8")):
+                    target = (source.parent / specifier).resolve()
+                    if target.is_relative_to(bundle):
+                        continue
+                    relative = target.relative_to(REPOSITORY).as_posix()
+                    with self.subTest(source=str(source.relative_to(REPOSITORY)), target=relative):
+                        self.assertTrue(relative.startswith(prefixes), f"{relative} is bundled by {tree} but deploys nothing when it changes")
 
     def test_web_change_deploys_only_web(self) -> None:
         plan = make_plan(["web/src/App.tsx"])

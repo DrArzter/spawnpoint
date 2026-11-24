@@ -1117,7 +1117,7 @@ export function runConsoleCommand(gameId: string, worldId: string, command: stri
   if (heldSession(gameId, world)?.observedState !== "ready") throw new Error("This world is not running. Start it first.");
   state.counter += 1;
   const key = worldKey(gameId, worldId);
-  const entry: ConsoleEntry = { id: `console-${state.counter + 100}`, at: iso(), identityId: "identity-owner", displayName: "DrArzter", worldId, command: trimmed, status: "pending", output: null };
+  const entry: ConsoleEntry = { id: `console-${state.counter + 100}`, at: iso(), identityId: "identity-owner", displayName: "DrArzter", agent: null, worldId, command: trimmed, status: "pending", output: null };
   state.console[key] = [entry, ...(state.console[key] ?? [])].slice(0, 30);
   window.setTimeout(() => {
     const list = state.console[key];

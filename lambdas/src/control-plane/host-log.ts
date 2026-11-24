@@ -3,11 +3,10 @@
 // this is an allow-list: a line passes only when it has a known safe shape, and
 // what passes is redacted again. Nothing here reads or writes AWS.
 
+import type { HostLogKind, HostLogLine } from "../../../contract/operations.ts";
 import hostOutput from "../../../server/scripts/host-output.json" with { type: "json" };
 
-export type HostLogKind = "step" | "result" | "container" | "error" | "warning" | "game";
-
-export type HostLogLine = Readonly<{ at: string; kind: HostLogKind; text: string }>;
+export type { HostLogKind, HostLogLine };
 
 /** One raw event of a command's output stream. */
 export type RawLogEvent = Readonly<{ timestamp: number; message: string }>;

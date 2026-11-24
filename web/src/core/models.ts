@@ -570,7 +570,11 @@ export type ConnectionFieldsModel = Readonly<{
   connectivity: World["connectivity"];
   setConnectivity: (connectivity: World["connectivity"]) => void;
   dnsAvailable: boolean;
+  /** The connections this placement offers, decided once for both skins (ADR-0085). */
+  connections: readonly ConnectionOption[];
 }>;
+
+export type ConnectionOption = Readonly<{ value: World["connectivity"]; label: string; disabled: boolean; hint?: string }>;
 
 export type CreateWorldModel = Readonly<{
   game: Game;

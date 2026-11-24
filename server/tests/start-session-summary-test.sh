@@ -27,6 +27,8 @@ printf 'container chatter on stdout\n'
 printf 'container chatter on stderr\n' >&2
 # What the session decided about the gate, for a test to read.
 printf '%s\n' "${SPAWNPOINT_WHITELIST_ENABLED-unset}" >"${SPAWNPOINT_WHITELIST_PROBE:-/dev/null}"
+# The address the game ports listen on (ADR-0085), for a test to read.
+printf '%s\n' "${SPAWNPOINT_GAME_BIND-unset}" >"${SPAWNPOINT_BIND_PROBE:-/dev/null}"
 STUB
 cat >"${fixture}/bin/zerotier-cli" <<'STUB'
 #!/usr/bin/env bash
@@ -44,6 +46,10 @@ grep -Fxq 'connection_host=172.29.23.24' <<<"${text_output}"
 grep -Fxq 'connection_address=172.29.23.24:25565' <<<"${text_output}"
 grep -Fxq 'zerotier_network=b6079f73c6698651' <<<"${text_output}"
 grep -Fxq 'container chatter on stdout' <<<"${text_output}"
+
+# --- a ZeroTier world listens on the overlay address alone (ADR-0085) ---
+SPAWNPOINT_BIND_PROBE="${fixture}/bind" "${session}" >/dev/null 2>&1
+[[ "$(cat "${fixture}/bind")" == "172.29.23.24" ]]
 
 # --- json is one document, and nothing else reaches stdout ---
 json_output="$(SESSION_FORMAT=json "${session}" 2>"${fixture}/json.err")"

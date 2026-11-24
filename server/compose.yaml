@@ -23,7 +23,9 @@ services:
     ports:
       # The host port is the session's slot (ADR-0054): slot zero, and an
       # unplaced session, keep the game's own; the container never changes.
-      - "${SPAWNPOINT_GAME_PORT:-25565}:25565"
+      # The address is the session's connection (ADR-0085): a ZeroTier world
+      # listens on the overlay alone, a public world on every address.
+      - "${SPAWNPOINT_GAME_BIND:-0.0.0.0}:${SPAWNPOINT_GAME_PORT:-25565}:25565"
     environment:
       CF_API_KEY: ${CF_API_KEY}
       EULA: "TRUE"

@@ -9,7 +9,7 @@ services:
     image: thijsvanloef/palworld-server-docker@sha256:86fc7470949f6fcc931cb6443f61facc79bacc09e3f40d46e628d9e1ef6e56cd
     ports:
       # The host port is the session's slot (ADR-0054); the container's is fixed.
-      - "${SPAWNPOINT_GAME_PORT:-8211}:8211/udp"
+      - "${SPAWNPOINT_GAME_BIND:-0.0.0.0}:${SPAWNPOINT_GAME_PORT:-8211}:8211/udp"
       # The REST API stays host-local: the probe's transport (ADR-0076), never a
       # player surface. Its maker says it must not face the Internet.
       - "127.0.0.1:${SPAWNPOINT_RCON_PORT:-8212}:8212/tcp"

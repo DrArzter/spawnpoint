@@ -118,9 +118,20 @@ run "free_plan_host_preserves_m0_invariants" {
     error_message = "The Free Plan host must remain m7i-flex.large until an explicit paid upgrade."
   }
 
+  # ADR-0085: the persistent host opens each game module's own port and the
+  # slot range, and nothing else. What listens on them is decided per session
+  # (server/tests/compose-bindings-test.sh).
   assert {
-    condition     = length(local.public_game_ports) == 0
-    error_message = "No world declares a public connectivity today, so the host must open no port at all. Opening one is a catalog diff — and the check block refuses a public world that declares no authentication."
+    condition = (
+      length(aws_security_group.game_host.ingress) == length(local.fleet_game_ports) + 2
+      && alltrue([for module in values(local.fleet_game_ports) : anytrue([
+        for rule in aws_security_group.game_host.ingress : rule.from_port == module.port && rule.to_port == module.port && rule.protocol == module.protocol
+      ])])
+      && alltrue([for protocol in ["tcp", "udp"] : anytrue([
+        for rule in aws_security_group.game_host.ingress : rule.from_port == 30010 && rule.to_port == 32559 && rule.protocol == protocol
+      ])])
+    )
+    error_message = "The persistent host opens exactly the game modules' own ports and the slot range (ADR-0085)."
   }
 
   # The mechanism itself: a world that does declare one must produce exactly one
@@ -268,10 +279,19 @@ run "host_steps_pass_values_only_through_checked_document_parameters" {
   }
 
   assert {
+    condition = alltrue([
+      for document in [aws_ssm_document.start_session, aws_ssm_document.stop_session] :
+      anytrue([for line in jsondecode(document.content).mainSteps[0].inputs.runCommand : strcontains(line, "SPAWNPOINT_INSTANCE_ID") && strcontains(line, "AWS_SSM_INSTANCE_ID")])
+      && !anytrue([for line in jsondecode(document.content).mainSteps[0].inputs.runCommand : strcontains(line, "SPAWNPOINT_DNS_ZONE_ID")])
+    ])
+    error_message = "The host steps carry the instance id from the SSM agent, and DNS settings only when the deployment has a DNS zone (ADR-0085)."
+  }
+
+  assert {
     condition = (
       strcontains(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand[2], "update-checkout.sh")
       && strcontains(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand[2], ">&2 || true")
-      && strcontains(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand[4], "start-session.sh")
+      && strcontains(element(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand, length(jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand) - 1), "start-session.sh")
     )
     error_message = "Every start first brings the host's checkout to the deployed commit, writing to standard error and never failing for it: the session summary is read from standard output."
   }
@@ -522,4 +542,37 @@ run "a_stop_refused_for_players_online_does_not_alarm" {
 # The deploy workflows pass the repository they run in.
 variables {
   repository_url = "https://github.com/example/spawnpoint.git"
+}
+
+run "host_steps_carry_the_dns_settings_when_the_deployment_has_a_zone" {
+  command = plan
+
+  variables {
+    game_dns_zone_name = "example.com"
+    game_dns_suffix    = "games.example.com"
+  }
+
+  override_data {
+    target = data.aws_route53_zone.game[0]
+    values = {
+      zone_id = "Z0123456789ABC"
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.game_host_dns[0]
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      for document in [aws_ssm_document.start_session, aws_ssm_document.stop_session] :
+      anytrue([for line in jsondecode(document.content).mainSteps[0].inputs.runCommand :
+        strcontains(line, "SPAWNPOINT_DNS_ZONE_ID='Z0123456789ABC'") && strcontains(line, "SPAWNPOINT_DNS_SUFFIX='games.example.com'") && strcontains(line, "SPAWNPOINT_DNS_LEDGER_TABLE='")
+      ])
+    ])
+    error_message = "The persistent host's environment is not Terraform's, so the host steps carry the deployment's DNS settings (ADR-0085)."
+  }
 }

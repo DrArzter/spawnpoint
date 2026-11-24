@@ -71,28 +71,39 @@ locals {
     if try(world.connectivity, "zerotier") != "zerotier"
   ]
 
-  # One rule per distinct port, since two worlds of the same game share it.
-  public_game_ports = {
-    for world in local.public_worlds : "${world.protocol}-${world.port}" => world...
-  }
 }
 
 resource "aws_security_group" "game_host" {
   # AWS makes a security group's description immutable. Keep the legacy text
-  # so adding catalog-driven public rules never replaces the group (and, by
-  # dependency, the host). The ingress blocks below are the source of truth.
+  # so changing the rules never replaces the group (and, by dependency, the
+  # host). The ingress blocks below are the source of truth.
   name        = "spawnpoint-game-host"
   description = "ZeroTier-only game host; deliberately no inbound rules"
   vpc_id      = aws_vpc.main.id
 
+  # ADR-0085: the persistent host serves public worlds too, so it opens every
+  # game module's own port, as a fleet host does, and the slot port range
+  # (ADR-0054). An open port is not an exposure by itself: a ZeroTier world
+  # listens on the overlay address alone, RCON on loopback alone, and
+  # server/tests/compose-bindings-test.sh fails on any other binding.
   dynamic "ingress" {
-    for_each = local.public_game_ports
-
+    for_each = local.fleet_game_ports
     content {
-      description = "Declared public world${length(ingress.value) > 1 ? "s" : ""}: ${join(", ", [for world in ingress.value : world.id])}"
-      from_port   = ingress.value[0].port
-      to_port     = ingress.value[0].port
-      protocol    = ingress.value[0].protocol
+      description = "Game module ${ingress.key}"
+      from_port   = ingress.value.port
+      to_port     = ingress.value.port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  dynamic "ingress" {
+    for_each = toset(["tcp", "udp"])
+    content {
+      description = "Slot game ports (${ingress.value})"
+      from_port   = local.slot_port_range.first
+      to_port     = local.slot_port_range.last
+      protocol    = ingress.value
       cidr_blocks = ["0.0.0.0/0"]
     }
   }
@@ -111,6 +122,10 @@ resource "aws_security_group" "game_host" {
 }
 
 locals {
+  # The slot windows of server/games/_dispatch.sh: slot n owns ten ports from
+  # 30000 + 10n, for n from 1 to 255. Slot zero keeps the game's own ports.
+  slot_port_range = { first = 30010, last = 32559 }
+
   # A public fleet world takes slot zero, so only the game module's own port
   # is reachable. The host refuses a non-gating adapter without declared auth.
   fleet_game_ports = {

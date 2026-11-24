@@ -6,8 +6,8 @@ import type { Confirmation } from "../shell/actions";
 import { action } from "./actions";
 import { startableLatest, startableReleases } from "./presets";
 import { releaseBuildCopy } from "./release-builds";
-import { neverStarted, promotionTargets } from "./worlds";
-import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, WorldPlacement, WorldSettingsModel } from "./models";
+import { connectionLabel, neverStarted, promotionTargets } from "./worlds";
+import type { ConfirmationModel, ConnectionFieldsModel, ConnectionOption, CreateWorldModel, GameSettingField, GameSettingsModel, WorldPlacement, WorldSettingsModel } from "./models";
 import { effectiveValue, settingDefinitions, settingValueValid } from "./settings";
 
 /*
@@ -18,10 +18,24 @@ import { effectiveValue, settingDefinitions, settingValueValid } from "./setting
 
 type Deployment = ControlPlaneSnapshot["deployment"];
 
-// A fleet host never joins ZeroTier; the configured host offers nothing else.
+// A fleet host never joins ZeroTier (ADR-0033); the persistent host serves
+// any connection (ADR-0085). A public world needs a DNS zone only for DNS.
 function defaultConnectivity(placement: WorldPlacement, dnsAvailable: boolean): World["connectivity"] {
   if (placement === "configured") return "zerotier";
   return dnsAvailable ? "route53" : "raw";
+}
+
+function offered(placement: WorldPlacement, connectivity: World["connectivity"], dnsAvailable: boolean): boolean {
+  if (connectivity === "zerotier") return placement === "configured";
+  return connectivity === "raw" || dnsAvailable;
+}
+
+export function connectionOptions(placement: WorldPlacement, dnsAvailable: boolean): readonly ConnectionOption[] {
+  return [
+    { value: "zerotier", label: connectionLabel("zerotier"), disabled: placement === "fleet", ...(placement === "fleet" ? { hint: "Fleet hosts do not join ZeroTier" } : {}) },
+    { value: "raw", label: connectionLabel("raw"), disabled: false },
+    ...(dnsAvailable ? [{ value: "route53" as const, label: connectionLabel("route53"), disabled: false }] : []),
+  ];
 }
 
 function useConnectionFields(deployment: Deployment, initial: { placement: WorldPlacement; connectivity: World["connectivity"] }): ConnectionFieldsModel & { valid: boolean; auth: "game" | undefined } {
@@ -29,18 +43,16 @@ function useConnectionFields(deployment: Deployment, initial: { placement: World
   const [connectivity, setConnectivity] = useState<World["connectivity"]>(initial.connectivity);
   const fleetAvailable = deployment?.launchEnabled === true;
   const dnsAvailable = deployment?.dnsAvailable === true;
-  const valid = placement === "configured"
-    ? connectivity === "zerotier"
-    : fleetAvailable && (connectivity === "raw" || (connectivity === "route53" && dnsAvailable));
+  const valid = offered(placement, connectivity, dnsAvailable) && (placement === "configured" || fleetAvailable);
   return {
     placement,
-    // Changing where a world runs changes how it is reached: a fleet host never
-    // joins ZeroTier, the configured host offers nothing else.
-    setPlacement: (next) => { setPlacement(next); setConnectivity(defaultConnectivity(next, dnsAvailable)); },
+    // A connection the new placement does not offer falls back to its default.
+    setPlacement: (next) => { setPlacement(next); if (!offered(next, connectivity, dnsAvailable)) setConnectivity(defaultConnectivity(next, dnsAvailable)); },
     fleetAvailable,
     connectivity,
     setConnectivity,
     dnsAvailable,
+    connections: connectionOptions(placement, dnsAvailable),
     valid,
     auth: connectivity === "zerotier" ? undefined : "game",
   };

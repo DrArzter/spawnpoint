@@ -46,6 +46,7 @@ host without need, and must not reach a model.
   whitelist, can leave a name in the log. The model never sees an address. A per-game pattern in the game's manifest
   is the place to close such a gap.
 - The monthly cap is an estimate. The prices are variables because Bedrock's EU prices can differ from the list
-  prices; they must be checked before the assistant is switched on. One answer may pass the cap, since the cap is
-  checked before a question and the cost is known after it.
+  prices. The defaults are the regional rates in the Marketplace offers accepted on 2026-11-24: Haiku 5.5 USD
+  0.11/0.55 and Sonnet 5.5 USD 2.20/11 per million input/output tokens, 10% above the global rates. One answer may
+  pass the cap, since the cap is checked before a question and the cost is known after it.
 - The worker bundles its own AWS SDK, so Converse does not depend on the Lambda runtime's copy.

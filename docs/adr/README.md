@@ -163,6 +163,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0096](0096-the-assistant-reads-as-the-owner-and-proposes-writes.md) | The assistant reads as the Owner and proposes every write | Accepted | M6 |
 | [0097](0097-every-world-is-a-record-in-the-registry.md) | Every world is a record in the registry | Accepted | M6 |
 | [0098](0098-the-console-speaks-from-one-message-catalogue.md) | The console speaks from one message catalogue | Accepted — implemented | M6 |
+| [0099](0099-agpl-licence-with-a-contributor-agreement.md) | AGPL-3.0, with a contributor licence agreement | Accepted | M6 |
 
 ## Decisions still to record
 
@@ -204,4 +205,3 @@ written, so the numbering stays chronological and nothing has to be renumbered w
   hosted broker would unify them but reintroduces an always-on service and makes the author hold other people's AWS
   access — the operator line this project keeps declining to cross. The safe shape runs entirely in the operator's own
   account with the author never holding their credentials. Decide before the first outside user, not after.
-- **Licence for this repository.** Public repository, so it needs one.

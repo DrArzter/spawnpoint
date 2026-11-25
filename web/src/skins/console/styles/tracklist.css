@@ -25,6 +25,14 @@ html[data-skin="console"] .c-tracklist-head {
   font-weight: 800;
 }
 
+/* A label longer than its track (a longer language) ends in an ellipsis, never over the next column. */
+html[data-skin="console"] .c-tracklist-head > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 html[data-skin="console"] .c-tracklist-row {
   position: relative;
   min-height: var(--c-gl-row);

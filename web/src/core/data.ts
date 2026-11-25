@@ -581,7 +581,7 @@ export function accessRequests(directory: AccessDirectory): Readonly<{
       if (!candidate) return null;
       return {
         approve: action("access.approve", t("access.approve"), () => void directory.approve(candidate), { icon: "check", disabled: working !== null, busy: working === id, hint: t("access.approveDefaultRole") }),
-        dismiss: action("access.dismiss", t("common.dismiss"), () => void directory.dismiss(candidate), { icon: "close", disabled: working !== null }),
+        dismiss: action("access.dismiss", t("access.dismiss"), () => void directory.dismiss(candidate), { icon: "close", disabled: working !== null }),
       };
     },
   };
@@ -669,7 +669,7 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
           role: roleChoice(roles, chosen ?? "", working === key),
           setRoleId: (roleId: string) => setCandidateRoles((current) => ({ ...current, [key]: roleId })),
           approve: action("access.approve", t("access.approve"), () => { if (chosen !== null) void directory.approve(candidate, chosen); }, { disabled: !rolesReady, busy: working === key, hint: rolesReady ? t("access.approveChosenRole") : t("access.rolesStillLoading") }),
-          dismiss: action("access.dismiss", t("common.dismiss"), () => void directory.dismiss(candidate), { disabled: working === key }),
+          dismiss: action("access.dismiss", t("access.dismiss"), () => void directory.dismiss(candidate), { disabled: working === key }),
         };
       }),
     };

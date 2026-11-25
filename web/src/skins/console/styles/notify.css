@@ -103,7 +103,7 @@ html[data-skin="console"] .c-toasts {
 
 html[data-skin="console"] .c-toast {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   max-width: 100%;
   padding: 12px 16px;
@@ -113,6 +113,12 @@ html[data-skin="console"] .c-toast {
   font-weight: 600;
   box-shadow: var(--c-shadow-pop);
   animation: c-up var(--c-d2) var(--c-ease);
+}
+
+/* The icon sits on the first line's centre, so a message that wraps keeps its mark beside its opening words. */
+html[data-skin="console"] .c-toast > svg {
+  flex: none;
+  margin-block: calc((1lh - 18px) / 2);
 }
 
 html[data-skin="console"] .c-toast-why > svg {

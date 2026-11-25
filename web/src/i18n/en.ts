@@ -1175,7 +1175,6 @@ export const en = {
   "world.launched": "Launched",
   "world.legacy": "Legacy",
   "world.listPlayers": "list players",
-  "world.live": "Live",
   "world.loadingApprovedPlayers": "Loading approved players",
   "world.loadingRecentInvitationResults": "Loading recent invitation results",
   "world.logCouldNotRead": "The log could not be read.",
@@ -1400,4 +1399,8 @@ export const en = {
   "world.roleCannotStartSessions": "Your role cannot start sessions.",
   "world.roleCannotStopSessions": "Your role cannot stop sessions.",
   "world.statusRunning": "Running",
+  "world.statusStopped": "Stopped",
+  "world.filterLive": "Live",
+  "world.filterStopped": "Stopped",
+  "access.dismiss": "Dismiss",
 } as const;

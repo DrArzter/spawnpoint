@@ -1,8 +1,8 @@
 /* PageHeader: the breadcrumb is the title. */
 
 /*
- * One line from the tablet step: the title gives way (the h1 truncates), the
- * actions never wrap. The height is fixed, so the header is as tall on every
+ * One line from the tablet step: the title gives way (the h1 truncates, down to
+ * its ellipsis when longer words leave it no room), the actions never wrap. The height is fixed, so the header is as tall on every
  * page and a page switch never moves what is below it.
  */
 html[data-skin="console"] .c-page-header {
@@ -69,7 +69,7 @@ html[data-skin="console"] .c-crumb-sep {
 
 html[data-skin="console"] .c-crumbs h1 {
   flex: 0 1 auto;
-  min-width: min(100%, 8ch);
+  min-width: 0;
   margin: 0;
   overflow: hidden;
   font-size: var(--c-fs-h1);
@@ -112,10 +112,6 @@ html[data-skin="console"] .c-page-actions {
 
   html[data-skin="console"] .c-crumb {
     display: none;
-  }
-
-  html[data-skin="console"] .c-crumbs h1 {
-    min-width: 0;
   }
 }
 

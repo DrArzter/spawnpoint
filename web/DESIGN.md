@@ -199,8 +199,11 @@ Two primitives step by their own width, not the window's, because a split page g
 - **Table**: `optional` columns drop under 1040px of table width, `wide` columns under 960px, and under 760px each row
   becomes a record whose cells carry their header as a label. The roles `matrix` stays a table and stands its role
   names on end under 600px.
-- **PageHeader**: under 760px of header width the trail becomes the back button and the title may truncate, so the
-  header keeps one line with its actions at the end edge. On a phone the actions take a row of their own.
+- **PageHeader**: under 760px of header width the trail becomes the back button. The title truncates at any width, down
+  to its ellipsis, so it never runs under the status beside it; the header keeps one line with its actions at the end
+  edge. On a phone the actions take a row of their own.
+- **Words**: every label, hint and message comes from the catalogue (`src/i18n/`, ADR-0098). Russian words run about
+  a third longer than English: a track or a one-line row gives way with an ellipsis, never by overlapping.
 
 ## Elevation and shape
 

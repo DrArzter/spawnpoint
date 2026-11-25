@@ -17,7 +17,7 @@ export function sessionStatus(state: ServerState): StatusDescriptor {
     case "running": return { kind: "ok", label: t("world.online") };
     case "starting": return { kind: "progress", label: t("world.starting") };
     case "stopping": return { kind: "progress", label: t("world.stopping") };
-    case "stopped": return { kind: "off", label: t("common.stopped") };
+    case "stopped": return { kind: "off", label: t("world.statusStopped") };
     default: return { kind: "unknown", label: t("common.unknown") };
   }
 }
@@ -56,7 +56,7 @@ export function hostStatus(state: "pending" | "running" | "stopping" | "stopped"
     case "running": return { kind: "ok", label: t("world.statusRunning") };
     case "pending": return { kind: "progress", label: t("common.pending") };
     case "stopping": return { kind: "progress", label: t("world.stopping") };
-    case "stopped": return { kind: "off", label: t("common.stopped") };
+    case "stopped": return { kind: "off", label: t("world.statusStopped") };
     default: return { kind: "unknown", label: t("common.unknown") };
   }
 }

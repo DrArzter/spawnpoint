@@ -21,7 +21,7 @@ const shows: Readonly<Record<Show, (row: SiblingRow) => boolean>> = {
   other: (row) => !LIVE.has(row.status.kind) && !STOPPED.has(row.status.kind),
 };
 
-const labels: Readonly<Record<Show, string>> = { all: t("common.all"), live: t("world.live"), stopped: t("common.stopped"), other: t("common.other") };
+const labels: Readonly<Record<Show, string>> = { all: t("common.all"), live: t("world.filterLive"), stopped: t("world.filterStopped"), other: t("common.other") };
 
 /** The same tab of another world, so moving down the list keeps the person's place. */
 function tabHref(row: SiblingRow, tab: WorldModel["tab"]): string {

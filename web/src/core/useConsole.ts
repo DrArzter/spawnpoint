@@ -152,6 +152,8 @@ export type ConsoleController = Readonly<{
   requestSession: (game: Game, world: World, action: SessionAction) => void;
   requestCreateWorld: (game: Game, preset?: Preset | null) => void;
   requestBuild: (game: Game, preset: Preset) => void;
+  /** Asks to delete a persistent host no world is placed on (ADR-0100). */
+  requestHostDeletion: (host: Readonly<{ providerRef: string; name: string }>) => void;
   /** Who has access, who waits, and the roles: one answer for the rail's count, the game home and the Access page. */
   directory: AccessDirectory;
   bootstrap: OwnerBootstrap;
@@ -161,7 +163,7 @@ export type ConsoleController = Readonly<{
   // What is open over the page, and how each closes and commits.
   confirmation: Confirmation | null;
   closeConfirmation: () => void;
-  runConfirmation: (confirmation: Confirmation, release?: string) => void;
+  runConfirmation: (confirmation: Confirmation, release?: string, keep?: boolean) => void;
   invite: { game: Game; world: World } | null;
   closeInvite: () => void;
   creating: { game: Game; preset: Preset | null } | null;
@@ -354,6 +356,16 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     }
   }
 
+  async function runHostDeletion(host: Readonly<{ providerRef: string; name: string }>, snapshot: boolean) {
+    try {
+      await api.requestHostDeletion(host.providerRef, snapshot);
+      notify({ tone: "success", message: snapshot ? t("host.deletingWithSnapshot", { hostName: host.name }) : t("host.deleting", { hostName: host.name }) });
+      await refresh(true);
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("host.couldNotDelete") });
+    }
+  }
+
   async function downloadPack(target: Game, targetWorld: World) {
     const mine: Pending = { kind: "pack", worldId: targetWorld.id };
     holdPending(mine);
@@ -537,6 +549,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     }),
     requestCreateWorld: (target, preset) => setCreating({ game: target, preset: preset ?? target.presets.find((item) => startableReleases(item).length > 0) ?? null }),
     requestBuild: (target, preset) => setConfirmation({ kind: "build", game: target, preset }),
+    requestHostDeletion: (host) => setConfirmation({ kind: "delete-host", host }),
     directory,
     bootstrap,
     appearance: appearanceModel,
@@ -545,8 +558,9 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     openInBrowser: viewer.inTelegram ? openInBrowser : null,
     confirmation,
     closeConfirmation: () => setConfirmation(null),
-    runConfirmation: (item, release) => {
+    runConfirmation: (item, release, keep) => {
       setConfirmation(null);
+      if (item.kind === "delete-host") { void runHostDeletion(item.host, keep ?? true); return; }
       if (item.kind === "build") void runBuild(item.game, item.preset);
       if (item.kind === "session") void runSession(item.game, item.world, item.action, item.disconnect === undefined ? undefined : "disconnect");
       if (item.kind === "archive") void runLifecycle(item.game, item.world, "archive");

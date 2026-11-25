@@ -1,86 +1,43 @@
-resource "aws_ebs_volume" "data" {
-  availability_zone = var.availability_zone
-  encrypted         = true
-  size              = var.data_volume_size_gib
-  type              = "gp3"
+# The persistent host (ADR-0100). Terraform created it and its data volume and
+# then let them go without destroying them: the panel deletes a persistent host
+# once no world is placed on it, and a resource Terraform still owned would be
+# made again by the next deploy. The host, its root volume, its data volume
+# (Name=spawnpoint-data) and its running-hours alarm stay in AWS until then.
+# The grants below find the host by its Name tag, never by its id.
 
-  tags = {
-    Name    = "spawnpoint-data"
-    Purpose = "persistent-game-data"
-  }
+removed {
+  from = aws_instance.game_host
 
   lifecycle {
-    precondition {
-      condition     = data.aws_availability_zone.selected.zone_id == var.availability_zone_id
-      error_message = "The data volume must stay in the reviewed physical Availability Zone."
-    }
+    destroy = false
   }
 }
 
-resource "aws_instance" "game_host" {
-  ami                                  = data.aws_ssm_parameter.amazon_linux_2023_ami.value
-  instance_type                        = var.instance_type
-  availability_zone                    = var.availability_zone
-  subnet_id                            = aws_subnet.public.id
-  vpc_security_group_ids               = [aws_security_group.game_host.id]
-  associate_public_ip_address          = true # NOSONAR no NAT gateway; game ports only, ADR-0033
-  iam_instance_profile                 = aws_iam_instance_profile.game_host.name
-  disable_api_termination              = true
-  instance_initiated_shutdown_behavior = "stop"
-  user_data                            = file("${path.module}/../../server/user-data.sh")
-  user_data_replace_on_change          = true
-
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_tokens                 = "required"
-    http_put_response_hop_limit = 1
-    instance_metadata_tags      = "enabled"
-  }
-
-  root_block_device {
-    delete_on_termination = true
-    encrypted             = true
-    volume_size           = 8
-    volume_type           = "gp3"
-
-    tags = {
-      Name    = "spawnpoint-root"
-      Purpose = "disposable-root"
-    }
-  }
-
-  tags = {
-    Name         = "spawnpoint-game-host"
-    Purpose      = "minecraft-session-host"
-    PurchaseMode = "on-demand"
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.ssm_core,
-    aws_route_table_association.public,
-  ]
+removed {
+  from = aws_ebs_volume.data
 
   lifecycle {
-    # AWS reports this instance attribute as false while the instance is stopped
-    # because no ephemeral public IPv4 is currently associated. Treating that
-    # readback as configuration drift would replace the host on every idle stop.
-    # The public subnet remains the source of truth for assigning one on start.
-    # The SSM parameter intentionally tracks Amazon's latest AL2023 image for
-    # replacement hosts. An AMI is immutable, though, so a routine parameter
-    # update must not destroy a healthy long-lived host and detach its data
-    # volume. Host replacement remains an explicit operator decision.
-    ignore_changes = [ami, associate_public_ip_address]
-
-    precondition {
-      condition     = data.aws_availability_zone.selected.zone_id == var.availability_zone_id
-      error_message = "The instance and persistent EBS must use the same reviewed physical Availability Zone."
-    }
+    destroy = false
   }
 }
 
-resource "aws_volume_attachment" "data" {
-  device_name                    = "/dev/sdf"
-  instance_id                    = aws_instance.game_host.id
-  volume_id                      = aws_ebs_volume.data.id
-  stop_instance_before_detaching = true
+removed {
+  from = aws_volume_attachment.data
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = aws_cloudwatch_metric_alarm.running_hours
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+locals {
+  # The Name tag the persistent host carries; the grants admit it by this tag.
+  persistent_host_name = "spawnpoint-game-host"
 }

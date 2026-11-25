@@ -73,6 +73,7 @@ const READS_BODY = [
   "PUT /games/{gameId}/worlds/{worldId}/config-files",
   "PUT /me/appearance",
   "PUT /me/subscriptions",
+  "DELETE /hosts/{instanceId}",
 ];
 
 // Writes that do not read a body, or that answer in a protocol's own error format.
@@ -113,6 +114,7 @@ const PARAMETERS: Record<string, string> = {
   gameId: "minecraft",
   presetId: "prominence",
   worldId: "prominence-a1b2c3d4",
+  instanceId: "i-0123456789abcdef0",
 };
 
 function pathFor(routeKey: string): { rawPath: string; pathParameters: Record<string, string> } {

@@ -1261,6 +1261,20 @@ Two things `shared` cannot do, and should not surprise anyone: two configured wo
 turns, because they share the game's lifecycle record (fleet worlds have their own, ADR-0062), and a world whose
 record says `configured` starts only on the configured host (ADR-0097).
 
+## Delete the persistent host (ADR-0100)
+
+Once every world has moved to the fleet, the worlds page shows "No world is placed on spawnpoint-game-host" with
+**Delete host**. Stop the host first. The dialog asks for the host's name and whether to keep a snapshot of the data
+disk. The operation `spawnpoint-delete-host` then snapshots (if chosen), terminates the host and deletes its data disk
+and its CPU alarm. A kept snapshot is named `spawnpoint-deleted-host-data`; list it with:
+
+```bash
+aws ec2 describe-snapshots --owner-ids self --filters Name=tag:Name,Values=spawnpoint-deleted-host-data
+```
+
+Terraform no longer creates the persistent host after this change; it only forgot the resources, so the first deploy
+deletes nothing.
+
 ## Launched hosts (ADR-0054, phase 12)
 
 A host that the control plane launches for a session has no data volume. At first boot it checks this repository out at

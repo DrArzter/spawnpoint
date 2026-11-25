@@ -139,7 +139,7 @@ export type Host = Readonly<{
   launchedAt?: string | null;
 }>;
 
-export type OperationType = "start" | "stop" | "promote" | "world";
+export type OperationType = "start" | "stop" | "promote" | "world" | "host";
 
 export type Operation = Readonly<{
   id: string;

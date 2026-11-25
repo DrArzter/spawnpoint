@@ -16,7 +16,7 @@ export type CaughtError = Readonly<{ error: string; cause: string; step: Operati
 
 export type OperationProgress = Readonly<{
   id: string;
-  type: "start" | "stop" | "promote" | "world";
+  type: "start" | "stop" | "promote" | "world" | "host";
   status: "running" | "succeeded" | "failed" | "timed_out" | "aborted";
   startedAt: string;
   stoppedAt: string | null;

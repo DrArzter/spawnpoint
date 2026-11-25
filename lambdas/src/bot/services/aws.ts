@@ -1,7 +1,8 @@
 // The bot's AWS port: every SDK call lives here, so commands stay glue and the
 // local control plane (ADR-0031) can swap endpoints without touching them.
 
-import { EC2Client, DescribeInstancesCommand } from "@aws-sdk/client-ec2";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { GetObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -10,6 +11,8 @@ import { attachmentDisposition, packAttachmentName, releaseManifestKey } from ".
 import { releasePackStorageKey } from "../../control-plane/release-objects.ts";
 import { S3ReleaseStateReader } from "../../control-plane/s3-release-state-store.ts";
 import { S3WorldReader } from "../../control-plane/s3-world-repository.ts";
+import { sessionLifecycleKey } from "../../control-plane/world-session.ts";
+import type { LifecycleRecord } from "../../domain/lifecycle.ts";
 import type { WorldRecord } from "../../control-plane/world-registry.ts";
 
 export const env = (name: string): string => {
@@ -19,7 +22,7 @@ export const env = (name: string): string => {
 };
 
 const region = env("AWS_REGION");
-const ec2 = new EC2Client({ region });
+const documents = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
 const s3 = new S3Client({ region });
 const ssm = new SSMClient({ region });
 
@@ -68,16 +71,14 @@ export async function readPointer(): Promise<Pointer | null> {
   }
 }
 
-// State and the public address come from the same observation: a public
-// world's address is whatever the running instance holds, and nothing stores it.
-export async function describeHost(): Promise<Readonly<{ state: string; publicIp: string | null }>> {
-  const described = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [env("INSTANCE_ID")] }));
-  const instance = described.Reservations?.[0]?.Instances?.[0];
-  return { state: instance?.State?.Name ?? "unknown", publicIp: instance?.PublicIpAddress ?? null };
-}
-
-export async function instanceState(): Promise<string> {
-  return (await describeHost()).state;
+/** The session record the world's placement names (ADR-0062), as the panel reads it; null when it has none. */
+export async function readSession(world: WorldRecord): Promise<LifecycleRecord | null> {
+  const response = await documents.send(new GetCommand({
+    TableName: env("LIFECYCLE_TABLE_NAME"),
+    Key: { server_id: sessionLifecycleKey(world.gameId, world.worldId, world.placement) },
+    ProjectionExpression: "lifecycle",
+  }));
+  return response.Item?.lifecycle as LifecycleRecord | undefined ?? null;
 }
 
 // An objects-v1 release keeps its pack as an object named by digest, so the

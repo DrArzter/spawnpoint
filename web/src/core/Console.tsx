@@ -18,6 +18,7 @@ import { chooseFile } from "./choose-file";
 import { useConsole, type ConsoleController } from "./useConsole";
 import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useConfigFiles, useWorldLog, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
+import { persistentHostNotice } from "./hosts";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
 import { addressFacts, buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, siblingRow, withReleasePacks, worldDetails, worldLaunchedAt, worldMoreActions, worldNotices, worldPlayers, worldSessionControl, worldTabs } from "./worlds";
@@ -135,7 +136,9 @@ function WorldsPage({ console, skin }: Controlled) {
     errorKind,
     game,
     unavailable: !loading && !game ? { failed: listStatus === "error", ...gamesFailure(listStatus, errorKind) } : null,
-    notices: listStatus === "error" ? [stateNotice(errorKind, error, () => void console.refresh())] : [],
+    notices: listStatus === "error"
+      ? [stateNotice(errorKind, error, () => void console.refresh())]
+      : [persistentHostNotice(snapshot, granted.has("host.manage") && console.capabilities.has("hostDeletion"), console.requestHostDeletion)].filter((notice) => notice !== null),
     overview: buildSessionOverview(game, snapshot, serverState, sharedSession, fleetOverview),
     rows: worldRows(console),
     emptyDescription: canManage && readyPreset ? null : t("app.worldsAppearHereOnce"),

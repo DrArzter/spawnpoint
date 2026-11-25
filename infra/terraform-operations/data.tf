@@ -16,14 +16,20 @@ data "aws_dynamodb_table" "lifecycle" {
   name = "spawnpoint-lifecycle-v2"
 }
 
-data "aws_instance" "game_host" {
+# The persistent host, if one still exists (ADR-0100): the panel may have
+# deleted it, so this lists rather than requires one.
+data "aws_instances" "persistent_host" {
   filter {
     name   = "tag:Name"
     values = ["spawnpoint-game-host"]
   }
 
-  filter {
-    name   = "instance-state-name"
-    values = ["pending", "running", "stopping", "stopped"]
-  }
+  instance_state_names = ["pending", "running", "stopping", "stopped"]
+}
+
+locals {
+  persistent_host_name = "spawnpoint-game-host"
+  # An event pattern needs at least one value. With no persistent host left the
+  # rules match an id no instance has, and stay in place rather than be deleted.
+  persistent_host_event_ids = length(data.aws_instances.persistent_host.ids) > 0 ? data.aws_instances.persistent_host.ids : ["i-00000000000000000"]
 }

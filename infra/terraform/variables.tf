@@ -27,39 +27,6 @@ variable "availability_zone_id" {
   default     = "euc1-az2"
 }
 
-variable "instance_type" {
-  description = "Free-plan host now; promote to r8i-flex.large only after an explicit paid-plan decision."
-  type        = string
-  default     = "m7i-flex.large"
-
-  validation {
-    condition     = contains(["m7i-flex.large", "r8i-flex.large"], var.instance_type)
-    error_message = "Use the measured free-plan shape or the reviewed 16 GiB upgrade; price any other type first."
-  }
-}
-
-variable "data_volume_size_gib" {
-  description = "Persistent world, release and session-data volume size."
-  type        = number
-  default     = 20
-
-  validation {
-    condition     = var.data_volume_size_gib >= 20
-    error_message = "Do not shrink below the measured 20 GiB starting size. EBS volumes cannot shrink in place."
-  }
-}
-
-variable "running_hours_alarm_hours" {
-  description = "Consecutive running hours before the alarm fires. Keep it above the watchdog's session cap (8h at the default timings), or every long legitimate evening pages."
-  type        = number
-  default     = 10
-
-  validation {
-    condition     = var.running_hours_alarm_hours >= 2
-    error_message = "An alarm under two hours fires during every ordinary session."
-  }
-}
-
 
 variable "egress_alarm_gib_per_hour" {
   description = "GiB all game hosts may send in one hour before the egress alarm fires. A session sends tens of MB per player-hour; a backup upload sends a few GiB once."

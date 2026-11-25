@@ -23,7 +23,7 @@ import { t } from "../../i18n";
 
 export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationModel | null }>) {
   if (model === null) return null;
-  const { releaseChoice, typedConfirmation } = model;
+  const { releaseChoice, typedConfirmation, option } = model;
   return (
     <Dialog actions={<ActionButton action={model.confirm} variant={model.destructive ? "danger" : "primary"} />} cancel={model.cancel} title={model.title}>
       {model.description && <p className="c-line">{model.description}</p>}
@@ -44,6 +44,7 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
           <TextInput autoComplete="off" mono onChange={(event) => typedConfirmation.set(event.target.value)} placeholder={typedConfirmation.expected} spellCheck={false} value={typedConfirmation.value} />
         </Field>
       )}
+      {option && <Checkbox actionId={option.toggle.id} checked={option.checked} label={option.toggle.label} onChange={() => option.toggle.run()} />}
       {model.error && <p className="c-field-error" role="alert">{model.error}</p>}
     </Dialog>
   );

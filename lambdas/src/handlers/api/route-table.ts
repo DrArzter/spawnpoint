@@ -10,6 +10,7 @@ import { metricsRoutes } from "./metrics-routes.ts";
 import { releasesRoutes } from "./releases-routes.ts";
 import { backupsRoutes } from "./backups-routes.ts";
 import { promotionRoutes } from "./promotion-routes.ts";
+import { hostsRoutes } from "./hosts-routes.ts";
 import { consoleRoutes } from "./console-routes.ts";
 import { worldConfigRoutes } from "./world-config-routes.ts";
 import { worldLogRoutes } from "./world-log-routes.ts";
@@ -39,6 +40,7 @@ export const routes = composeRoutes(
   releasesRoutes,
   backupsRoutes,
   promotionRoutes,
+  hostsRoutes,
   consoleRoutes,
   worldConfigRoutes,
   worldLogRoutes,

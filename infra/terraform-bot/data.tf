@@ -16,16 +16,8 @@ data "aws_dynamodb_table" "access" {
   name = "spawnpoint-access"
 }
 
-data "aws_instance" "game_host" {
-  filter {
-    name   = "tag:Name"
-    values = ["spawnpoint-game-host"]
-  }
-
-  filter {
-    name   = "instance-state-name"
-    values = ["pending", "running", "stopping", "stopped"]
-  }
+data "aws_dynamodb_table" "lifecycle" {
+  name = "spawnpoint-lifecycle-v2"
 }
 
 data "aws_iam_policy_document" "lambda_assume_role" {

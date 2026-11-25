@@ -254,6 +254,32 @@
     }
   },
   {
+    "name": "delete_host",
+    "title": "Delete a persistent host",
+    "description": "Delete a stopped persistent host on which no world is placed, with its data volumes. Choose whether the data volumes are kept as snapshots first.",
+    "effect": "write",
+    "destructive": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Host ID from get_control_plane"
+        },
+        "snapshot": {
+          "type": "boolean",
+          "description": "Keep a snapshot of each data volume before it is deleted"
+        }
+      },
+      "required": [
+        "instanceId",
+        "snapshot"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "delete_person",
     "title": "Delete person",
     "description": "Delete a person's identity and access, and remove their name from what they did.",

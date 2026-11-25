@@ -24,7 +24,7 @@ export type RecoveryTarget = Readonly<{
 }>;
 
 const HOST_STATES = new Set(["pending", "running", "stopping", "stopped", "unknown"]);
-const OPERATION_TYPES = new Set(["start", "stop", "promote", "world"]);
+const OPERATION_TYPES = new Set(["start", "stop", "promote", "world", "host"]);
 const EVENT_ID = /^[A-Za-z0-9-]{1,128}$/;
 
 function object(value: unknown): Record<string, unknown> | null {

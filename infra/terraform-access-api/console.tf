@@ -4,18 +4,6 @@
 # injection boundary: no value that reaches the host's shell can carry a quote,
 # a space or a metacharacter, and the command itself travels as base64.
 
-data "aws_instance" "configured_host" {
-  filter {
-    name   = "tag:Name"
-    values = ["spawnpoint-game-host"]
-  }
-
-  filter {
-    name   = "instance-state-name"
-    values = ["pending", "running", "stopping", "stopped"]
-  }
-}
-
 resource "aws_ssm_document" "console" {
   name            = "spawnpoint-console"
   document_type   = "Command"
@@ -67,12 +55,24 @@ resource "aws_ssm_document" "console" {
 data "aws_iam_policy_document" "access_api_console" {
   # The document and the instance are both resources of a SendCommand; this
   # statement admits Spawnpoint's own documents, the console's, the
-  # whitelist's (ADR-0066) and the world log's (ADR-0094), and the configured
-  # host.
+  # whitelist's (ADR-0066) and the world log's (ADR-0094).
   statement {
-    sid       = "SendOnlySpawnpointDocumentsToTheConfiguredHost"
+    sid       = "SendOnlySpawnpointDocuments"
     actions   = ["ssm:SendCommand"]
-    resources = [aws_ssm_document.console.arn, aws_ssm_document.whitelist.arn, aws_ssm_document.world_log.arn, data.aws_instance.configured_host.arn]
+    resources = [aws_ssm_document.console.arn, aws_ssm_document.whitelist.arn, aws_ssm_document.world_log.arn]
+  }
+
+  # The persistent host by its Name tag (ADR-0100): the panel may have deleted it.
+  statement {
+    sid       = "SendToThePersistentHost"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Name"
+      values   = ["spawnpoint-game-host"]
+    }
   }
 
   # A launched host (ADR-0054) is admitted by its fleet tag, never by its id.

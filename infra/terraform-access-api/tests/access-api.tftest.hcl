@@ -77,10 +77,6 @@ mock_provider "aws" {
     values = { json = "{}" }
   }
 
-  override_data {
-    target = data.aws_instance.configured_host
-    values = { arn = "arn:aws:ec2:eu-central-1:123456789012:instance/i-0123456789abcdef0" }
-  }
 
   # The console's permission names the document by ARN, known only after
   # apply; a fixed one lets the plan-time run read the statements.

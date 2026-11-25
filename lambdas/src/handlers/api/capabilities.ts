@@ -22,6 +22,7 @@ const capabilityRoutes: Readonly<Record<string, string>> = {
   releaseBuilds: "POST /games/{gameId}/presets/{presetId}/builds",
   releasePromotion: "POST /games/{gameId}/worlds/{worldId}/promote",
   operationProgress: "GET /games/{gameId}/worlds/{worldId}/operations/{operationId}",
+  hostDeletion: "DELETE /hosts/{instanceId}",
 };
 
 /** The capabilities whose routes exist, less those the deployment switched off (the assistant, ADR-0094). */

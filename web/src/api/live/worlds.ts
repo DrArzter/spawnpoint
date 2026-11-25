@@ -119,6 +119,16 @@ export const worldsApi = {
     return { result: "requested" as const, operationId: body.operationId as string };
   },
 
+  async requestHostDeletion(instanceId: string, snapshot: boolean) {
+    const body = await request<{ result?: "requested"; operationId?: string }>(`/hosts/${encodeURIComponent(instanceId)}`, {
+      method: "DELETE", body: { snapshot },
+      failure: t("host.couldNotDelete"),
+      refusals: { forbidden: t("host.roleCannotDelete") },
+      valid: (answer) => answer.result === "requested" && answer.operationId !== undefined,
+    });
+    return { operationId: body.operationId as string };
+  },
+
   async requestWorldLifecycle(gameId: string, worldId: string, action: WorldLifecycleAction, backupKey?: string, release?: string) {
     const body = await request<{ result?: "requested"; operationId?: string }>(`${worldPath(gameId, worldId)}/${action === "regenerate" ? "wipe" : action}`, {
       method: "POST", body: worldLifecyclePayload(action, worldId, backupKey, release),

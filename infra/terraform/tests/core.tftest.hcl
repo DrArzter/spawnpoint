@@ -110,13 +110,8 @@ mock_provider "aws" {
   }
 }
 
-run "free_plan_host_preserves_m0_invariants" {
+run "persistent_host_network_and_storage_contracts_hold" {
   command = plan
-
-  assert {
-    condition     = aws_instance.game_host.instance_type == "m7i-flex.large"
-    error_message = "The Free Plan host must remain m7i-flex.large until an explicit paid upgrade."
-  }
 
   # ADR-0085: the persistent host opens each game module's own port and the
   # slot range, and nothing else. What listens on them is decided per session
@@ -145,16 +140,6 @@ run "free_plan_host_preserves_m0_invariants" {
   }
 
   assert {
-    condition     = aws_instance.game_host.metadata_options[0].http_tokens == "required"
-    error_message = "The instance must require IMDSv2 tokens."
-  }
-
-  assert {
-    condition     = aws_instance.game_host.disable_api_termination
-    error_message = "The game host must retain EC2 termination protection."
-  }
-
-  assert {
     condition = local.game_host_release_resources == [
       "arn:aws:s3:::spawnpoint-releases-123456789012/releases/*",
       "arn:aws:s3:::spawnpoint-releases-123456789012/objects/*",
@@ -164,36 +149,8 @@ run "free_plan_host_preserves_m0_invariants" {
   }
 
   assert {
-    condition     = aws_instance.game_host.root_block_device[0].encrypted && aws_instance.game_host.root_block_device[0].delete_on_termination
-    error_message = "The disposable root volume must be encrypted and deleted with the instance."
-  }
-
-  assert {
-    condition     = aws_ebs_volume.data.encrypted && aws_ebs_volume.data.size == 20
-    error_message = "The persistent data EBS must be encrypted and start at the measured 20 GiB."
-  }
-
-  assert {
-    condition     = aws_volume_attachment.data.device_name == "/dev/sdf" && aws_volume_attachment.data.stop_instance_before_detaching
-    error_message = "The data volume must use the reviewed attachment contract and stop before detach."
-  }
-
-  assert {
     condition     = data.aws_s3_bucket.backups.id == "spawnpoint-backups-123456789012" && data.aws_s3_bucket.releases.id == "spawnpoint-releases-123456789012"
     error_message = "The compute stack must consume the separately managed persistent storage buckets."
-  }
-}
-
-run "reviewed_paid_upgrade_is_explicit" {
-  command = plan
-
-  variables {
-    instance_type = "r8i-flex.large"
-  }
-
-  assert {
-    condition     = aws_instance.game_host.instance_type == "r8i-flex.large"
-    error_message = "The reviewed 16 GiB upgrade must remain selectable without changing the topology."
   }
 }
 
@@ -387,40 +344,6 @@ run "lifecycle_v2_coordinator_is_small_scoped_and_not_wired_to_v1" {
   }
 }
 
-run "unreviewed_instance_type_is_rejected" {
-  command = plan
-
-  variables {
-    instance_type = "m7i-flex.xlarge"
-  }
-
-  expect_failures = [var.instance_type]
-}
-
-run "running_hours_alarm_is_a_presence_alarm_on_the_guardrails_topic" {
-  command = plan
-
-  assert {
-    condition     = aws_cloudwatch_metric_alarm.running_hours.treat_missing_data == "notBreaching"
-    error_message = "A stopped host emits no metric; missing data must read as healthy."
-  }
-
-  assert {
-    condition     = aws_cloudwatch_metric_alarm.running_hours.threshold == -1 && aws_cloudwatch_metric_alarm.running_hours.comparison_operator == "GreaterThanThreshold"
-    error_message = "The alarm fires on metric presence — any CPU reading beats -1 — not on load."
-  }
-
-  assert {
-    condition     = aws_cloudwatch_metric_alarm.running_hours.period == 3600 && aws_cloudwatch_metric_alarm.running_hours.evaluation_periods == 10
-    error_message = "Ten hourly datapoints keep the alarm above the watchdog's 8h session cap."
-  }
-
-  assert {
-    condition     = contains(aws_cloudwatch_metric_alarm.running_hours.alarm_actions, "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert")
-    error_message = "The alarm must publish to the guardrails topic, where every alert converges."
-  }
-}
-
 run "fleet_host_is_a_template_that_names_no_type_and_keeps_nothing" {
   command = plan
 
@@ -447,11 +370,6 @@ run "fleet_host_is_a_template_that_names_no_type_and_keeps_nothing" {
   assert {
     condition     = aws_launch_template.fleet_host.iam_instance_profile[0].name == aws_iam_instance_profile.game_host.name && tostring(aws_launch_template.fleet_host.network_interfaces[0].associate_public_ip_address) == "true"
     error_message = "A launched host is the same kind of host: the game host's profile, the public subnet, an ephemeral address."
-  }
-
-  assert {
-    condition     = aws_instance.game_host.disable_api_termination
-    error_message = "The configured host keeps termination protection whatever the fleet does."
   }
 }
 
@@ -574,5 +492,30 @@ run "host_steps_carry_the_dns_settings_when_the_deployment_has_a_zone" {
       ])
     ])
     error_message = "The persistent host's environment is not Terraform's, so the host steps carry the deployment's DNS settings (ADR-0085)."
+  }
+}
+
+# ADR-0100: Terraform lets the persistent host go without destroying it, and
+# admits it by its Name tag, so a host the panel deleted breaks no plan.
+run "persistent_host_is_admitted_by_tag_never_by_id" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for statement in concat(data.aws_iam_policy_document.start_workflow.statement, data.aws_iam_policy_document.stop_workflow.statement) :
+      toset(statement.resources) == toset(["arn:aws:ec2:eu-central-1:123456789012:instance/*"])
+      && anytrue([for condition in statement.condition : condition.variable == "ec2:ResourceTag/Name" && contains(condition.values, "spawnpoint-game-host")])
+      if contains(["StartOnlySpawnpointHost", "StopOnlySpawnpointHost"], statement.sid)
+    ])
+    error_message = "The persistent host is started and stopped by its Name tag, never by an instance id."
+  }
+
+  assert {
+    condition = alltrue([
+      for document in [data.aws_iam_policy_document.start_workflow, data.aws_iam_policy_document.stop_workflow] : anytrue([
+        for statement in document.statement : statement.sid == "RunOnSpawnpointHost" && anytrue([for condition in statement.condition : condition.variable == "ssm:resourceTag/Name" && contains(condition.values, "spawnpoint-game-host")])
+      ])
+    ])
+    error_message = "A host command reaches the persistent host only by its Name tag."
   }
 }

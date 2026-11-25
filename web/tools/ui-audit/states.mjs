@@ -29,6 +29,8 @@ export const STATES = [
   { name: "invite", route: WORLD, steps: [{ action: "world.invite" }] },
   { name: "stop", route: WORLD, steps: [{ action: "session.stop" }] },
   { name: "archive", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ action: "world.archive" }] },
+  // A persistent host no world is placed on: the notice offers its deletion, and the dialog asks for its name and the snapshot (ADR-0100).
+  { name: "delete-host", route: "/?demo&latency=0&fixture=fleet#/worlds/minecraft", steps: [{ action: "host.delete" }] },
   // A world's config file opens in a panel (the console) or a drawer (the terminal), with its text, Reset, Save and the line under it.
   { name: "config-file", route: `${WORLD}/config`, steps: [{ action: "config.open.config/claims.toml" }] },
   // The Owner's assistant opens over any page: its conversations, the open one and the message box (ADR-0096).

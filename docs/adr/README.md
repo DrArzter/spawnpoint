@@ -37,7 +37,7 @@ Eighty-six records is a wall, and a wall is not a plan. Read the two or three th
 | M3 — releases and the pipeline | [0008](0008-versioned-mod-releases.md), [0030](0030-desired-and-active-release.md), [0042](0042-preset-scoped-release-identity.md); then [0028](0028-update-proposals.md) and [0029](0029-preview-environments.md), still proposed |
 | M4 — surfaces and identity | Built on [0045](0045-provider-neutral-login-sessions.md), [0055](0055-sign-in-with-email-and-password-by-default.md), [0036](0036-observed-visitors-and-owner-approved-access.md) and [0012](0012-web-control-panel.md); [0016](0016-chat-integrations.md) stays open for Discord |
 | Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0097](0097-every-world-is-a-record-in-the-registry.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
-| Fleet hosts, placement and several worlds at once | [0048](0048-one-instance-per-active-world.md), [0054](0054-place-a-session-on-a-host-with-room.md), [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md) |
+| Fleet hosts, placement and several worlds at once | [0048](0048-one-instance-per-active-world.md), [0054](0054-place-a-session-on-a-host-with-room.md), [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md), [0100](0100-delete-a-persistent-host-from-the-panel.md) |
 | Release storage by content | [0080](0080-store-release-files-by-content.md) |
 | The web console and its skins | [0059](0059-separate-the-console-into-bones-and-skins.md), [0072](0072-draw-the-console-in-the-c-a-grammar.md), [0098](0098-the-console-speaks-from-one-message-catalogue.md) |
 | Deploying a change to production | [0043](0043-deploy-production-from-reviewed-pull-requests.md), [0044](0044-apply-github-identities-behind-an-owner-gate.md) |
@@ -164,6 +164,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0097](0097-every-world-is-a-record-in-the-registry.md) | Every world is a record in the registry | Accepted | M6 |
 | [0098](0098-the-console-speaks-from-one-message-catalogue.md) | The console speaks from one message catalogue | Accepted — implemented | M6 |
 | [0099](0099-agpl-licence-with-a-contributor-agreement.md) | AGPL-3.0, with a contributor licence agreement | Accepted | M6 |
+| [0100](0100-delete-a-persistent-host-from-the-panel.md) | Delete a persistent host from the panel | Accepted | M6 |
 
 ## Decisions still to record
 

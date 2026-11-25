@@ -43,19 +43,36 @@ data "aws_iam_policy_document" "start_workflow" {
     resources = ["*"]
   }
 
+  # The persistent host is admitted by its Name tag (ADR-0100): the panel may
+  # have deleted it, and no grant names an instance that is gone.
   statement {
     sid       = "StartOnlySpawnpointHost"
     actions   = ["ec2:StartInstances"]
-    resources = [aws_instance.game_host.arn]
+    resources = [local.fleet_host_instance_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/Name"
+      values   = [local.persistent_host_name]
+    }
   }
 
   statement {
-    sid     = "RunOnlyApprovedDocumentOnSpawnpointHost"
-    actions = ["ssm:SendCommand"]
-    resources = [
-      aws_instance.game_host.arn,
-      aws_ssm_document.start_session.arn,
-    ]
+    sid       = "RunOnlyApprovedDocument"
+    actions   = ["ssm:SendCommand"]
+    resources = [aws_ssm_document.start_session.arn]
+  }
+
+  statement {
+    sid       = "RunOnSpawnpointHost"
+    actions   = ["ssm:SendCommand"]
+    resources = [local.fleet_host_instance_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Name"
+      values   = [local.persistent_host_name]
+    }
   }
 
   # A host the control plane launched (ADR-0054) carries the fleet tag, and
@@ -127,16 +144,31 @@ data "aws_iam_policy_document" "stop_workflow" {
   statement {
     sid       = "StopOnlySpawnpointHost"
     actions   = ["ec2:StopInstances"]
-    resources = [aws_instance.game_host.arn]
+    resources = [local.fleet_host_instance_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/Name"
+      values   = [local.persistent_host_name]
+    }
   }
 
   statement {
-    sid     = "RunOnlyApprovedDocumentOnSpawnpointHost"
-    actions = ["ssm:SendCommand"]
-    resources = [
-      aws_instance.game_host.arn,
-      aws_ssm_document.stop_session.arn,
-    ]
+    sid       = "RunOnlyApprovedDocument"
+    actions   = ["ssm:SendCommand"]
+    resources = [aws_ssm_document.stop_session.arn]
+  }
+
+  statement {
+    sid       = "RunOnSpawnpointHost"
+    actions   = ["ssm:SendCommand"]
+    resources = [local.fleet_host_instance_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Name"
+      values   = [local.persistent_host_name]
+    }
   }
 
   statement {

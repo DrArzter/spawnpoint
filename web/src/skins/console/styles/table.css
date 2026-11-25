@@ -68,12 +68,16 @@ html[data-skin="console"] .c-table tr.c-row-selected td {
   background: var(--c-accent-soft);
 }
 
-html[data-skin="console"] .c-table .c-table-empty td,
-html[data-skin="console"] .c-table tbody .c-table-empty:hover td {
+html[data-skin="console"] .c-table .c-table-empty td {
   height: auto;
   padding: 0;
   background: none;
   white-space: normal;
+}
+
+/* The empty row is not a target: hovering it shades nothing. */
+html[data-skin="console"] .c-table tbody .c-table-empty:hover td {
+  background: none;
 }
 
 html[data-skin="console"] .c-sort {

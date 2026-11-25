@@ -304,6 +304,20 @@ export function unscoped(rules: readonly Rule[], scope: string): string[] {
   return rules.flatMap((rule) => rule.selectors.filter((selector) => !selector.startsWith(scope)).map((selector) => `${at(rule)} ${selector}`));
 }
 
+// --- hover ---------------------------------------------------------------------------
+
+// What changes a box's size or the space around it. A hover state may change
+// colour, shadow, opacity or a transform, never these: a control that grows
+// under the pointer shifts the row it sits in.
+const BOX_SIZE = /^(?:(?:min-|max-)?(?:width|height)|padding(?:-.+)?|margin(?:-.+)?|border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?-width|font-size|line-height|font)$/;
+
+/** Declarations that change a box's size in a rule whose selectors include a hover state. */
+export function hoverSizeChanges(rules: readonly Rule[]): string[] {
+  return rules
+    .filter((rule) => rule.selectors.some((selector) => selector.includes(":hover")))
+    .flatMap((rule) => [...rule.declarations.keys()].filter((property) => BOX_SIZE.test(property)).map((property) => `${at(rule)} ${rule.selectors.join(", ")} sets ${property}`));
+}
+
 // --- literals ------------------------------------------------------------------------
 
 // "200ms", ".4s", "-1.2s": a number and a time unit, nothing else in the token.
@@ -367,6 +381,11 @@ export function cssRuleTests(name: string, options: CssRuleOptions): void {
   test(`${name}: no selector sets a shorthand and its longhand in one cascade context`, () => {
     const clashes = shorthandClashes(rules);
     assert.deepEqual(clashes, [], `set the property once:\n${clashes.join("\n")}`);
+  });
+
+  test(`${name}: a hover state changes no box's size`, () => {
+    const grows = hoverSizeChanges(rules);
+    assert.deepEqual(grows, [], `a hover rule may change colour, shadow or a transform, not a size (is a selector list split by another rule?):\n${grows.join("\n")}`);
   });
 
   if (scope !== undefined) {

@@ -402,8 +402,9 @@ resource "aws_apigatewayv2_api" "access" {
       trimsuffix(var.panel_url, "/"),
       var.legacy_panel_url == null ? null : trimsuffix(var.legacy_panel_url, "/"),
     ]))
-    allow_headers     = ["authorization", "content-type"]
-    allow_methods     = ["GET", "POST", "PUT", "OPTIONS"]
+    allow_headers = ["authorization", "content-type"]
+    # Every method a route uses, or the browser refuses the request before it is sent.
+    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     allow_credentials = true
     max_age           = 3600
   }

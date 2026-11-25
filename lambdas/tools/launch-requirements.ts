@@ -1,4 +1,4 @@
-// What a launch would ask EC2 for, per world, and — with credentials — whether
+// What a launch would ask EC2 for, per game, and — with credentials — whether
 // EC2 has any instance type that answers it. The check the rollout names for
 // the allowed families: a requirement nothing satisfies is found here, not at
 // ten o'clock when a start is refused.
@@ -8,15 +8,16 @@
 
 import { EC2Client, GetInstanceTypesFromInstanceRequirementsCommand } from "@aws-sdk/client-ec2";
 
-import { gameCatalog, launchFamilies, launchRequirementsForWorld } from "../src/control-plane/catalog.ts";
-import type { LaunchRequirements } from "../src/domain/placement.ts";
+import { gameFootprints, launchFamilies } from "../src/control-plane/catalog.ts";
+import { requirementsFor, type LaunchRequirements } from "../src/domain/placement.ts";
 
 const verify = process.argv.includes("--verify");
-const worlds = gameCatalog.flatMap((game) => game.worlds.map((world) => ({ game: game.id, world: world.id, requirements: launchRequirementsForWorld(world.id) })));
+// A session is sized by its game (ADR-0097), so every launch asks one of these.
+const worlds = Object.entries(gameFootprints).map(([game, footprint]) => ({ world: game, requirements: requirementsFor(footprint) }));
 
-console.log(`${"world".padEnd(20)} ${"game".padEnd(10)} ${"min MiB".padStart(8)} ${"min vCPU".padStart(9)}`);
+console.log(`${"game".padEnd(20)} ${"min MiB".padStart(8)} ${"min vCPU".padStart(9)}`);
 for (const entry of worlds) {
-  console.log(`${entry.world.padEnd(20)} ${entry.game.padEnd(10)} ${String(entry.requirements.memoryMiB).padStart(8)} ${String(entry.requirements.vcpu).padStart(9)}`);
+  console.log(`${entry.world.padEnd(20)} ${String(entry.requirements.memoryMiB).padStart(8)} ${String(entry.requirements.vcpu).padStart(9)}`);
 }
 console.log(`\nallowed families: ${launchFamilies.join(", ")}`);
 

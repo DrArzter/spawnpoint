@@ -70,8 +70,8 @@ export function useBackups(gameId: string, world: World, opts: Readonly<{ canRea
     wipeNumber: (generationId) => world.wipes.find((wipe) => wipe.id === generationId)?.number,
     restore: (entry) => action("backup.restore", "Restore", () => opts.onRestore(entry), {
       icon: "restore",
-      disabled: !world.worldLifecycleAvailable || !opts.canRestore || entry.generationId === null || opts.busy,
-      hint: restoreHint(world, entry, opts.canRestore),
+      disabled: !opts.canRestore || entry.generationId === null || opts.busy,
+      hint: restoreHint(entry, opts.canRestore),
     }),
     download: onDownload === null ? null : (entry) => action("backup.download", "Download archive", () => onDownload(entry), {
       icon: "download",
@@ -460,8 +460,7 @@ export function useReleaseChanges(gameId: string, release: Readonly<{ presetId: 
   return { release: release.version, changes: { status: "ready", value: diff === null ? null : { from: diff.from, ...releaseChangeRows(diff) } } };
 }
 
-function restoreHint(world: World, entry: BackupEntry, canRestore: boolean): string {
-  if (!world.worldLifecycleAvailable) return "This legacy world is not wipe-managed.";
+function restoreHint(entry: BackupEntry, canRestore: boolean): string {
   if (entry.generationId === null) return "This legacy backup is not tied to a wipe.";
   return canRestore ? "Restore into a new wipe" : "Your role cannot restore backups.";
 }

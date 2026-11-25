@@ -3,7 +3,7 @@
 // revision. Two starts that race for the last gigabyte both compute a fit;
 // one write lands; the other takes its next candidate.
 
-import { footprintForWorld, gameFootprints, worldHostBinding, worldNeedsSlotZero } from "../control-plane/catalog.ts";
+import { gameFootprints, worldNeedsSlotZero } from "../control-plane/catalog.ts";
 import {
   PlacementConflict,
   drainDecision,
@@ -67,10 +67,7 @@ export type PlacementInput =
 
 export type PlacementOutcome =
   | Readonly<{ kind: "reuse"; hostId: string; slot: number }>
-  | Readonly<{ kind: "launch"; requirements: LaunchRequirements }>
-  // A world whose save lives on the configured host's volume cannot be placed
-  // anywhere else, and no launch can help it.
-  | Readonly<{ kind: "refused"; reason: "bound_to_configured_host" }>;
+  | Readonly<{ kind: "launch"; requirements: LaunchRequirements }>;
 
 export type PlacementOutput = Readonly<{
   /** `null` is an answer: the host in question does not exist. */
@@ -102,23 +99,18 @@ function requirePolicy(value: unknown): void {
   if (value !== undefined && value !== "cold" && value !== "warm") throw new Error("policy must be cold or warm");
 }
 
-// The footprint a session is placed with: what the caller says, else the
-// world's catalog entry, else its game's default. A world nobody can size is
-// refused here, before a host is chosen for it.
+// The footprint a session is placed with: what the caller says, else its
+// game's. A session nobody can size is refused here, before a host is chosen.
 function requestGame(request: SessionRequest): string | undefined {
   return request.gameId ?? request.serverId;
 }
 
 export function resolveFootprint(request: SessionRequest): Footprint {
   if (request.footprint) return request.footprint;
-  try {
-    return footprintForWorld(request.worldId);
-  } catch {
-    const gameId = requestGame(request);
-    const byGame = gameId === undefined ? undefined : gameFootprints[gameId];
-    if (byGame) return byGame;
-    throw new PlacementConflict(`no footprint for world ${request.worldId}`);
-  }
+  const gameId = requestGame(request);
+  const byGame = gameId === undefined ? undefined : gameFootprints[gameId];
+  if (byGame) return byGame;
+  throw new PlacementConflict(`no footprint for world ${request.worldId}`);
 }
 
 type CoordinatorContext = Readonly<{
@@ -212,11 +204,7 @@ function rankedCandidates(
   request: SessionRequest,
   footprint: Footprint,
 ): readonly VersionedHost[] {
-  const binding = worldHostBinding(request.worldId);
-  const eligible = hosts.filter((host) => {
-    if (binding === "configured" && host.record.provenance !== "configured") return false;
-    return request.eligibleProvenance === undefined || host.record.provenance === request.eligibleProvenance;
-  });
+  const eligible = hosts.filter((host) => request.eligibleProvenance === undefined || host.record.provenance === request.eligibleProvenance);
   const ranked = placementCandidates(
     eligible.map((host) => host.record),
     footprint,
@@ -230,10 +218,8 @@ function rankedCandidates(
   });
 }
 
-function noCandidateOutcome(request: SessionRequest, footprint: Footprint): PlacementOutcome {
-  return worldHostBinding(request.worldId) === "configured"
-    ? { kind: "refused", reason: "bound_to_configured_host" }
-    : { kind: "launch", requirements: requirementsFor(footprint) };
+function noCandidateOutcome(footprint: Footprint): PlacementOutcome {
+  return { kind: "launch", requirements: requirementsFor(footprint) };
 }
 
 async function placeSession(context: CoordinatorContext, request: SessionRequest): Promise<PlacementOutput> {
@@ -246,7 +232,7 @@ async function placeSession(context: CoordinatorContext, request: SessionRequest
     const already = existingReservation(hosts, request.sessionId);
     if (already) return { placement: already };
     const candidates = rankedCandidates(hosts, request, footprint);
-    if (candidates.length === 0) return { placement: noCandidateOutcome(request, footprint) };
+    if (candidates.length === 0) return { placement: noCandidateOutcome(footprint) };
     const taken = await reserveOnFirst(context, candidates, request, footprint);
     if (taken) return { placement: taken };
   }

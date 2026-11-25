@@ -28,7 +28,7 @@ function session(worldId: string, observedState: WorldSession["observedState"], 
 function fleetWorld(id: string, displayName: string, worldSession: WorldSession | null): World {
   return {
     id, displayName, profileId: id, sessionControlAvailable: true, connectivity: "route53", placement: "fleet", auth: "game",
-    materialization: "existing", worldLifecycleAvailable: true, wipes: [], preset: null, connectionAddress: null,
+    materialization: "existing", wipes: [], preset: null, connectionAddress: null,
     release: { state: "available", generationId: null, desiredRelease: "1.2", activeRelease: "1.2" },
     session: worldSession,
   };

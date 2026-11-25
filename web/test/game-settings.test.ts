@@ -56,8 +56,10 @@ test("the world's overflow offers game settings only where they can be kept and 
   assert.ok(ids(rostik, ["world.manage"]).includes("world.game-settings"));
   assert.ok(!ids(rostik, ["status.read"]).includes("world.game-settings"), "only world.manage changes them");
   assert.ok(!ids(rostik, ["world.manage"], false).includes("world.game-settings"), "only where the deployment keeps them");
-  assert.equal(settingsAvailable(minecraft, vanilla), false, "a legacy world has no record to keep them in");
-  assert.ok(!ids(vanilla, ["world.manage"]).includes("world.game-settings"));
+  assert.equal(settingsAvailable(minecraft), true);
+  // ADR-0097: a world on the configured host is a record like any other, with the same menu.
+  assert.ok(ids(vanilla, ["world.manage"]).includes("world.game-settings"));
+  assert.ok(ids(vanilla, ["world.manage"]).includes("world.settings"));
 });
 
 test("the world's details say which settings differ from the game's defaults", () => {
@@ -66,5 +68,5 @@ test("the world's details say which settings differ from the game's defaults", (
   assert.deepEqual(detail?.value, { type: "text", text: "Difficulty: Hard, Allow flight: On" });
   const untouched = worldDetails(minecraft, { ...rostik, gameSettings: { values: {}, updatedAt: null } }, "running").find((item) => item.label === "Game settings");
   assert.deepEqual(untouched?.value, { type: "absent", text: "Game defaults" });
-  assert.equal(worldDetails(minecraft, vanilla, "running").some((item) => item.label === "Game settings"), false);
+  assert.deepEqual(worldDetails(minecraft, vanilla, "running").find((item) => item.label === "Game settings")?.value, { type: "absent", text: "Game defaults" });
 });

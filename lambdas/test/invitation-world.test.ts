@@ -4,9 +4,9 @@ import test from "node:test";
 import { catalogWithPresets, findCatalogWorld, gameCatalog } from "../src/control-plane/catalog.ts";
 import { archiveWorldRecord, newWorldRecord } from "../src/control-plane/world-registry.ts";
 
-// Inviting players names a world. Every world the panel lists must resolve,
-// and most of them were created from a preset, so they live in the registry
-// rather than in the built-in catalog, which knows only the legacy worlds.
+// Inviting players names a world. Every world the panel lists must resolve, and
+// every world is a record in the registry (ADR-0097): the built-in catalog
+// knows games, not worlds.
 
 const preset = {
   id: "minecraft-industrial", displayName: "Industrial", gameId: "minecraft",
@@ -21,11 +21,10 @@ test("a world created from a preset resolves, with its game and its own name", (
   const found = findCatalogWorld(catalog, "minecraft", rostik.worldId);
   assert.equal(found?.game.displayName, "Minecraft");
   assert.equal(found?.world.displayName, "Rostik");
-  assert.equal(findCatalogWorld(gameCatalog, "minecraft", rostik.worldId), null, "the built-in catalog alone never knew it");
+  assert.equal(findCatalogWorld(gameCatalog, "minecraft", rostik.worldId), null, "the built-in catalog alone knows no world");
 });
 
-test("the legacy worlds still resolve, and an archived world says so", () => {
-  assert.equal(findCatalogWorld(catalog, "minecraft", "world")?.world.id, "world");
+test("an archived world still resolves, and says so", () => {
   assert.equal(findCatalogWorld(catalog, "minecraft", retired.worldId)?.world.materialization, "archived");
 });
 

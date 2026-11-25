@@ -48,7 +48,7 @@ test("a new world or wipe opens on the current revision only; a promotion may us
 function world(preset: Preset, activeRelease: string): World {
   return {
     id: "prom", displayName: "Prominence", profileId: "prominence", sessionControlAvailable: true, connectivity: "route53", placement: "fleet", auth: "game",
-    materialization: "existing", worldLifecycleAvailable: true, wipes: [], connectionAddress: null, preset,
+    materialization: "existing", wipes: [], connectionAddress: null, preset,
     release: { state: "available", generationId: `gen-${"c".repeat(32)}`, desiredRelease: activeRelease, activeRelease }, session: null,
   };
 }

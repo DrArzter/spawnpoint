@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { configuredCatalog } from "./support/configured-worlds.ts";
+
 import { PlacementConflict, SYSTEM_RESERVE_MIB } from "../src/domain/placement.ts";
 import type { HostRecord, HostShape } from "../src/domain/placement.ts";
 import { createPlacementCoordinator, resolveFootprint, type PlacementStore, type VersionedHost } from "../src/lifecycle/placement-coordinator.ts";
@@ -38,14 +40,16 @@ class MemoryFleet implements PlacementStore {
 const SMALL: HostShape = { instanceType: "m7i-flex.large", memoryMiB: 8 * 1024, vcpu: 2 };
 const LARGE: HostShape = { instanceType: "r7i.xlarge", memoryMiB: 32 * 1024, vcpu: 4 };
 
+// A world smaller than its game's default, sized by its start request.
+const VANILLA = { memoryMiB: 3 * 1024, cores: 0.5 };
+
 function coordinator(fleet: MemoryFleet) {
   let now = 1_789_000_000;
   return createPlacementCoordinator(fleet, () => now++);
 }
 
-test("a footprint comes from the request, the world, or the game, in that order, and a world nobody can size is refused", () => {
-  assert.deepEqual(resolveFootprint({ sessionId: "s", worldId: "world" }), { memoryMiB: 7 * 1024, cores: 1 });
-  assert.deepEqual(resolveFootprint({ sessionId: "s", worldId: "vanilla" }), { memoryMiB: 3 * 1024, cores: 0.5 });
+test("a footprint comes from the request, else the game, and a world nobody can size is refused", () => {
+  assert.deepEqual(resolveFootprint({ sessionId: "s", worldId: "world", serverId: "minecraft" }), { memoryMiB: 7 * 1024, cores: 1 });
   assert.deepEqual(resolveFootprint({ sessionId: "s", worldId: "made-later", serverId: "factorio" }), { memoryMiB: 2 * 1024, cores: 0.5 });
   assert.deepEqual(resolveFootprint({ sessionId: "s", worldId: "world", footprint: { memoryMiB: 1024, cores: 0.25 } }), { memoryMiB: 1024, cores: 0.25 });
   assert.throws(() => resolveFootprint({ sessionId: "s", worldId: "made-later" }), PlacementConflict);
@@ -75,7 +79,7 @@ test("drain conclusion is fenced to the revision that was decided", async () => 
   const revision = decided.host?.revision;
   assert.equal(decided.drain, "terminate");
   assert.ok(revision !== undefined);
-  await coordinate({ action: "reserveOnHost", hostId: "i-fleet", sessionId: "s1", worldId: "vanilla" });
+  await coordinate({ action: "reserveOnHost", hostId: "i-fleet", sessionId: "s1", worldId: "vanilla", serverId: "minecraft", footprint: VANILLA });
   await coordinate({ action: "releasePlacement", hostId: "i-fleet", sessionId: "s1" });
   await assert.rejects(coordinate({ action: "concludeDrain", hostId: "i-fleet", outcome: "terminate", expectedRevision: revision }), PlacementConflict);
   assert.equal(fleet.hosts.get("i-fleet")?.record.state, "draining");
@@ -84,15 +88,13 @@ test("drain conclusion is fenced to the revision that was decided", async () => 
 test("with nothing up, placing asks for a launch; with a host up, it reserves a slot and is idempotent for the session", async () => {
   const fleet = new MemoryFleet();
   const coordinate = coordinator(fleet);
-  const bound = await coordinate({ action: "placeSession", sessionId: "s0", worldId: "world" });
-  assert.deepEqual(bound.placement, { kind: "refused", reason: "bound_to_configured_host" }, "a legacy world cannot be launched for; its save is on the configured host");
   const nothing = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "arrived-later", serverId: "minecraft" });
   assert.deepEqual(nothing.placement, { kind: "launch", requirements: { memoryMiB: 7 * 1024 + SYSTEM_RESERVE_MIB, vcpu: 2 } });
 
   await coordinate({ action: "registerHost", hostId: "i-1", shape: SMALL, ready: true });
-  const placed = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" });
+  const placed = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world", serverId: "minecraft" });
   assert.deepEqual(placed.placement, { kind: "reuse", hostId: "i-1", slot: 0 });
-  const repeated = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" });
+  const repeated = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world", serverId: "minecraft" });
   assert.deepEqual(repeated.placement, placed.placement);
   assert.equal(fleet.hosts.get("i-1")?.record.reservations.length, 1);
   assert.equal(fleet.hosts.get("i-1")?.record.state, "ready");
@@ -100,9 +102,9 @@ test("with nothing up, placing asks for a launch; with a host up, it reserves a 
   // The small host is full; a second modded preset world asks for a launch.
   const second = await coordinate({ action: "placeSession", sessionId: "s2", worldId: "arrived-later", serverId: "minecraft" });
   assert.equal(second.placement?.kind, "launch");
-  // The legacy vanilla world does not fit beside it either (7 + 3 > 8 - 1), and being bound it is refused.
-  const vanilla = await coordinate({ action: "placeSession", sessionId: "s3", worldId: "vanilla" });
-  assert.equal(vanilla.placement?.kind, "refused");
+  // A smaller world does not fit beside it either (7 + 3 > 8 - 1).
+  const small = await coordinate({ action: "placeSession", sessionId: "s3", worldId: "vanilla", serverId: "minecraft", footprint: VANILLA });
+  assert.equal(small.placement?.kind, "launch");
 });
 
 test("a lost conditional write falls through to the next candidate instead of failing the start", async () => {
@@ -112,7 +114,7 @@ test("a lost conditional write falls through to the next candidate instead of fa
   await coordinate({ action: "registerHost", hostId: "i-roomy", shape: LARGE, ready: true });
   // Best fit prefers the small host; its write is lost to a racing start.
   fleet.failNextCompareAndSetOn = "i-tight";
-  const placed = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "vanilla" });
+  const placed = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "vanilla", serverId: "minecraft", footprint: VANILLA });
   assert.deepEqual(placed.placement, { kind: "reuse", hostId: "i-roomy", slot: 0 });
 });
 
@@ -122,19 +124,15 @@ test("reserving on a named host, releasing, and the drain that follows", async (
   await coordinate({ action: "registerHost", hostId: "i-1", shape: LARGE, ready: true });
   const one = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s1", worldId: "world", serverId: "minecraft" });
   assert.deepEqual(one.placement, { kind: "reuse", hostId: "i-1", slot: 0 });
-  const two = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "vanilla", serverId: "minecraft" });
-  assert.deepEqual(two.placement, { kind: "reuse", hostId: "i-1", slot: 1 });
-  const again = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "vanilla", serverId: "minecraft" });
-  assert.deepEqual(again.placement, two.placement);
-  await assert.rejects(coordinate({ action: "reserveOnHost", hostId: "i-9", sessionId: "s3", worldId: "world" }), PlacementConflict);
+  const again = await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s1", worldId: "world", serverId: "minecraft" });
+  assert.deepEqual(again.placement, one.placement);
+  // A world the catalog does not describe takes slot zero only, and that slot is held.
+  await assert.rejects(coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "vanilla", serverId: "minecraft", footprint: VANILLA }), PlacementConflict);
+  await assert.rejects(coordinate({ action: "reserveOnHost", hostId: "i-9", sessionId: "s3", worldId: "world", serverId: "minecraft" }), PlacementConflict);
 
   const releasedOne = await coordinate({ action: "releasePlacement", hostId: "i-1", sessionId: "s1" });
   assert.equal(releasedOne.released, true);
-  assert.equal(releasedOne.host?.record.state, "ready");
-  assert.equal((await coordinate({ action: "decideDrain", hostId: "i-1", gracePeriodSeconds: 600 })).drain, "keep");
-
-  const releasedTwo = await coordinate({ action: "releasePlacement", hostId: "i-1", sessionId: "s2" });
-  assert.equal(releasedTwo.host?.record.state, "draining");
+  assert.equal(releasedOne.host?.record.state, "draining");
   assert.equal((await coordinate({ action: "decideDrain", hostId: "i-1", gracePeriodSeconds: 600 })).drain, "keep");
   assert.equal((await coordinate({ action: "decideDrain", hostId: "i-1", gracePeriodSeconds: 0 })).drain, "stop", "the configured host is never terminated");
 
@@ -162,7 +160,7 @@ test("an empty host that is the fleet's headroom is kept; without headroom it dr
   const fleet = new MemoryFleet();
   const coordinate = coordinator(fleet);
   await coordinate({ action: "registerHost", hostId: "i-busy", shape: SMALL, ready: true });
-  await coordinate({ action: "reserveOnHost", hostId: "i-busy", sessionId: "s1", worldId: "world" });
+  await coordinate({ action: "reserveOnHost", hostId: "i-busy", sessionId: "s1", worldId: "world", serverId: "minecraft" });
   await coordinate({ action: "registerHost", hostId: "i-spare", shape: LARGE, ready: true, provenance: "launched" });
   assert.equal((await coordinate({ action: "decideDrain", hostId: "i-spare", gracePeriodSeconds: 0, headroomMiB: 8 * 1024 })).drain, "keep");
   assert.equal((await coordinate({ action: "decideDrain", hostId: "i-spare", gracePeriodSeconds: 0 })).drain, "terminate");
@@ -175,24 +173,14 @@ test("a stop finds where its session runs, and can give the slot back knowing on
   const coordinate = coordinator(fleet);
   assert.deepEqual(await coordinate({ action: "findPlacement", sessionId: "s1" }), { placement: null });
   await coordinate({ action: "registerHost", hostId: "i-1", shape: LARGE, ready: true });
-  await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s1", worldId: "world" });
-  await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s2", worldId: "vanilla" });
-  assert.deepEqual((await coordinate({ action: "findPlacement", sessionId: "s2" })).placement, { kind: "reuse", hostId: "i-1", slot: 1 });
+  await coordinate({ action: "registerHost", hostId: "i-2", shape: LARGE, ready: true });
+  await coordinate({ action: "reserveOnHost", hostId: "i-1", sessionId: "s1", worldId: "world", serverId: "minecraft" });
+  await coordinate({ action: "reserveOnHost", hostId: "i-2", sessionId: "s2", worldId: "vanilla", serverId: "minecraft", footprint: VANILLA });
+  assert.deepEqual((await coordinate({ action: "findPlacement", sessionId: "s2" })).placement, { kind: "reuse", hostId: "i-2", slot: 0 });
   const released = await coordinate({ action: "releasePlacement", sessionId: "s2" });
   assert.equal(released.released, true);
   assert.deepEqual(await coordinate({ action: "findPlacement", sessionId: "s2" }), { placement: null });
   assert.deepEqual(await coordinate({ action: "releasePlacement", sessionId: "s2" }), { released: false, host: null });
-});
-
-test("a legacy world is bound to the configured host: it never lands on a launched one and never asks for a launch", async () => {
-  const fleet = new MemoryFleet();
-  const coordinate = coordinator(fleet);
-  await coordinate({ action: "registerHost", hostId: "i-fleet", shape: LARGE, ready: true, provenance: "launched" });
-  assert.deepEqual((await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" })).placement, { kind: "refused", reason: "bound_to_configured_host" });
-  // A preset world is free to take the launched host.
-  assert.deepEqual((await coordinate({ action: "placeSession", sessionId: "s2", worldId: "made-later", serverId: "factorio" })).placement, { kind: "reuse", hostId: "i-fleet", slot: 0 });
-  await coordinate({ action: "registerHost", hostId: "i-home", shape: SMALL, ready: true });
-  assert.deepEqual((await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world" })).placement, { kind: "reuse", hostId: "i-home", slot: 0 });
 });
 
 test("fleet-only placement ignores a configured host and launches from zero", async () => {
@@ -218,14 +206,6 @@ test("fleet-only placement ignores a configured host and launches from zero", as
     eligibleProvenance: "launched",
   });
   assert.deepEqual(reused.placement, { kind: "reuse", hostId: "i-fleet", slot: 0 });
-
-  const bound = await coordinate({
-    action: "placeSession",
-    sessionId: "s2",
-    worldId: "world",
-    eligibleProvenance: "launched",
-  });
-  assert.deepEqual(bound.placement, { kind: "refused", reason: "bound_to_configured_host" });
 });
 
 test("a Zomboid world and a public world take slot zero only; the second of them on a host asks for a launch", async () => {
@@ -242,7 +222,7 @@ test("a Zomboid world and a public world take slot zero only; the second of them
   const publicCatalogWorld = { id: "arena", displayName: "Arena", profileId: "p", sessionControl: "v1" as const, connectivity: "raw" as const };
   const { worldNeedsSlotZero } = await import("../src/control-plane/catalog.ts");
   assert.equal(worldNeedsSlotZero("arena", undefined, [{ id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565, worlds: [publicCatalogWorld] }]), true);
-  assert.equal(worldNeedsSlotZero("world"), false);
+  assert.equal(worldNeedsSlotZero("world", undefined, configuredCatalog), false);
   assert.equal(worldNeedsSlotZero("knox", "zomboid"), true);
   assert.equal(worldNeedsSlotZero("base", "factorio"), true);
 });

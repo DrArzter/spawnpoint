@@ -1258,8 +1258,8 @@ of the rollout is `scripts/acceptance-capacity-allocation.sh`; its written repor
 `docs/acceptance/` directory does not exist.
 
 Two things `shared` cannot do, and should not surprise anyone: two configured worlds of the same game still take
-turns, because they share the game's lifecycle record (fleet worlds have their own, ADR-0062), and the legacy worlds
-run only on the configured host (the world's `hostBinding` is `configured`).
+turns, because they share the game's lifecycle record (fleet worlds have their own, ADR-0062), and a world whose
+record says `configured` starts only on the configured host (ADR-0097).
 
 ## Launched hosts (ADR-0054, phase 12)
 

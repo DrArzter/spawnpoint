@@ -13,15 +13,15 @@ export function settingDefinitions(game: Game): readonly SettingDefinition[] {
   return game.settings ?? [];
 }
 
-/** The world can keep settings: its game defines some, and it has a record. */
-export function settingsAvailable(game: Game, world: World): boolean {
-  return settingDefinitions(game).length > 0 && world.gameSettings != null;
+/** The world can keep settings: its game defines some. Every world is a record (ADR-0097). */
+export function settingsAvailable(game: Game): boolean {
+  return settingDefinitions(game).length > 0;
 }
 
 
 /** The value in effect: what the world set, else the game's default. */
 export function effectiveValue(setting: SettingDefinition, world: World): SettingValue {
-  const value = world.gameSettings?.values[setting.id];
+  const value = world.gameSettings.values[setting.id];
   return value !== undefined && settingValueValid(setting, value) ? value : setting.default;
 }
 

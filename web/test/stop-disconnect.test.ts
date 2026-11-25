@@ -21,7 +21,7 @@ function session(players: number | null): WorldSession {
 function world(players: number | null): World {
   return {
     id: "prom", displayName: "Prominence", profileId: "prominence", sessionControlAvailable: true, connectivity: "route53", placement: "fleet", auth: "game",
-    materialization: "existing", worldLifecycleAvailable: true, wipes: [], connectionAddress: null,
+    materialization: "existing", wipes: [], connectionAddress: null,
     preset: { id: "prominence", displayName: "Prominence II", repository: "https://github.com/x/y", commit: "a".repeat(40), profileDigest: "b".repeat(64), releases: ["1.0"], buildStatus: "ready", latestRelease: "1.0" },
     release: { state: "available", generationId: `gen-${"c".repeat(32)}`, desiredRelease: "1.0", activeRelease: "1.0" },
     session: session(players),

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { HostObservation, OperationObservation } from "../src/control-plane/read-model.ts";
 import { catalogWithPresets } from "../src/control-plane/catalog.ts";
+import { configuredCatalog } from "./support/configured-worlds.ts";
 import { packRelease, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession } from "../src/control-plane/session-control.ts";
 import { acquireLease, beginSession, initialLifecycleRecord, type LifecycleRecord } from "../src/domain/lifecycle.ts";
 import { newWorldRecord } from "../src/control-plane/world-registry.ts";
@@ -23,8 +24,8 @@ test("any world in the catalog can execute, because the machines take a world id
     "2026-09-08T00:00:00.000Z",
   );
   const catalog = catalogWithPresets([factorioPreset], undefined, [world]);
-  assert.equal(planSessionOperation("minecraft", "world", "start", [host("stopped")], []).kind, "execute");
-  assert.equal(planSessionOperation("minecraft", "vanilla", "start", [host("stopped")], []).kind, "execute");
+  assert.equal(planSessionOperation("minecraft", "world", "start", [host("stopped")], [], configuredCatalog).kind, "execute");
+  assert.equal(planSessionOperation("minecraft", "vanilla", "start", [host("stopped")], [], configuredCatalog).kind, "execute");
   assert.equal(planSessionOperation("factorio", world.worldId, "start", [host("stopped")], [], catalog).kind, "execute");
   assert.deepEqual(
     planSessionOperation("factorio", factorioPreset.id, "start", [host("stopped")], [], catalog),
@@ -46,36 +47,36 @@ test("a world listed before its session workflow exists is refused, not attempte
 
 test("a running host refuses a start, because its state does not say which world is up", () => {
   assert.deepEqual(
-    planSessionOperation("minecraft", "world", "start", [host("running")], []),
+    planSessionOperation("minecraft", "world", "start", [host("running")], [], configuredCatalog),
     { kind: "reject", reason: "host_already_running" },
   );
   // Stopping the world that is up stays possible; that is how the host frees.
-  assert.equal(planSessionOperation("minecraft", "world", "stop", [host("running")], []).kind, "execute");
+  assert.equal(planSessionOperation("minecraft", "world", "stop", [host("running")], [], configuredCatalog).kind, "execute");
 });
 
 test("global operations and ambiguous hosts fail closed", () => {
-  assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopped")], [operation]), { kind: "reject", reason: "operation_in_progress" });
-  assert.deepEqual(planSessionOperation("minecraft", "world", "start", [], []), { kind: "reject", reason: "host_not_unique" });
-  assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopped"), host("running")], []), { kind: "reject", reason: "host_not_unique" });
+  assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopped")], [operation], configuredCatalog), { kind: "reject", reason: "operation_in_progress" });
+  assert.deepEqual(planSessionOperation("minecraft", "world", "start", [], [], configuredCatalog), { kind: "reject", reason: "host_not_unique" });
+  assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopped"), host("running")], [], configuredCatalog), { kind: "reject", reason: "host_not_unique" });
 });
 
 test("fleet sessions do not depend on a unique persistent host", () => {
-  assert.equal(planFleetSessionOperation("minecraft", "world", "start", [], null).kind, "execute");
+  assert.equal(planFleetSessionOperation("minecraft", "world", "start", [], null, configuredCatalog).kind, "execute");
   const active: LifecycleRecord = {
     schemaVersion: 1, serverId: "minecraft", desiredState: "running", observedState: "ready",
     activeSessionId: "session-1", activeWorldId: "world", fencingToken: 1, lease: null, idle: null,
     updatedAtEpochSeconds: 1,
   };
-  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "start", [], active), { kind: "reject", reason: "session_transitioning" });
-  assert.equal(planFleetSessionOperation("minecraft", "world", "stop", [], active).kind, "execute");
-  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "stop", [], { ...active, activeWorldId: "vanilla" }), { kind: "reject", reason: "world_not_active" });
-  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "stop", [], null), { kind: "noop", reason: "already_stopped" });
+  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "start", [], active, configuredCatalog), { kind: "reject", reason: "session_transitioning" });
+  assert.equal(planFleetSessionOperation("minecraft", "world", "stop", [], active, configuredCatalog).kind, "execute");
+  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "stop", [], { ...active, activeWorldId: "vanilla" }, configuredCatalog), { kind: "reject", reason: "world_not_active" });
+  assert.deepEqual(planFleetSessionOperation("minecraft", "world", "stop", [], null, configuredCatalog), { kind: "noop", reason: "already_stopped" });
 });
 
 test("stop is idempotent and transitional host states are rejected", () => {
-  assert.deepEqual(planSessionOperation("minecraft", "world", "stop", [host("stopped")], []), { kind: "noop", reason: "already_stopped" });
-  assert.equal(planSessionOperation("minecraft", "world", "stop", [host("running")], []).kind, "execute");
-  assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopping")], []), { kind: "reject", reason: "host_transitioning" });
+  assert.deepEqual(planSessionOperation("minecraft", "world", "stop", [host("stopped")], [], configuredCatalog), { kind: "noop", reason: "already_stopped" });
+  assert.equal(planSessionOperation("minecraft", "world", "stop", [host("running")], [], configuredCatalog).kind, "execute");
+  assert.deepEqual(planSessionOperation("minecraft", "world", "start", [host("stopping")], [], configuredCatalog), { kind: "reject", reason: "host_transitioning" });
 });
 
 test("a manually stopped host can reconcile its stranded stopping session", () => {
@@ -114,9 +115,9 @@ test("a player is handed the pack for the release the world is running", () => {
 test("a configured stop in the name of a world the host is not running is refused", () => {
   // The caller located this world's session and found none: the running host
   // runs another world, whose session a stop here would end.
-  assert.deepEqual(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], [], undefined, null), { kind: "reject", reason: "world_not_active" });
+  assert.deepEqual(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], [], configuredCatalog, null), { kind: "reject", reason: "world_not_active" });
   const lease = acquireLease(initialLifecycleRecord("minecraft", 1), "start", 1, 60);
   const record = beginSession(lease.record, lease.ownership, "s1", "vanilla", 2);
-  assert.equal(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], [], undefined, record).kind, "execute");
-  assert.equal(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], []).kind, "execute", "a caller that did not locate keeps the old answer");
+  assert.equal(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], [], configuredCatalog, record).kind, "execute");
+  assert.equal(planSessionOperation("minecraft", "vanilla", "stop", [host("running")], [], configuredCatalog).kind, "execute", "a caller that did not locate keeps the old answer");
 });

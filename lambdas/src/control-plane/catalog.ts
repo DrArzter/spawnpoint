@@ -1,5 +1,4 @@
-import { requirementsFor } from "../domain/placement.ts";
-import type { Footprint, LaunchRequirements } from "../domain/placement.ts";
+import type { Footprint } from "../domain/placement.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
 import { gameModules } from "./game-modules.ts";
@@ -32,15 +31,7 @@ export type CatalogWorld = Readonly<{
   // public address the instance holds for that session.
   connectivity: "zerotier" | "raw" | "route53";
   placement?: "configured" | "fleet";
-  // Overrides the game's footprint, field by field: a vanilla world needs less
-  // than a modded one of the same game.
-  footprint?: Partial<Footprint>;
-  // A legacy world's save lives on the configured host's data volume, so only
-  // that host can run it. A world created from a preset lives in S3 between
-  // sessions and may be placed anywhere.
-  hostBinding?: "configured";
   materialization?: "existing" | "not_created" | "archived";
-  worldLifecycle?: "v1" | null;
   preset?: Readonly<{
     id: string;
     repository: string;
@@ -80,17 +71,8 @@ export type CatalogGame = Readonly<{
   worlds: readonly CatalogWorld[];
 }>;
 
-// The worlds this deployment manages from before presets: deployment
-// configuration, not observed runtime state. A world may be listed before it
-// has a release pointer or an active session.
-const configuredWorlds: Readonly<Record<string, readonly CatalogWorld[]>> = {
-  minecraft: [
-    { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1", connectivity: "zerotier", hostBinding: "configured" },
-    { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1", connectivity: "zerotier", footprint: { memoryMiB: 3 * 1024, cores: 0.5 }, hostBinding: "configured" },
-  ],
-};
-
-// Every game comes from its module's manifest (ADR-0088); only the worlds are this deployment's.
+// Every game comes from its module's manifest (ADR-0088). Its worlds come from
+// the world registry alone (ADR-0097): catalogWithPresets adds them.
 export const gameCatalog: readonly CatalogGame[] = gameModules.map((module) => ({
   id: module.id,
   code: module.code,
@@ -101,12 +83,12 @@ export const gameCatalog: readonly CatalogGame[] = gameModules.map((module) => (
   ...(module.whitelist ? { whitelist: true } : {}),
   ...(module.whitelist && module.whitelistRules !== null ? { playerName: { pattern: module.whitelistRules.namePattern.source, hint: module.whitelistRules.nameHint } } : {}),
   consoleSuggestions: module.console.suggestions,
-  worlds: configuredWorlds[module.id] ?? [],
+  worlds: [],
 }));
 
-// Static entries preserve every already managed legacy world. Presets remain
-// reusable templates in their own collection; they are never projected into
-// fake not-yet-created worlds and are never consumed by world creation.
+// Every world is a record in the registry (ADR-0097). Presets remain reusable
+// templates in their own collection; they are never projected into fake
+// not-yet-created worlds and are never consumed by world creation.
 export function catalogWithPresets(
   presets: readonly PresetObservation[],
   catalog: readonly CatalogGame[] = gameCatalog,
@@ -114,29 +96,8 @@ export function catalogWithPresets(
 ): readonly CatalogGame[] {
   return catalog.map((game) => {
     const forGame = presets.filter((preset) => preset.gameId === game.id);
-    const existing = game.worlds.map((world) => {
-      const preset = forGame.find((candidate) => candidate.id === world.profileId);
-      if (preset === undefined) return { ...world, materialization: "existing" as const, worldLifecycle: null };
-      return {
-        ...world,
-        displayName: preset.displayName,
-        materialization: "existing" as const,
-        worldLifecycle: null,
-        preset: {
-          id: preset.id,
-          repository: preset.repository,
-          commit: preset.commit,
-          profileDigest: preset.profileDigest,
-          releases: preset.releases,
-          buildStatus: preset.buildStatus,
-          latestRelease: preset.latestRelease,
-          ...(preset.olderReleases?.length ? { olderReleases: preset.olderReleases } : {}),
-        },
-      };
-    });
     const materialized = worldRecords
       .filter((record) => record.gameId === game.id)
-      .filter((record) => !existing.some((world) => world.id === record.worldId))
       .map((record) => {
         const current = forGame.find((preset) => preset.id === record.preset.id && preset.profileDigest === record.preset.profileDigest);
         return {
@@ -147,7 +108,6 @@ export function catalogWithPresets(
           connectivity: record.connectivity,
           placement: record.placement,
           materialization: record.status === "active" ? "existing" as const : "archived" as const,
-          worldLifecycle: "v1" as const,
           preset: current === undefined ? {
             id: record.preset.id,
             repository: record.preset.repository,
@@ -168,19 +128,10 @@ export function catalogWithPresets(
           },
         };
       });
-    return { ...game, presets: forGame, worlds: [...existing, ...materialized] };
+    return { ...game, presets: forGame, worlds: materialized };
   });
 }
 
-function gameOf(worldId: string, catalog: readonly CatalogGame[]): CatalogGame {
-  const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
-  if (game === undefined) throw new Error(`unknown world: ${worldId}`);
-  return game;
-}
-
-// The footprint a session of this world is placed with: the world's own fields
-// over its game's. A game with no footprint anywhere is refused here, before
-// a start, rather than placed with a guess.
 /** A world and its game, from whichever catalog the caller built: the built-in one, or with presets and the registry. */
 export function findCatalogWorld(catalog: readonly CatalogGame[], gameId: string, worldId: string): Readonly<{ game: CatalogGame; world: CatalogWorld }> | null {
   const game = catalog.find((candidate) => candidate.id === gameId);
@@ -188,26 +139,10 @@ export function findCatalogWorld(catalog: readonly CatalogGame[], gameId: string
   return game === undefined || world === undefined ? null : { game, world };
 }
 
-export function footprintForWorld(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): Footprint {
-  const game = gameOf(worldId, catalog);
-  const world = game.worlds.find((candidate) => candidate.id === worldId)!;
-  const base = game.footprint ?? gameFootprints[game.id];
-  if (base === undefined) throw new Error(`no footprint for game ${game.id}`);
-  return { memoryMiB: world.footprint?.memoryMiB ?? base.memoryMiB, cores: world.footprint?.cores ?? base.cores };
-}
-
-// Whether a world may run only on the configured host. Unknown worlds — those
-// created from presets and living in S3 — carry no binding.
-export function worldHostBinding(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): "configured" | null {
-  const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));
-  return game?.worlds.find((candidate) => candidate.id === worldId)?.hostBinding ?? null;
-}
-
 // Whether a session of this world must take slot zero: a public world, whose
 // security group opens the game's own port only, and a world of a game that
-// cannot be slotted. Worlds created from presets are absent from the static
-// catalog; pin them conservatively because a public fleet world may use that
-// same fixed port. Configured private worlds use the single-host path.
+// cannot be slotted. A world absent from the catalog given is pinned
+// conservatively, because a public fleet world may use that same fixed port.
 export function worldNeedsSlotZero(worldId: string, serverId?: string, catalog: readonly CatalogGame[] = gameCatalog): boolean {
   const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId))
     ?? (serverId === undefined ? undefined : catalog.find((candidate) => candidate.id === serverId));
@@ -216,13 +151,7 @@ export function worldNeedsSlotZero(worldId: string, serverId?: string, catalog: 
   return game.slottable === false || world === undefined || world.connectivity === "raw" || world.connectivity === "route53";
 }
 
-// What a launch for this world asks EC2 for when no host has room.
-export function launchRequirementsForWorld(worldId: string, catalog: readonly CatalogGame[] = gameCatalog): LaunchRequirements {
-  return requirementsFor(footprintForWorld(worldId, catalog));
-}
-
-// A world id is unique across games in this catalog, and the drift test against
-// server/worlds/catalog.json keeps it that way.
+// A world id is unique across games: the registry keys records by world id.
 /** The address as players type it: without the port when it is the game's own and the client implies it. */
 export function displayAddress(address: string, worldId: string, catalog: readonly CatalogGame[] = gameCatalog): string {
   const game = catalog.find((candidate) => candidate.worlds.some((world) => world.id === worldId));

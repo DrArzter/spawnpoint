@@ -1,4 +1,5 @@
-bootstrap_owner_telegram_id = "1780660807"
+# Your own Telegram user id: the account that may claim the Owner role once.
+bootstrap_owner_telegram_id = "100000001"
 
 # Public value from BotFather -> Login Widget after adding the panel's trusted origin.
 telegram_oidc_client_id = "8521897198"

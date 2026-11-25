@@ -74,8 +74,8 @@ export const demoSession: ActiveSession = {
   // explorable without advertising those destinations in production.
   capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "configFiles", "worldLog", "assistant", "releasePromotion", "operationProgress", "hostDeletion"],
   role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "config.edit", "log.read", "assistant.use", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "host.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
-  profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
-  bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
+  profile: { provider: "telegram", platformUserId: "100000001", telegramId: "100000001", username: "drarzter", email: null, photoUrl: null },
+  bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "100000001", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
 
 /** The catalogue as the backend serves it (lambdas/src/access/domain.ts), in its order. */
@@ -258,7 +258,7 @@ export function initialState(): DemoState {
     ],
     defaultRoleId: "viewer",
     identities: [
-      { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "1780660807", handle: "drarzter", verified: true }, { platform: "minecraft", value: "DrArzter", handle: null, verified: true }, { platform: "zerotier", value: "b9bc15e2cf", handle: null, verified: true }] },
+      { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "100000001", handle: "drarzter", verified: true }, { platform: "minecraft", value: "DrArzter", handle: null, verified: true }, { platform: "zerotier", value: "b9bc15e2cf", handle: null, verified: true }] },
       { id: "identity-alex", displayName: "Alex", roleId: "player", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "128381920", handle: null, verified: true }] },
       { id: "identity-mira", displayName: "Mira", roleId: "viewer", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "998120144", handle: null, verified: true }, { platform: "factorio", value: "Mira", handle: null, verified: true }] },
       { id: "identity-kira", displayName: "Kira", roleId: "player", directGrants: [], photoUrl: null, links: [{ platform: "password", value: "5b1c6e0a-2d4f-4a8e-9c3b-7e6f5d4c3b2a", handle: "kira@example.com", verified: false }] },

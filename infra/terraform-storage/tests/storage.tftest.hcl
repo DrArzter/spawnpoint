@@ -95,7 +95,7 @@ run "persistent_storage_is_private_versioned_and_recoverable" {
       aws_dynamodb_table.control_plane_view.billing_mode == "PAY_PER_REQUEST",
       aws_dynamodb_table.control_plane_view.deletion_protection_enabled,
       aws_dynamodb_table.control_plane_view.point_in_time_recovery[0].enabled,
-      aws_dynamodb_table.control_plane_view.server_side_encryption[0].enabled,
+      !aws_dynamodb_table.control_plane_view.server_side_encryption[0].enabled,
       aws_dynamodb_table.control_plane_view.ttl[0].attribute_name == "expires_at",
       aws_dynamodb_table.control_plane_view.ttl[0].enabled,
     ])
@@ -220,7 +220,7 @@ run "release_refs_table_is_durable_and_recoverable" {
       aws_dynamodb_table.release_refs.range_key == "sk",
       aws_dynamodb_table.release_refs.deletion_protection_enabled,
       aws_dynamodb_table.release_refs.point_in_time_recovery[0].enabled,
-      aws_dynamodb_table.release_refs.server_side_encryption[0].enabled,
+      !aws_dynamodb_table.release_refs.server_side_encryption[0].enabled,
       length(aws_dynamodb_table.release_refs.ttl) == 0,
     ])
     error_message = "The reference table must be on-demand, encrypted, deletion-protected and recoverable, and must never expire an item."

@@ -26,8 +26,8 @@ run "access_state_is_protected_on_demand_and_queryable_by_review_state" {
   }
 
   assert {
-    condition     = aws_dynamodb_table.access.server_side_encryption[0].enabled
-    error_message = "Observed external account identifiers must be encrypted at rest."
+    condition     = !aws_dynamodb_table.access.server_side_encryption[0].enabled
+    error_message = "Observed external account identifiers are encrypted at rest with the AWS owned key, which makes no KMS request (ADR-0101)."
   }
 
   assert {

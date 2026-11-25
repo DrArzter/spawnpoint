@@ -10,8 +10,10 @@ resource "aws_dynamodb_table" "lifecycle_v2" {
     type = "S"
   }
 
+  # Encrypted at rest with the AWS owned key (ADR-0101): the AWS managed key cost a KMS request per caller every
+  # five minutes.
   server_side_encryption {
-    enabled = true
+    enabled = false
   }
 
   lifecycle {

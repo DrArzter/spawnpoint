@@ -28,10 +28,11 @@ data "aws_iam_policy_document" "bot" {
     resources = ["arn:aws:lambda:${var.aws_region}:${local.account_id}:function:spawnpoint-access-api"]
   }
 
+  # /status reads the world's session record, as the panel does (ADR-0097).
   statement {
-    sid       = "ReadHostState"
-    actions   = ["ec2:DescribeInstances"]
-    resources = ["*"]
+    sid       = "ReadWorldSession"
+    actions   = ["dynamodb:GetItem"]
+    resources = [data.aws_dynamodb_table.lifecycle.arn]
   }
 
   statement {
@@ -77,7 +78,6 @@ resource "aws_lambda_function" "bot" {
   environment {
     variables = {
       ACCESS_API_FUNCTION      = "spawnpoint-access-api"
-      INSTANCE_ID              = data.aws_instance.game_host.id
       RELEASE_BUCKET           = data.aws_s3_bucket.releases.id
       GAME_ID                  = var.bot_world.game_id
       WORLD_ID                 = var.bot_world.world_id
@@ -88,6 +88,7 @@ resource "aws_lambda_function" "bot" {
       BOT_TOKEN_PARAMETER      = "/spawnpoint/bot/token"
       WEBHOOK_SECRET_PARAMETER = "/spawnpoint/bot/webhook-secret"
       ACCESS_TABLE_NAME        = data.aws_dynamodb_table.access.name
+      LIFECYCLE_TABLE_NAME     = data.aws_dynamodb_table.lifecycle.name
     }
   }
 

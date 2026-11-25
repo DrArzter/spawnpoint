@@ -1,0 +1,176 @@
+{
+  "Comment": "Delete a persistent host (ADR-0100): snapshot its data volumes when asked, terminate it, delete its data volumes and the alarms on it. The API refuses the request while a world is placed on the host or it is not stopped; the grants admit only a host and volumes with Spawnpoint's Name tags.",
+  "QueryLanguage": "JSONPath",
+  "StartAt": "Initialize",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Parameters": {
+        "request.$": "$"
+      },
+      "Next": "Route Snapshot"
+    },
+    "Route Snapshot": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.request.snapshot", "BooleanEquals": true, "Next": "Snapshot Data Volumes" }
+      ],
+      "Default": "Allow Termination"
+    },
+    "Snapshot Data Volumes": {
+      "Type": "Map",
+      "ItemsPath": "$.request.dataVolumeIds",
+      "ItemSelector": {
+        "volumeId.$": "$$.Map.Item.Value",
+        "hostId.$": "$.request.hostId",
+        "operationId.$": "$.request.operationId"
+      },
+      "MaxConcurrency": 1,
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "Create Snapshot",
+        "States": {
+          "Create Snapshot": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::aws-sdk:ec2:createSnapshot",
+            "Parameters": {
+              "VolumeId.$": "$.volumeId",
+              "Description.$": "States.Format('Data volume of persistent host {} before its deletion', $.hostId)",
+              "TagSpecifications": [
+                {
+                  "ResourceType": "snapshot",
+                  "Tags": [
+                    { "Key": "Name", "Value": "spawnpoint-deleted-host-data" },
+                    { "Key": "SpawnpointHost", "Value.$": "$.hostId" },
+                    { "Key": "SpawnpointOperation", "Value.$": "$.operationId" }
+                  ]
+                }
+              ]
+            },
+            "ResultSelector": { "snapshotId.$": "$.SnapshotId" },
+            "ResultPath": "$.snapshot",
+            "Retry": [
+              { "ErrorEquals": ["Ec2.RequestLimitExceededException", "Ec2.SnapshotCreationPerVolumeRateExceededException"], "IntervalSeconds": 15, "MaxAttempts": 5, "BackoffRate": 2 }
+            ],
+            "Next": "Wait For Snapshot"
+          },
+          "Wait For Snapshot": {
+            "Type": "Wait",
+            "Seconds": 30,
+            "Next": "Read Snapshot"
+          },
+          "Read Snapshot": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::aws-sdk:ec2:describeSnapshots",
+            "Parameters": { "SnapshotIds.$": "States.Array($.snapshot.snapshotId)" },
+            "ResultSelector": { "state.$": "$.Snapshots[0].State" },
+            "ResultPath": "$.observed",
+            "Next": "Route Snapshot State"
+          },
+          "Route Snapshot State": {
+            "Type": "Choice",
+            "Choices": [
+              { "Variable": "$.observed.state", "StringEquals": "completed", "Next": "Snapshot Kept" },
+              { "Variable": "$.observed.state", "StringEquals": "error", "Next": "Snapshot Failed" }
+            ],
+            "Default": "Wait For Snapshot"
+          },
+          "Snapshot Failed": {
+            "Type": "Fail",
+            "Error": "Spawnpoint.SnapshotFailed",
+            "Cause": "A snapshot of the host's data volume failed; nothing was deleted."
+          },
+          "Snapshot Kept": { "Type": "Succeed" }
+        }
+      },
+      "ResultPath": null,
+      "Next": "Allow Termination"
+    },
+    "Allow Termination": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:modifyInstanceAttribute",
+      "Parameters": {
+        "InstanceId.$": "$.request.hostId",
+        "DisableApiTermination": { "Value": false }
+      },
+      "ResultPath": null,
+      "Next": "Terminate Host"
+    },
+    "Terminate Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:terminateInstances",
+      "Parameters": { "InstanceIds.$": "States.Array($.request.hostId)" },
+      "ResultPath": null,
+      "Next": "Wait For Termination"
+    },
+    "Wait For Termination": {
+      "Type": "Wait",
+      "Seconds": 15,
+      "Next": "Read Host"
+    },
+    "Read Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": { "InstanceIds.$": "States.Array($.request.hostId)" },
+      "ResultSelector": { "state.$": "$.Reservations[0].Instances[0].State.Name" },
+      "ResultPath": "$.host",
+      "Next": "Route Host State"
+    },
+    "Route Host State": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.host.state", "StringEquals": "terminated", "Next": "Delete Data Volumes" }
+      ],
+      "Default": "Wait For Termination"
+    },
+    "Delete Data Volumes": {
+      "Type": "Map",
+      "ItemsPath": "$.request.dataVolumeIds",
+      "MaxConcurrency": 1,
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "Delete Volume",
+        "States": {
+          "Delete Volume": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::aws-sdk:ec2:deleteVolume",
+            "Parameters": { "VolumeId.$": "$" },
+            "Retry": [
+              { "ErrorEquals": ["Ec2.VolumeInUseException", "Ec2.IncorrectStateException"], "IntervalSeconds": 10, "MaxAttempts": 12, "BackoffRate": 1.5 }
+            ],
+            "End": true
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "Find Host Alarms"
+    },
+    "Find Host Alarms": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:cloudwatch:describeAlarmsForMetric",
+      "Parameters": {
+        "Namespace": "AWS/EC2",
+        "MetricName": "CPUUtilization",
+        "Dimensions": [{ "Name": "InstanceId", "Value.$": "$.request.hostId" }]
+      },
+      "ResultSelector": { "names.$": "$.MetricAlarms[*].AlarmName" },
+      "ResultPath": "$.alarms",
+      "Next": "Route Host Alarms"
+    },
+    "Route Host Alarms": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.alarms.names[0]", "IsPresent": true, "Next": "Delete Host Alarms" }
+      ],
+      "Default": "Host Deleted"
+    },
+    "Delete Host Alarms": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:cloudwatch:deleteAlarms",
+      "Parameters": { "AlarmNames.$": "$.alarms.names" },
+      "ResultPath": null,
+      "Next": "Host Deleted"
+    },
+    "Host Deleted": { "Type": "Succeed" }
+  }
+}

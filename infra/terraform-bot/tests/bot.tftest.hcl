@@ -16,12 +16,6 @@ mock_provider "aws" {
     }
   }
 
-  override_data {
-    target = data.aws_instance.game_host
-    values = {
-      id = "i-00000000000000000"
-    }
-  }
 
 
   override_data {
@@ -76,7 +70,6 @@ run "bot_is_an_isolated_webhook" {
         "ACCESS_API_FUNCTION",
         "GAME_ID",
         "WORLD_ID",
-        "INSTANCE_ID",
         "RELEASE_BUCKET",
         "PANEL_ADDRESS",
         "ZEROTIER_NETWORK_ID",
@@ -84,6 +77,7 @@ run "bot_is_an_isolated_webhook" {
         "BOT_TOKEN_PARAMETER",
         "WEBHOOK_SECRET_PARAMETER",
         "ACCESS_TABLE_NAME",
+        "LIFECYCLE_TABLE_NAME",
       ] : contains(keys(aws_lambda_function.bot.environment[0].variables), key)
     ])
     error_message = "Every environment value read by the handler must be wired."

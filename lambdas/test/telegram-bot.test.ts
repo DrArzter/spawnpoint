@@ -9,7 +9,9 @@ import {
   buildStopInput,
   parseChatIds,
   replies,
+  worldSessionStatus,
 } from "../src/domain/telegram-bot.ts";
+import { acquireLease, beginSession, initialLifecycleRecord, markSessionReady } from "../src/domain/lifecycle.ts";
 import { authMiddleware } from "../src/bot/middleware/auth.ts";
 import { telegramContact } from "../src/bot/middleware/contact.ts";
 import {
@@ -338,4 +340,15 @@ test("replies carry what the player actually needs", () => {
 
   assert.match(replies.pack("1.0"), /delete your mods folder entirely/i);
   assert.match(replies.packMissing("1.0"), /no published pack yet/);
+});
+
+// ADR-0097: the bot reads its world's session from the record the panel reads, not a host's EC2 state.
+test("the bot's status is its world's session, with the address the host reported once it is ready", () => {
+  const acquired = acquireLease(initialLifecycleRecord("world#world", 100), "op", 100, 300);
+  const starting = beginSession(acquired.record, acquired.ownership, "s1", "world", 101);
+  const ready = markSessionReady(starting, acquired.ownership, "s1", 102, "world.games.example:25565");
+  assert.deepEqual(worldSessionStatus(null, "world"), { state: "stopped", address: null });
+  assert.deepEqual(worldSessionStatus(starting, "world"), { state: "starting", address: null });
+  assert.deepEqual(worldSessionStatus(ready, "world"), { state: "running", address: "world.games.example:25565" });
+  assert.deepEqual(worldSessionStatus(ready, "other"), { state: "stopped", address: null }, "another world's session is not this one");
 });

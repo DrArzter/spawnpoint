@@ -8,11 +8,19 @@ import type { ControlPlaneSnapshot, Preset, SettingValue, World, WorldGameSettin
 import { DEMO_CONFIG_RELEASE, DemoState, demoSession, initialState, Mutable, PERMISSION_CATALOGUE, type OperationPlan } from "./data";
 import { demoFixture, demoOperation } from "./flag";
 import { stressState } from "./stress";
+import { fleetOnlyState } from "./fleet-only";
 
 // One in-memory control plane for the whole demo. Transitions are scheduled in
 // time rather than run by timers, so any read settles whatever has come due —
 // the console's own polling is what makes a start look like a start.
-let state: DemoState = demoFixture() === "stress" ? stressState() : initialState();
+function fixtureState(): DemoState {
+  const fixture = demoFixture();
+  if (fixture === "stress") return stressState();
+  if (fixture === "fleet") return fleetOnlyState();
+  return initialState();
+}
+
+let state: DemoState = fixtureState();
 
 const START_MS = 7000;
 const STOP_MS = 6000;
@@ -424,6 +432,22 @@ export function promoteWorld(gameId: string, worldId: string, release: string): 
     }
   });
   return { result: "requested", operationId };
+}
+
+// A persistent host leaves once no world is placed on it (ADR-0100); the demo has no snapshot to keep.
+export function deleteHost(instanceId: string, _snapshot: boolean): { operationId: string } {
+  settle();
+  const host = state.snapshot.hosts.find((item) => (item.providerRef ?? item.id) === instanceId);
+  if (!host) throw new Error("This host no longer exists. Refresh.");
+  if (host.provenance === "launched") throw new Error("The fleet lets its own hosts go by itself.");
+  if (host.state !== "stopped") throw new Error("Stop the host first.");
+  if (state.snapshot.games.some((game) => game.worlds.some((item) => item.placement === "configured" && item.materialization !== "archived"))) {
+    throw new Error("A world is still placed on this host. Move it to the fleet first.");
+  }
+  state.snapshot.hosts = state.snapshot.hosts.filter((item) => item !== host);
+  state.snapshot.observedAt = iso();
+  state.counter += 1;
+  return { operationId: `op-host-${state.counter.toString().padStart(4, "0")}` };
 }
 
 export function worldLifecycle(gameId: string, worldId: string, action: "archive" | "regenerate" | "restore" | "purge", backupKey?: string, release?: string): { result: "requested"; operationId: string } {

@@ -204,6 +204,9 @@ export function confirmationCopy(confirmation: Confirmation): { title: string; d
   if (confirmation.kind === "build") {
     return { ...releaseBuildCopy(confirmation.preset), destructive: false };
   }
+  if (confirmation.kind === "delete-host") {
+    return { title: t("host.deleteTitle", { hostName: confirmation.host.name }), description: t("host.deleteDescription"), label: t("host.delete"), destructive: true };
+  }
   const { world } = confirmation;
   switch (confirmation.kind) {
     case "session":
@@ -255,18 +258,21 @@ export function confirmationCopy(confirmation: Confirmation): { title: string; d
   }
 }
 
-export function useConfirmationForm(confirmation: Confirmation | null, opts: Readonly<{ onConfirm: (confirmation: Confirmation, release?: string) => void; onClose: () => void }>): ConfirmationModel | null {
+export function useConfirmationForm(confirmation: Confirmation | null, opts: Readonly<{ onConfirm: (confirmation: Confirmation, release?: string, keep?: boolean) => void; onClose: () => void }>): ConfirmationModel | null {
   const [typed, setTyped] = useState("");
   const [release, setRelease] = useState("");
+  const [keep, setKeep] = useState(true);
   useEffect(() => {
     setTyped("");
     setRelease(initialRelease(confirmation));
+    setKeep(true);
   }, [confirmation]);
   if (confirmation === null) return null;
   const copy = confirmationCopy(confirmation);
   const options = releaseOptions(confirmation);
   // A wipe that never started holds no save, so its release change needs no typed ID.
-  const typedTarget = confirmation.kind === "purge" || (confirmation.kind === "promote" && !neverStarted(confirmation.world)) ? confirmation.world.id : null;
+  const typedTarget = confirmation.kind === "delete-host" ? confirmation.host.name
+    : confirmation.kind === "purge" || (confirmation.kind === "promote" && !neverStarted(confirmation.world)) ? confirmation.world.id : null;
   const needsRelease = confirmation.kind === "wipe" || confirmation.kind === "promote";
   const blocked = (typedTarget !== null && typed !== typedTarget) || (needsRelease && !(options?.some((option) => option.version === release) ?? false));
   const chosen = needsRelease ? release : undefined;
@@ -274,12 +280,13 @@ export function useConfirmationForm(confirmation: Confirmation | null, opts: Rea
     title: copy.title,
     description: copy.description,
     destructive: copy.destructive,
-    confirm: action("confirm", copy.label, () => opts.onConfirm(confirmation, chosen), { disabled: blocked, danger: copy.destructive }),
+    confirm: action("confirm", copy.label, () => opts.onConfirm(confirmation, chosen, confirmation.kind === "delete-host" ? keep : undefined), { disabled: blocked, danger: copy.destructive }),
     cancel: action("cancel", t("common.cancel"), opts.onClose),
     releaseChoice: options === null ? null : {
       label: confirmation.kind === "promote" ? t("world.releaseUpdate") : t("world.releaseNewWipe"), value: release, options, set: setRelease,
     },
-    typedConfirmation: typedTarget === null ? null : { label: t("world.worldID"), expected: typedTarget, value: typed, set: setTyped },
+    typedConfirmation: typedTarget === null ? null : { label: confirmation.kind === "delete-host" ? t("host.name") : t("world.worldID"), expected: typedTarget, value: typed, set: setTyped },
+    option: confirmation.kind === "delete-host" ? { checked: keep, toggle: action("confirm.snapshot", t("host.keepSnapshot"), () => setKeep(!keep)) } : null,
   };
 }
 

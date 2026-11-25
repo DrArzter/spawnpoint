@@ -84,7 +84,13 @@ data "aws_iam_policy_document" "lifecycle_v2_start" {
   statement {
     sid       = "ForceStopOnlyFailedStartHost"
     actions   = ["ec2:StopInstances"]
-    resources = [data.aws_instance.game_host.arn]
+    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/Name"
+      values   = [local.persistent_host_name]
+    }
   }
 
   statement {
@@ -320,12 +326,22 @@ data "aws_iam_policy_document" "lifecycle_v2_watchdog" {
   }
 
   statement {
-    sid     = "ProbeOnlySpawnpointHost"
-    actions = ["ssm:SendCommand"]
-    resources = [
-      data.aws_instance.game_host.arn,
-      aws_ssm_document.session_activity.arn,
-    ]
+    sid       = "ProbeOnlySpawnpointHost"
+    actions   = ["ssm:SendCommand"]
+    resources = [aws_ssm_document.session_activity.arn]
+  }
+
+  # The persistent host by its Name tag (ADR-0100), never by an id that may be gone.
+  statement {
+    sid       = "ProbePersistentHost"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Name"
+      values   = [local.persistent_host_name]
+    }
   }
 
   # A session placed on a launched host is probed on that host, which does not

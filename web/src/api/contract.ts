@@ -243,6 +243,8 @@ export type SpawnpointApi = Readonly<{
   requestWorldLifecycle(gameId: string, worldId: string, action: WorldLifecycleAction, backupKey?: string, release?: string): Promise<{ result: "requested"; operationId: string }>;
   /** Moves a fleet world's open wipe to another release of its preset, keeping its save (ADR-0078). A wipe that never started is switched at once, with no operation. */
   requestPromotion(gameId: string, worldId: string, release: string): Promise<PromotionResult>;
+  /** Deletes a stopped persistent host no world is placed on, keeping its data disk as a snapshot when asked (ADR-0100). */
+  requestHostDeletion(instanceId: string, snapshot: boolean): Promise<{ operationId: string }>;
   requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<{ id: string; displayName: string }>;
   requestReleaseBuild(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): Promise<{ release: string; attempt: number }>;
   requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<void>;

@@ -677,6 +677,8 @@ export type ConfirmationModel = Readonly<{
   releaseChoice: Readonly<{ label: string; value: string; options: readonly Readonly<{ version: string; latest: boolean }>[]; set: (value: string) => void }> | null;
   /** `label` names what is typed: "World ID" for a purge. */
   typedConfirmation: Readonly<{ label: string; expected: string; value: string; set: (value: string) => void }> | null;
+  /** A choice the request carries, asked each time: whether a host's data disk is kept as a snapshot (ADR-0100). */
+  option?: Readonly<{ checked: boolean; toggle: Action }> | null;
   /** Why the last attempt was refused; the dialog stays open and shows it. */
   error?: string | null;
 }>;

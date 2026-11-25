@@ -1,13 +1,3 @@
-output "game_host_instance_id" {
-  description = "Stable identifier consumed later by Step Functions and SSM."
-  value       = aws_instance.game_host.id
-}
-
-output "data_volume_id" {
-  description = "Persistent zonal data volume; never infer it from Linux device order."
-  value       = aws_ebs_volume.data.id
-}
-
 output "availability_zone_id" {
   description = "Physical AZ identity paired with the zonal data volume."
   value       = data.aws_availability_zone.selected.zone_id
@@ -56,11 +46,6 @@ output "lifecycle_v2_coordinator_function_name" {
 output "lifecycle_v2_coordinator_function_arn" {
   description = "Scoped target for the later V2 workflow roles."
   value       = aws_lambda_function.lifecycle_coordinator.arn
-}
-
-output "running_hours_alarm_name" {
-  description = "Backstop behind the watchdog; alarms to the guardrails topic after too many consecutive running hours."
-  value       = aws_cloudwatch_metric_alarm.running_hours.alarm_name
 }
 
 output "fleet_launch_template_id" {

@@ -175,7 +175,7 @@ data "aws_iam_policy_document" "access_api" {
     actions = ["states:ListExecutions"]
     resources = [
       for machine in local.operation_state_machines : machine.arn
-      if contains(["start", "stop", "promote", "world"], machine.type)
+      if contains(["start", "stop", "promote", "world", "host"], machine.type)
     ]
   }
 
@@ -186,7 +186,7 @@ data "aws_iam_policy_document" "access_api" {
     actions = ["states:DescribeExecution"]
     resources = [
       for machine in local.operation_state_machines : "${replace(machine.arn, ":stateMachine:", ":execution:")}:*"
-      if contains(["start", "stop", "promote", "world"], machine.type)
+      if contains(["start", "stop", "promote", "world", "host"], machine.type)
     ]
   }
 
@@ -252,6 +252,14 @@ data "aws_iam_policy_document" "access_api" {
     sid       = "PromoteFleetWorld"
     actions   = ["states:StartExecution"]
     resources = [for machine in local.operation_state_machines : machine.arn if machine.type == "promote"]
+  }
+
+  # Deleting a persistent host (ADR-0100), under host.manage. The machine's own
+  # grants reach only the tagged host and its data volume.
+  statement {
+    sid       = "DeletePersistentHost"
+    actions   = ["states:StartExecution"]
+    resources = [for machine in local.operation_state_machines : machine.arn if machine.type == "host"]
   }
 
   statement {
@@ -470,6 +478,7 @@ locals {
     "POST /games/{gameId}/worlds/{worldId}/console",
     "GET /games/{gameId}/worlds/{worldId}/console/{commandId}",
     "GET /hosts/{instanceId}/metrics",
+    "DELETE /hosts/{instanceId}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/mods/{sha256}",
     "GET /games/{gameId}/presets/{presetId}/releases/{version}/packs/{pack}",

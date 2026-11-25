@@ -39,6 +39,7 @@ locals {
     { type = "stop", arn = local.stop_state_machine_arn },
     { type = "promote", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-promote-release" },
     { type = "world", arn = local.world_lifecycle_arn },
+    { type = "host", arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-delete-host" },
   ]
   # The log group the host's start commands write to; the same name as in infra/terraform/iam.tf and the workflows.
   session_command_log_group     = "/spawnpoint/session-commands"

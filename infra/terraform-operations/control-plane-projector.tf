@@ -10,6 +10,7 @@ locals {
     { type = "stop", arn = local.lifecycle_v2_stop_arn },
     { type = "promote", arn = local.promote_release_arn },
     { type = "world", arn = "arn:aws:states:${var.aws_region}:${local.account_id}:stateMachine:spawnpoint-world-lifecycle" },
+    { type = "host", arn = local.delete_host_arn },
   ]
 }
 
@@ -200,7 +201,7 @@ resource "aws_cloudwatch_event_rule" "control_plane_host_state" {
     source        = ["aws.ec2"]
     "detail-type" = ["EC2 Instance State-change Notification"]
     detail = {
-      "instance-id" = [data.aws_instance.game_host.id]
+      "instance-id" = local.persistent_host_event_ids
       state         = ["pending", "running", "stopping", "stopped"]
     }
   })
@@ -377,7 +378,7 @@ resource "aws_cloudwatch_event_rule" "control_plane_stopped_reconcile" {
     source        = ["aws.ec2"]
     "detail-type" = ["EC2 Instance State-change Notification"]
     detail = {
-      "instance-id" = [data.aws_instance.game_host.id]
+      "instance-id" = local.persistent_host_event_ids
       state         = ["stopped"]
     }
   })

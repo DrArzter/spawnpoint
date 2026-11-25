@@ -17,11 +17,8 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_instance.game_host
-    values = {
-      id  = "i-00000000000000000"
-      arn = "arn:aws:ec2:eu-central-1:123456789012:instance/i-00000000000000000"
-    }
+    target = data.aws_instances.persistent_host
+    values = { ids = ["i-0123456789abcdef0"] }
   }
 
   override_data {
@@ -35,6 +32,16 @@ mock_provider "aws" {
   override_data {
     target = data.aws_sns_topic.fleet_alerts
     values = { arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.delete_host_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.delete_host
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
 
   override_data {
@@ -383,7 +390,7 @@ run "lifecycle_v2_workflows_are_additive_standard_and_session_scoped" {
   assert {
     condition = alltrue([
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "ForceStopOnlyFailedStartHost"]) == toset(["ec2:StopInstances"]),
-      one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.resources if statement.sid == "ForceStopOnlyFailedStartHost"]) == toset(["arn:aws:ec2:eu-central-1:123456789012:instance/i-00000000000000000"]),
+      anytrue([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.sid == "ForceStopOnlyFailedStartHost" && anytrue([for condition in statement.condition : condition.variable == "ec2:ResourceTag/Name" && contains(condition.values, "spawnpoint-game-host")])]),
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "ForceStopOnlyFailedLaunchedHost"]) == toset(["ec2:StopInstances"]),
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "ObserveForcedStop"]) == toset(["ec2:DescribeInstances"]),
       one([for statement in data.aws_iam_policy_document.lifecycle_v2_start.statement : statement.actions if statement.sid == "DescribeHostShape"]) == toset(["ec2:DescribeInstanceTypes"]),
@@ -414,9 +421,9 @@ run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
 
   assert {
     condition = jsondecode(aws_cloudwatch_event_rule.control_plane_host_state.event_pattern).detail["instance-id"] == [
-      "i-00000000000000000"
+      "i-0123456789abcdef0"
     ]
-    error_message = "Host projection events must be scoped to the configured shared instance."
+    error_message = "Host projection events must be scoped to the persistent host."
   }
 
   assert {
@@ -859,5 +866,52 @@ run "release_state_holds_release_items_and_never_file_items" {
       one([for statement in data.aws_iam_policy_document.release_state.statement : statement.resources if statement.sid == "ReadWorldRecordForHolder"]) == toset(["arn:aws:s3:::spawnpoint-releases-123456789012/worlds/*/world.json"]),
     ])
     error_message = "The release-state Lambda reads world records, and only them, to find the game and preset of a pointer."
+  }
+}
+
+# ADR-0100: with no persistent host left, the host rules stay in place and match no instance.
+run "host_rules_outlive_a_deleted_persistent_host" {
+  command = plan
+
+  override_data {
+    target = data.aws_instances.persistent_host
+    values = { ids = [] }
+  }
+
+  assert {
+    condition     = jsondecode(aws_cloudwatch_event_rule.control_plane_host_state.event_pattern).detail["instance-id"] == ["i-00000000000000000"]
+    error_message = "A deleted persistent host must leave the rule in place, matching no instance, rather than delete it."
+  }
+}
+
+# ADR-0100: the delete-host machine reaches only the persistent host, its data volume and Spawnpoint's alarms.
+run "delete_host_reaches_only_spawnpoint_resources" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.delete_host.statement :
+      anytrue([for condition in statement.condition : condition.variable == "ec2:ResourceTag/Name" && contains(condition.values, "spawnpoint-game-host")])
+      if contains(statement.actions, "ec2:TerminateInstances")
+    ])
+    error_message = "Only an instance named spawnpoint-game-host may be terminated."
+  }
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.delete_host.statement :
+      anytrue([for condition in statement.condition : condition.variable == "ec2:ResourceTag/Name" && contains(condition.values, "spawnpoint-data")])
+      if contains(statement.actions, "ec2:DeleteVolume")
+    ])
+    error_message = "Only a volume named spawnpoint-data may be deleted."
+  }
+
+  assert {
+    condition = (
+      aws_sfn_state_machine.delete_host.type == "STANDARD"
+      && contains([for machine in local.control_plane_operation_machines : machine.type], "host")
+      && strcontains(aws_sfn_state_machine.delete_host.definition, "arn:aws:states:::aws-sdk:ec2:createSnapshot")
+    )
+    error_message = "Deleting a host is a tracked operation that can keep a snapshot first."
   }
 }

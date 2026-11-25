@@ -19,7 +19,8 @@ export type Confirmation =
   | { kind: "wipe"; game: Game; world: World; preset: Preset | null }
   | { kind: "restore"; game: Game; world: World; backupKey: string; backupName: string; release: string | null }
   | { kind: "purge"; game: Game; world: World }
-  | { kind: "promote"; game: Game; world: World; preset: Preset | null };
+  | { kind: "promote"; game: Game; world: World; preset: Preset | null }
+  | { kind: "delete-host"; host: Readonly<{ providerRef: string; name: string }> };
 
 /** What is in flight: one slot per world, and one per kind that names no world, so one request never clears another's. */
 export type PendingMap = Readonly<Record<string, Pending>>;

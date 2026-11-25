@@ -10,6 +10,7 @@
 
 import { WATCHDOG_TIMING } from "./watchdog-timing.ts";
 import type { SessionPolicy } from "./placement.ts";
+import type { LifecycleRecord } from "./lifecycle.ts";
 
 function escapeHtml(value: string): string {
   return value
@@ -201,6 +202,17 @@ export function buildPromotionInput(args: Readonly<{
     stopTiming: POLL_TIMING,
     watchdogTiming: WATCHDOG_TIMING,
   };
+}
+
+export type WorldSessionStatus = Readonly<{ state: "running" | "starting" | "stopping" | "stopped" | "unknown"; address: string | null }>;
+
+/** What /status says of the bot's world: its session's state, and the address the host reported once it is ready. */
+export function worldSessionStatus(record: LifecycleRecord | null, worldId: string): WorldSessionStatus {
+  if (record?.activeWorldId !== worldId) return { state: "stopped", address: null };
+  switch (record.observedState) {
+    case "ready": return { state: "running", address: record.activeSessionAddress ?? null };
+    case "starting": case "stopping": case "stopped": case "unknown": return { state: record.observedState, address: null };
+  }
 }
 
 export const replies = {

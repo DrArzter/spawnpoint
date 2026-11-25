@@ -72,8 +72,8 @@ export const demoSession: ActiveSession = {
   identity: { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [] },
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
-  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "configFiles", "worldLog", "assistant", "releasePromotion", "operationProgress"],
-  role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "config.edit", "log.read", "assistant.use", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
+  capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "configFiles", "worldLog", "assistant", "releasePromotion", "operationProgress", "hostDeletion"],
+  role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "config.edit", "log.read", "assistant.use", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "host.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
   profile: { provider: "telegram", platformUserId: "1780660807", telegramId: "1780660807", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "1780660807", claimedAt: "2026-08-28T18:24:00.000Z" },
 };
@@ -100,6 +100,7 @@ export const PERMISSION_CATALOGUE: readonly AccessPermission[] = [
   { id: "backup.download", group: "Backups", label: "Download", description: "Download a world's backup archives, each recorded against your identity.", reserved: false },
   { id: "backup.restore", group: "Backups", label: "Restore", description: "Restore a backup, which opens a new wipe.", reserved: false },
   { id: "world.manage", group: "Worlds", label: "Manage worlds", description: "Create, wipe, archive and permanently delete worlds, and change their game settings.", reserved: false },
+  { id: "host.manage", group: "Hosts", label: "Delete hosts", description: "Delete a persistent host once no world is placed on it.", reserved: false },
   { id: "access.read", group: "Access", label: "See access", description: "See who has access and which role they hold.", reserved: false },
   { id: "access.manage", group: "Access", label: "Manage access", description: "Approve people, change their roles and delete identities.", reserved: false },
   { id: "access.invite", group: "Access", label: "Invite people", description: "Invite a person to the panel by email.", reserved: false },

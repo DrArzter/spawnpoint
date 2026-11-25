@@ -51,7 +51,7 @@ function operationMachines(): readonly OperationMachine[] {
     const type = "type" in item ? item.type : undefined;
     const arn = "arn" in item ? item.arn : undefined;
     if (
-      (type !== "start" && type !== "stop" && type !== "promote" && type !== "world") ||
+      (type !== "start" && type !== "stop" && type !== "promote" && type !== "world" && type !== "host") ||
       typeof arn !== "string" ||
       !arn
     ) {
@@ -298,7 +298,7 @@ async function listWorldRecords(): Promise<readonly WorldRecord[]> {
 }
 
 function isSessionOperation(type: MachineType): type is OperationObservation["type"] {
-  return type === "start" || type === "stop" || type === "promote" || type === "world";
+  return type === "start" || type === "stop" || type === "promote" || type === "world" || type === "host";
 }
 
 // An execution's input never changes, so its world is read once per ARN.

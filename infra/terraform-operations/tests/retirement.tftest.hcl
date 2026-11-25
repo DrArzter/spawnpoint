@@ -17,11 +17,8 @@ mock_provider "aws" {
   }
 
   override_data {
-    target = data.aws_instance.game_host
-    values = {
-      id  = "i-00000000000000000"
-      arn = "arn:aws:ec2:eu-central-1:123456789012:instance/i-00000000000000000"
-    }
+    target = data.aws_instances.persistent_host
+    values = { ids = ["i-0123456789abcdef0"] }
   }
 
   override_data {
@@ -35,6 +32,16 @@ mock_provider "aws" {
   override_data {
     target = data.aws_sns_topic.fleet_alerts
     values = { arn = "arn:aws:sns:eu-central-1:123456789012:spawnpoint-alert" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.delete_host_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.delete_host
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
 
   override_data {

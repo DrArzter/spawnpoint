@@ -462,7 +462,7 @@ export function connectionLabel(connectivity: World["connectivity"]): string {
   return connectionLabels[connectivity];
 }
 
-const operationLabels: Record<Operation["type"], string> = { start: t("world.startingSession"), stop: t("world.stoppingSession"), world: t("world.updatingWorld"), promote: t("world.promotingRelease") };
+const operationLabels: Record<Operation["type"], string> = { start: t("world.startingSession"), stop: t("world.stoppingSession"), world: t("world.updatingWorld"), promote: t("world.promotingRelease"), host: t("world.deletingHost") };
 
 export function operationLabel(type: Operation["type"]): string {
   return operationLabels[type];

@@ -218,6 +218,11 @@ export const demoApi: SpawnpointApi = {
     return store.worldLifecycle(gameId, worldId, action, backupKey, release);
   },
 
+  async requestHostDeletion(instanceId: string, snapshot: boolean) {
+    await demoLatency();
+    return store.deleteHost(instanceId, snapshot);
+  },
+
   async requestPromotion(gameId: string, worldId: string, release: string) {
     await demoLatency();
     return store.promoteWorld(gameId, worldId, release);

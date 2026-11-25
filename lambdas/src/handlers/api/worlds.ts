@@ -49,8 +49,11 @@ type SessionExecution = Readonly<{
   players: StopPlayersPolicy;
 }>;
 
+// A fleet session's machine finds its host from the placement and never reads
+// this input, so a deployment with no persistent host still runs it (ADR-0100).
 function plannedSessionHost(request: SessionExecution): string | undefined {
-  if (!request.fleet && request.plan.kind === "execute" && "host" in request.plan) return request.plan.host.providerRef;
+  if (request.fleet) return "";
+  if (request.plan.kind === "execute" && "host" in request.plan) return request.plan.host.providerRef;
   return request.configuredHosts[0]?.providerRef;
 }
 
@@ -150,15 +153,15 @@ function lifecycleInput(action: WorldLifecycleAction, worldId: string, body: str
 
 function lifecycleSessionError(
   record: WorldRecord,
-  host: Awaited<ReturnType<ControlPlaneSources["listHosts"]>>[number],
+  host: Awaited<ReturnType<ControlPlaneSources["listHosts"]>>[number] | undefined,
   located: Awaited<ReturnType<typeof readWorldSession>>,
 ): Response | null {
-  if (record.placement !== "fleet" && (host.state === "pending" || host.state === "stopping" || host.state === "unknown")) {
+  if (record.placement !== "fleet" && (host?.state === "pending" || host?.state === "stopping" || host?.state === "unknown")) {
     return errorResponse(409, "host_transitioning");
   }
   // Refuse an untracked configured session; never stop another world's game.
   const configured = record.placement !== "fleet";
-  if (configured && record.status === "active" && host.state === "running" && located.record === null && located.game?.activeSessionId == null) {
+  if (configured && record.status === "active" && host?.state === "running" && located.record === null && located.game?.activeSessionId == null) {
     return errorResponse(409, "active_session_unavailable");
   }
   const stopRequired = record.status === "active" && located.record !== null;
@@ -207,10 +210,8 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     const { identity, action, gameId, worldId, worldName, fleet, warm, located, recoverySessionId, players } = request;
     const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
     const requestedBy = `identity:${identity.id}`;
-    // The fleet workflow places the session itself. Its legacy instanceId input
-    // is only a fallback for a missing placement, never a host selection.
     const hostId = plannedSessionHost(request);
-    if (!hostId) return errorResponse(409, "configured_host_unavailable");
+    if (hostId === undefined) return errorResponse(409, "configured_host_unavailable");
     if (action === "start") {
       // No address in the request: the host's session summary answers with it
       // and the machine carries it back (ADR-0033). A new session always begins
@@ -440,14 +441,15 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     }
     if (operations.length > 0) return errorResponse(409, "operation_in_progress");
     const configuredHosts = hosts.filter((candidate) => candidate.provenance !== "launched");
-    if (configuredHosts.length !== 1) return errorResponse(409, "configured_host_unavailable");
-    const host = configuredHosts[0]!;
+    // Only a configured world runs on the persistent host; a fleet world's stop finds its own (ADR-0100).
+    const host = configuredHosts.length === 1 ? configuredHosts[0] : undefined;
+    if (placement === "configured" && host === undefined) return errorResponse(409, "configured_host_unavailable");
     const sessionError = lifecycleSessionError(record, host, located);
     if (sessionError !== null) return sessionError;
     const operationId = `panel-world-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
     const stopRequired = record.status === "active" && located.record !== null;
     await machines.worldLifecycle({
-      operationId, instanceId: host.providerRef, requestedBy: `identity:${identity.id}`, serverId: located.serverId,
+      operationId, instanceId: host?.providerRef ?? "", requestedBy: `identity:${identity.id}`, serverId: located.serverId,
       sessionId: located.record?.activeSessionId ?? "none", worldId, action, backupKey, release,
       stopRequired, targetGenerationId: record.currentGeneration.id,
     });

@@ -64,14 +64,13 @@ export function promotionFeature({ sources, machines, worlds }: PromotionDepende
       pointer, session, hasBackup,
       blockingOperations: operations.length,
       launchEnabled: process.env.SPAWNPOINT_LAUNCH === "enabled",
-      configuredHostId: hosts.find((candidate) => candidate.provenance !== "launched")?.providerRef,
     });
     if (plan.kind === "reject") return errorResponse(plan.status, plan.error);
     if (plan.kind === "switch") return switchResponse(plan, worldId, identity, switchRelease);
     const operationId = `panel-promote-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
     await machines.promote({
       operationId, serverId, gameId, presetId: plan.record.preset.id, worldId, worldName: plan.record.displayName,
-      generationId: plan.record.currentGeneration.id, release: plan.release, instanceId: plan.instanceId,
+      generationId: plan.record.currentGeneration.id, release: plan.release,
       policy: plan.record.warm === true ? "warm" : "cold", requestedBy: `identity:${identity.id}`, startAfter,
     });
     return response(202, { result: "requested", operationId, release: plan.release, previousRelease: plan.previous, startAfter });

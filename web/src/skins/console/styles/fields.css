@@ -70,7 +70,6 @@ html[data-skin="console"] .c-input-colour {
   cursor: pointer;
 }
 
-html[data-skin="console"] .c-input:hover,
 /* A message, not a file: wrapped in the body font, a few lines tall. */
 html[data-skin="console"] .c-textarea-prose {
   min-height: 88px;
@@ -83,6 +82,7 @@ html[data-skin="console"] .c-dialog-body > .c-textarea-fill {
   resize: none;
 }
 
+html[data-skin="console"] .c-input:hover,
 html[data-skin="console"] .c-textarea:hover {
   border-color: var(--c-ink-3);
 }

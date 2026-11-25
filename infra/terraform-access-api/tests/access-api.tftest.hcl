@@ -433,7 +433,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
       for route in aws_apigatewayv2_stage.default.route_settings :
       route.throttling_burst_limit == 5 && route.throttling_rate_limit == 2
       if startswith(route.route_key, "POST /auth/")
-    ]) && length([
+      ]) && length([
       for route in aws_apigatewayv2_stage.default.route_settings : route
       if startswith(route.route_key, "POST /auth/")
     ]) == 6
@@ -661,6 +661,15 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
     condition     = aws_sfn_state_machine.world_lifecycle.type == "STANDARD"
     error_message = "World mutations must be durable workflows because a verified stop may take minutes."
   }
+
+  # A method no CORS rule allows is refused by the browser before the request
+  # is sent, and the panel reads that as "Spawnpoint did not answer".
+  assert {
+    condition = alltrue([
+      for route in local.access_routes : contains(aws_apigatewayv2_api.access.cors_configuration[0].allow_methods, split(" ", route)[0])
+    ])
+    error_message = "Every method a route uses must be in the API's CORS allow_methods."
+  }
 }
 
 run "self_hosted_api_keeps_the_generated_endpoint_optional" {
@@ -703,12 +712,12 @@ run "registration_can_open_without_changing_password_login" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id       = "100000001"
-    panel_url                         = "https://panel.example.dev/"
-    session_signing_secret_parameter  = "/spawnpoint/auth/session-signing-secret"
-    password_registration_enabled     = true
-    email_delivery_provider           = "resend"
-    email_from                        = "Spawnpoint <auth@example.dev>"
+    bootstrap_owner_telegram_id      = "100000001"
+    panel_url                        = "https://panel.example.dev/"
+    session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
+    password_registration_enabled    = true
+    email_delivery_provider          = "resend"
+    email_from                       = "Spawnpoint <auth@example.dev>"
   }
 
   assert {

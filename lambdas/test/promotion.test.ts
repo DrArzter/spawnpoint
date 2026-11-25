@@ -34,7 +34,7 @@ function facts(values: Partial<PromotionFacts> = {}): PromotionFacts {
     gameId: "minecraft", release: "200.1", record, preset,
     pointer: { state: "available", generationId: GENERATION, desiredRelease: "100.1", activeRelease: "100.1" },
     releaseUsability: "usable", hasBackup: false,
-    session: null, blockingOperations: 0, launchEnabled: true, configuredHostId: "i-0123456789abcdef0",
+    session: null, blockingOperations: 0, launchEnabled: true,
     ...values,
   };
 }
@@ -46,7 +46,7 @@ function refused(values: Partial<PromotionFacts>): string {
 
 test("a fleet world is promoted to another ready release of its own preset", () => {
   assert.deepEqual(planPromotion(facts()), {
-    kind: "execute", record, release: "200.1", previous: "100.1", instanceId: "i-0123456789abcdef0",
+    kind: "execute", record, release: "200.1", previous: "100.1",
   });
 });
 
@@ -97,11 +97,10 @@ test("a promotion only moves forward along the preset's releases; going back is 
   assert.notEqual(refused({ pointer: unlisted, release: "100.1" }), "409 release_older_than_active");
 });
 
-test("players online, another operation, or no fallback host refuse before the workflow starts", () => {
+test("players online or another operation refuse before the workflow starts", () => {
   const playing: LifecycleRecord = { ...initialLifecycleRecord("world#prominence-a1b2c3d4", 1), idle: { playersOnline: 2 } as LifecycleRecord["idle"] };
   assert.equal(refused({ session: playing }), "409 players_online");
   assert.equal(refused({ blockingOperations: 1 }), "409 operation_in_progress");
-  assert.equal(refused({ configuredHostId: undefined }), "409 configured_host_unavailable");
 });
 
 function scenario(t: TestContext, options: Readonly<{ operations?: OperationObservation[]; world?: WorldRecord }> = {}) {
@@ -174,7 +173,7 @@ function unstartedPlan(values: Partial<PromotionFacts> = {}): string {
 }
 
 test("a wipe that never started switches to a newer release, with no host needed", () => {
-  assert.deepEqual(planPromotion(unstartedFacts({ configuredHostId: undefined })), { kind: "switch", record, release: "200.1", previous: "100.1" });
+  assert.deepEqual(planPromotion(unstartedFacts()), { kind: "switch", record, release: "200.1", previous: "100.1" });
 });
 
 test("it also switches to an older release: there is no save to protect", () => {

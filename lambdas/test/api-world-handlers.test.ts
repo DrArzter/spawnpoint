@@ -32,10 +32,12 @@ function running(serverId = "minecraft"): LifecycleRecord {
 
 function scenario(t: TestContext, options: Readonly<{
   world?: WorldRecord; state?: HostObservation["state"]; game?: LifecycleRecord | null; own?: LifecycleRecord | null;
+  /** False: the deployment's persistent host was deleted (ADR-0100). */
+  persistentHost?: boolean;
 }> = {}) {
   const sources = awsControlPlaneSources as Required<ControlPlaneSources>;
   const inputs: Record<string, unknown>[] = [];
-  t.mock.method(sources, "listHosts", async () => [{
+  t.mock.method(sources, "listHosts", async () => options.persistentHost === false ? [] : [{
     id: "host", name: "Host", state: options.state ?? "stopped", providerRef: "i-12345678", instanceType: null,
     availabilityZone: null, launchedAt: null, publicIp: null, provenance: "configured" as const,
   }]);
@@ -120,6 +122,24 @@ test("a warm fleet world asks for a warm placement at start; a cold one and a co
   const configured = scenario(t);
   assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
   assert.equal("policy" in (configured[0] ?? {}), false);
+});
+
+test("with no persistent host a fleet world still starts, stops and archives; a configured world is refused", async (t) => {
+  const fleet = { ...record, placement: "fleet" as const, connectivity: "raw" as const, auth: "game" as const };
+  const inputs = scenario(t, { world: fleet, persistentHost: false, own: running(`world#${record.worldId}`) });
+  assert.equal((await controlSession(identity, "stop", record.gameId, record.worldId)).statusCode, 202);
+  assert.equal((await controlWorldLifecycle(identity, "archive", record.gameId, record.worldId, "{}")).statusCode, 202);
+  t.mock.restoreAll();
+  const started = scenario(t, { world: fleet, persistentHost: false });
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
+  assert.deepEqual([...inputs, ...started].map((input) => input.instanceId), ["", "", ""], "a fleet machine finds its host from the placement");
+  t.mock.restoreAll();
+  const configured = scenario(t, { persistentHost: false });
+  const refused = await controlSession(identity, "start", record.gameId, record.worldId);
+  assert.deepEqual([refused.statusCode, JSON.parse(refused.body)], [409, { error: "host_not_unique" }]);
+  const archive = await controlWorldLifecycle(identity, "archive", record.gameId, record.worldId, "{}");
+  assert.deepEqual([archive.statusCode, JSON.parse(archive.body)], [409, { error: "configured_host_unavailable" }]);
+  assert.deepEqual(configured, []);
 });
 
 test("unsafe lifecycle inputs are rejected before any workflow can be dispatched", async (t) => {

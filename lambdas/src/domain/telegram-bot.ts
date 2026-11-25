@@ -169,7 +169,6 @@ export function buildPromotionInput(args: Readonly<{
   worldName: string;
   generationId: string;
   release: string;
-  instanceId: string;
   releaseBucket: string;
   launch: LaunchMode;
   appCommit: string;
@@ -187,7 +186,8 @@ export function buildPromotionInput(args: Readonly<{
     gameId: args.gameId,
     presetId: args.presetId,
     release: args.release,
-    instanceId: args.instanceId,
+    // The machines read the path, but a fleet session's host comes from its placement (ADR-0100).
+    instanceId: "",
     releaseBucket: args.releaseBucket,
     placement: "fleet" as const,
     launch: args.launch,

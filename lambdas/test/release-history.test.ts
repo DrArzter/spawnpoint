@@ -88,7 +88,7 @@ function promotion(values: Partial<PromotionFacts>) {
     }), "minecraft")![0]!,
     pointer: { state: "available", generationId: GENERATION, desiredRelease: "100.1", activeRelease: "100.1" },
     releaseUsability: "usable", hasBackup: false,
-    session: null, blockingOperations: 0, launchEnabled: true, configuredHostId: "i-0123456789abcdef0",
+    session: null, blockingOperations: 0, launchEnabled: true,
     ...values,
   });
   return plan.kind === "reject" ? `${plan.status} ${plan.error}` : plan.kind;

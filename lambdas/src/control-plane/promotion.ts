@@ -28,12 +28,11 @@ export type PromotionRefusal =
   | "release_already_active"
   | "release_older_than_active"
   | "players_online"
-  | "operation_in_progress"
-  | "configured_host_unavailable";
+  | "operation_in_progress";
 
 export type PromotionPlan =
   | Readonly<{ kind: "reject"; status: 400 | 404 | 409; error: PromotionRefusal }>
-  | Readonly<{ kind: "execute"; record: WorldRecord; release: string; previous: string; instanceId: string }>
+  | Readonly<{ kind: "execute"; record: WorldRecord; release: string; previous: string }>
   /** A wipe that never started takes the release at once (ADR-0078). */
   | Readonly<{ kind: "switch"; record: WorldRecord; release: string; previous: string }>;
 
@@ -51,8 +50,6 @@ export type PromotionFacts = Readonly<{
   session: LifecycleRecord | null;
   blockingOperations: number;
   launchEnabled: boolean;
-  /** The fallback host a V2 machine needs in its input; placement chooses the real one. */
-  configuredHostId: string | undefined;
 }>;
 
 function reject(status: 400 | 404 | 409, error: PromotionRefusal): PromotionPlan {
@@ -116,8 +113,7 @@ function planStarted(facts: PromotionFacts, record: WorldRecord, preset: PresetO
   // The workflow's stop refuses with players online too; this answers before it is asked.
   if ((facts.session?.idle?.playersOnline ?? 0) > 0) return reject(409, "players_online");
   if (facts.blockingOperations > 0) return reject(409, "operation_in_progress");
-  if (facts.configuredHostId === undefined) return reject(409, "configured_host_unavailable");
-  return { kind: "execute", record, release, previous: pointer.activeRelease, instanceId: facts.configuredHostId };
+  return { kind: "execute", record, release, previous: pointer.activeRelease };
 }
 
 export function planPromotion(facts: PromotionFacts): PromotionPlan {

@@ -28,7 +28,7 @@ export type StopSessionRun = Readonly<{
   players?: StopPlayersPolicy;
 }>;
 
-/** A fleet world's release promotion (ADR-0078). */
+/** A fleet world's release promotion (ADR-0078). Its machines find the host from the placement. */
 export type PromotionRun = Readonly<{
   operationId: string;
   serverId: string;
@@ -38,7 +38,6 @@ export type PromotionRun = Readonly<{
   worldName: string;
   generationId: string;
   release: string;
-  instanceId: string;
   policy: SessionPolicy;
   requestedBy: string;
   /** False stops a world that was stopped before its update again; by default it keeps running (ADR-0078). */

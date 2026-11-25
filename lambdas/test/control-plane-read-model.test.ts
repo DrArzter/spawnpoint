@@ -4,6 +4,7 @@ import test from "node:test";
 import { initialLifecycleRecord } from "../src/domain/lifecycle.ts";
 import { readControlPlaneSnapshot, type ControlPlaneSources } from "../src/control-plane/read-model.ts";
 import { displayAddress, gameCatalog, type CatalogGame } from "../src/control-plane/catalog.ts";
+import { configuredCatalog, withRecords } from "./support/configured-worlds.ts";
 
 const sources: ControlPlaneSources = {
   listHosts: async () => [
@@ -19,8 +20,7 @@ const sources: ControlPlaneSources = {
 
 test("retains the supplied projection observation timestamp", async () => {
   const observedAt = new Date("2026-08-29T00:58:00.000Z");
-  const snapshot = await readControlPlaneSnapshot(
-    { ...sources, readObservedAt: async () => observedAt },
+  const snapshot = await readControlPlaneSnapshot(withRecords({ ...sources, readObservedAt: async () => observedAt }, configuredCatalog),
     { includeInfrastructure: true, includeDesiredRelease: true },
     undefined,
     () => new Date("2026-08-29T01:00:00.000Z"),
@@ -30,7 +30,7 @@ test("retains the supplied projection observation timestamp", async () => {
 });
 
 test("builds a multi-host read model without binding stopped worlds to instances", async () => {
-  const snapshot = await readControlPlaneSnapshot(sources, { includeInfrastructure: true, includeDesiredRelease: true }, undefined, () => new Date("2026-08-29T01:00:00.000Z"));
+  const snapshot = await readControlPlaneSnapshot(withRecords(sources, configuredCatalog), { includeInfrastructure: true, includeDesiredRelease: true }, undefined, () => new Date("2026-08-29T01:00:00.000Z"));
   assert.equal(snapshot.hosts.length, 2);
   assert.equal(snapshot.games[0]?.worlds[0]?.release.activeRelease, "1.0");
   assert.equal(snapshot.games[0]?.worlds[0]?.release.desiredRelease, "1.1");
@@ -39,44 +39,12 @@ test("builds a multi-host read model without binding stopped worlds to instances
 });
 
 test("redacts infrastructure references and desired releases from coarse status", async () => {
-  const snapshot = await readControlPlaneSnapshot(sources, { includeInfrastructure: false, includeDesiredRelease: false });
+  const snapshot = await readControlPlaneSnapshot(withRecords(sources, configuredCatalog), { includeInfrastructure: false, includeDesiredRelease: false });
   assert.equal("providerRef" in snapshot.hosts[0]!, false);
   assert.equal("instanceType" in snapshot.hosts[0]!, false);
   assert.equal("providerRef" in snapshot.operations[0]!, false);
   assert.equal(snapshot.games[0]?.worlds[0]?.release.activeRelease, "1.0");
   assert.equal(snapshot.games[0]?.worlds[0]?.release.desiredRelease, null);
-});
-
-test("the panel's catalog offers exactly the worlds the host catalog resolves", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const url = new URL("../../server/worlds/catalog.json", import.meta.url);
-  const hostCatalog = JSON.parse(await readFile(url, "utf8")) as {
-    worlds: ReadonlyArray<{ id: string; game?: string }>;
-  };
-
-  const hostPairs = new Set(hostCatalog.worlds.map((world) => `${world.game ?? "minecraft"}/${world.id}`));
-  const panelPairs = new Set(gameCatalog.flatMap((game) => game.worlds.map((world) => `${game.id}/${world.id}`)));
-
-  // Two lists of the same worlds is a duplication this project accepts for now,
-  // deliberately: the panel is a Lambda and the host catalog is a file on a
-  // volume. What it must not do is drift — a world the panel offers and the host
-  // cannot resolve fails at the session command, after the instance is running.
-  assert.deepEqual([...panelPairs].sort(), [...hostPairs].sort());
-});
-
-test("a footprint the host catalog states is the one the panel places with", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const { footprintForWorld } = await import("../src/control-plane/catalog.ts");
-  const url = new URL("../../server/worlds/catalog.json", import.meta.url);
-  const hostCatalog = JSON.parse(await readFile(url, "utf8")) as {
-    worlds: ReadonlyArray<{ id: string; footprint?: { memory_mib: number; cores: number } }>;
-  };
-  // The host reads its own file and the panel its own module; a session limited
-  // to one figure and placed by another would fit on paper and be killed on the box.
-  for (const world of hostCatalog.worlds) {
-    if (!world.footprint) continue;
-    assert.deepEqual(footprintForWorld(world.id), { memoryMiB: world.footprint.memory_mib, cores: world.footprint.cores }, world.id);
-  }
 });
 
 test("each world's address carries its own game's port, and only for callers allowed one", async () => {
@@ -99,7 +67,7 @@ test("each world's address carries its own game's port, and only for callers all
     ],
   };
 
-  const visible = await readControlPlaneSnapshot(sources, {
+  const visible = await readControlPlaneSnapshot(withRecords(sources, configuredCatalog), {
     includeInfrastructure: false,
     includeDesiredRelease: false,
     connectionHost: "172.29.23.24",
@@ -113,7 +81,7 @@ test("each world's address carries its own game's port, and only for callers all
   assert.equal(visible.games.find((game) => game.id === "factorio")?.presets[0]?.id, "factorio-vanilla");
   assert.equal(visible.games.find((game) => game.id === "zomboid")?.presets[0]?.id, "zomboid-vanilla");
 
-  const withheld = await readControlPlaneSnapshot(sources, {
+  const withheld = await readControlPlaneSnapshot(withRecords(sources, configuredCatalog), {
     includeInfrastructure: false,
     includeDesiredRelease: false,
   });
@@ -129,7 +97,7 @@ test("a public world's address is the instance's current one, and nothing while 
     displayName: "Minecraft",
     connectPort: 25565,
     worlds: [
-      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" as const, connectivity: "raw" as const },
+      { id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" as const, connectivity: "raw" as const, placement: "configured" as const },
       { id: "vanilla", displayName: "Vanilla Forge", profileId: "vanilla-forge", sessionControl: "v1" as const, connectivity: "zerotier" as const },
     ],
   }];
@@ -141,8 +109,7 @@ test("a public world's address is the instance's current one, and nothing while 
   });
   const options = { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" };
 
-  const running = await readControlPlaneSnapshot(
-    withHosts([{ id: "h", name: "Host", state: "running", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: "203.0.113.10" }]),
+  const running = await readControlPlaneSnapshot(withRecords(withHosts([{ id: "h", name: "Host", state: "running", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: "203.0.113.10" }]), publicCatalog),
     options,
     publicCatalog,
   );
@@ -150,8 +117,7 @@ test("a public world's address is the instance's current one, and nothing while 
   assert.equal(addresses.get("world"), "203.0.113.10:25565", "a public world publishes the address the instance holds");
   assert.equal(addresses.get("vanilla"), "172.29.23.24:25565", "an overlay world beside it is unaffected");
 
-  const stopped = await readControlPlaneSnapshot(
-    withHosts([{ id: "h", name: "Host", state: "stopped", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null }]),
+  const stopped = await readControlPlaneSnapshot(withRecords(withHosts([{ id: "h", name: "Host", state: "stopped", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null }]), publicCatalog),
     options,
     publicCatalog,
   );
@@ -165,21 +131,21 @@ test("a fleet world never borrows another running host's public address", async 
     id: "factorio", code: "FA", displayName: "Factorio", connectPort: 34197,
     worlds: [{ id: "factory", displayName: "Factory", profileId: "vanilla", sessionControl: "v1" as const, connectivity: "raw" as const, placement: "fleet" as const }],
   }];
-  const snapshot = await readControlPlaneSnapshot({
+  const snapshot = await readControlPlaneSnapshot(withRecords({
     listHosts: async () => [{ id: "configured", name: "Persistent host", state: "running", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: "203.0.113.10", provenance: "configured" }],
     listRunningOperations: async () => [],
     readLifecycle: async () => null,
     readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
-  }, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, fleetCatalog);
+  }, fleetCatalog), { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, fleetCatalog);
   assert.equal(snapshot.games[0]?.worlds[0]?.connectionAddress, null);
 });
 
 test("a configured world never borrows a launched host's public address", async () => {
   const configuredCatalog = [{
     id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565,
-    worlds: [{ id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" as const, connectivity: "raw" as const }],
+    worlds: [{ id: "world", displayName: "Main modded", profileId: "main", sessionControl: "v1" as const, connectivity: "raw" as const, placement: "configured" as const }],
   }];
-  const snapshot = await readControlPlaneSnapshot({
+  const snapshot = await readControlPlaneSnapshot(withRecords({
     listHosts: async () => [
       { id: "configured", name: "Persistent host", state: "stopped", providerRef: "i-1", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: null, provenance: "configured" },
       { id: "fleet-1", name: "Fleet host", state: "running", providerRef: "i-2", instanceType: null, availabilityZone: null, launchedAt: null, publicIp: "198.51.100.7", provenance: "launched" },
@@ -187,7 +153,7 @@ test("a configured world never borrows a launched host's public address", async 
     listRunningOperations: async () => [],
     readLifecycle: async () => null,
     readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
-  }, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, configuredCatalog);
+  }, configuredCatalog), { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, configuredCatalog);
   assert.equal(snapshot.games[0]?.worlds[0]?.connectionAddress, null);
 });
 
@@ -210,12 +176,12 @@ test("two fleet worlds of one game run at once, each with its own session and it
     "world#magic": ready("world#magic", "magic", "magic.games.example:25565"),
   };
   const asked: string[] = [];
-  const snapshot = await readControlPlaneSnapshot({
+  const snapshot = await readControlPlaneSnapshot(withRecords({
     listHosts: async () => [],
     listRunningOperations: async () => [],
     readLifecycle: async (serverId) => { asked.push(serverId); return records[serverId] ?? null; },
     readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
-  }, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, fleetCatalog);
+  }, fleetCatalog), { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" }, fleetCatalog);
   const worlds = new Map(snapshot.games[0]!.worlds.map((world) => [world.id, world]));
   assert.deepEqual(asked.sort(), ["minecraft", "world#magic", "world#rostik", "world#spare"]);
   assert.equal(worlds.get("rostik")?.session?.observedState, "ready");
@@ -234,15 +200,13 @@ test("a ready session's address is the one the host reported, port and all; a st
   const { acquireLease, beginSession, markSessionReady } = await import("../src/domain/lifecycle.ts");
   const acquired = acquireLease(initialLifecycleRecord("minecraft", 100), "op", 100, 300);
   const ready = markSessionReady(beginSession(acquired.record, acquired.ownership, "s1", "vanilla", 101), acquired.ownership, "s1", 102, "172.29.23.24:30010");
-  const snapshot = await readControlPlaneSnapshot(
-    { ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? ready : null },
+  const snapshot = await readControlPlaneSnapshot(withRecords({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? ready : null }, configuredCatalog),
     { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "172.29.23.24" },
   );
   const addresses = new Map(snapshot.games[0]!.worlds.map((world) => [world.id, world.connectionAddress]));
   assert.equal(addresses.get("vanilla"), "172.29.23.24:30010", "the session on slot one publishes its slot's port");
   assert.equal(addresses.get("world"), "172.29.23.24", "a world with no session shows where it would be, without the implied port");
-  const withheld = await readControlPlaneSnapshot(
-    { ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? ready : null },
+  const withheld = await readControlPlaneSnapshot(withRecords({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? ready : null }, configuredCatalog),
     { includeInfrastructure: false, includeDesiredRelease: false },
   );
   assert.equal(withheld.games[0]!.worlds.find((world) => world.id === "vanilla")?.connectionAddress, null, "a caller who may not read an address reads none, observed or not");
@@ -257,7 +221,7 @@ test("each game carries its settings, and each world with a record what it sets 
   };
   const created = newWorldRecord(preset, { worldId: "minecraft-rostik-1a2b3c4d", displayName: "Rostik", release: "1.2" }, "12345678-1234-1234-1234-1234567890ab", "2026-10-09T10:00:00.000Z");
   const set = withGameSettings(created, { values: { max_players: 8 }, updatedAt: "2026-10-09T11:00:00.000Z", updatedBy: { identityId: "identity-owner", displayName: "DrArzter" } });
-  const snapshot = await readControlPlaneSnapshot({ ...sources, listPresets: async () => [preset], listWorldRecords: async () => [set] }, { includeInfrastructure: false, includeDesiredRelease: false });
+  const snapshot = await readControlPlaneSnapshot(withRecords({ ...sources, listPresets: async () => [preset], listWorldRecords: async () => [set] }, configuredCatalog), { includeInfrastructure: false, includeDesiredRelease: false });
   const minecraft = snapshot.games.find((game) => game.id === "minecraft")!;
   assert.ok(minecraft.settings.some((setting) => setting.id === "max_players"));
   assert.equal("env" in minecraft.settings[0]!, false, "the host's variable names stay on the host");
@@ -266,7 +230,7 @@ test("each game carries its settings, and each world with a record what it sets 
   assert.equal(snapshot.games.find((game) => game.id === "factorio")?.whitelist, false);
   const worlds = new Map(minecraft.worlds.map((world) => [world.id, world]));
   assert.deepEqual(worlds.get("minecraft-rostik-1a2b3c4d")?.gameSettings, { values: { max_players: 8 }, updatedAt: "2026-10-09T11:00:00.000Z" });
-  assert.equal(worlds.get("vanilla")?.gameSettings, null, "a legacy world has no record to keep settings in");
+  assert.deepEqual(worlds.get("vanilla")?.gameSettings, { values: {}, updatedAt: null }, "every world is a record, and one that sets nothing reads the defaults");
 });
 
 test("an operation's expected time reaches the snapshot, also for a coarse viewer", async () => {
@@ -277,7 +241,7 @@ test("an operation's expected time reaches the snapshot, also for a coarse viewe
       { id: "stop-1", type: "stop", status: "running", startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:execution-2", worldId: "w1" },
     ],
   };
-  const coarse = await readControlPlaneSnapshot(withEta, { includeInfrastructure: false, includeDesiredRelease: false });
+  const coarse = await readControlPlaneSnapshot(withRecords(withEta, configuredCatalog), { includeInfrastructure: false, includeDesiredRelease: false });
   assert.equal(coarse.operations[0]?.expectedSeconds, 100);
   assert.equal(coarse.operations[0]?.expectedSamples, 6);
   assert.equal("expectedSeconds" in coarse.operations[1]!, false);
@@ -292,11 +256,11 @@ test("a DNS world shows its fixed name while stopped, and an address keeps a por
   };
   const catalog: CatalogGame[] = [{
     id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565, portImplied: true,
-    worlds: [{ id: "minecraft-dns-1a2b3c4d", displayName: "Dns", profileId: "main", sessionControl: "v2", connectivity: "route53", placement: "fleet", hostBinding: "launched" } as never],
+    worlds: [{ id: "minecraft-dns-1a2b3c4d", displayName: "Dns", profileId: "main", sessionControl: "v2", connectivity: "route53", placement: "fleet" } as never],
   }];
-  const stopped = await readControlPlaneSnapshot(sources, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "unused", dnsSuffix: "games.example" }, catalog);
+  const stopped = await readControlPlaneSnapshot(withRecords(sources, catalog), { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: "unused", dnsSuffix: "games.example" }, catalog);
   assert.equal(stopped.games[0]!.worlds[0]!.connectionAddress, "minecraft-dns-1a2b3c4d.games.example", "the record's name is known while the world is stopped");
-  const withheld = await readControlPlaneSnapshot(sources, { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: null, dnsSuffix: "games.example" }, catalog);
+  const withheld = await readControlPlaneSnapshot(withRecords(sources, catalog), { includeInfrastructure: false, includeDesiredRelease: false, connectionHost: null, dnsSuffix: "games.example" }, catalog);
   assert.equal(withheld.games[0]!.worlds[0]!.connectionAddress, null, "a caller who may not read an address reads none");
   assert.equal(displayAddress("minecraft-dns-1a2b3c4d.games.example:25565", "minecraft-dns-1a2b3c4d", catalog), "minecraft-dns-1a2b3c4d.games.example");
   assert.equal(displayAddress("minecraft-dns-1a2b3c4d.games.example:30010", "minecraft-dns-1a2b3c4d", catalog), "minecraft-dns-1a2b3c4d.games.example:30010", "a slot's own port stays");
@@ -304,7 +268,7 @@ test("a DNS world shows its fixed name while stopped, and an address keeps a por
 
 test("a game's session record reaches viewers without its lease or fence", async () => {
   const record = { ...initialLifecycleRecord("minecraft", 100), lease: { ownerOperationId: "op", fencingToken: 7, expiresAtEpochSeconds: 200 } };
-  const snapshot = await readControlPlaneSnapshot({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, { includeInfrastructure: true, includeDesiredRelease: true });
+  const snapshot = await readControlPlaneSnapshot(withRecords({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, configuredCatalog), { includeInfrastructure: true, includeDesiredRelease: true });
   const lifecycle = snapshot.games[0]?.lifecycle;
   assert.equal(lifecycle?.serverId, "minecraft");
   assert.equal(lifecycle?.observedState, "stopped");
@@ -315,17 +279,17 @@ test("a game's session record reaches viewers without its lease or fence", async
 test("a player reading says until when it is current: one missed probe and the longest probe wait", async () => {
   const idle = { watchdogExecutionId: "arn:watchdog", consecutiveEmpty: 0, lastObservationId: "cmd-1", playersOnline: 1, lastObservedAtEpochSeconds: 1_000 };
   const record = { ...initialLifecycleRecord("minecraft", 100), observedState: "ready" as const, idle };
-  const snapshot = await readControlPlaneSnapshot({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, { includeInfrastructure: true, includeDesiredRelease: true });
+  const snapshot = await readControlPlaneSnapshot(withRecords({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, configuredCatalog), { includeInfrastructure: true, includeDesiredRelease: true });
   const view = snapshot.games[0]?.lifecycle?.idle;
   assert.equal(view?.playersOnline, 1);
   assert.equal(view?.freshUntilEpochSeconds, 1_000 + 2 * 900 + 10 * 30);
-  const unread = await readControlPlaneSnapshot({ ...sources, readLifecycle: async () => ({ ...record, idle: { ...idle, lastObservedAtEpochSeconds: null } }) }, { includeInfrastructure: true, includeDesiredRelease: true });
+  const unread = await readControlPlaneSnapshot(withRecords({ ...sources, readLifecycle: async () => ({ ...record, idle: { ...idle, lastObservedAtEpochSeconds: null } }) }, configuredCatalog), { includeInfrastructure: true, includeDesiredRelease: true });
   assert.equal(unread.games[0]?.lifecycle?.idle?.freshUntilEpochSeconds, null);
 });
 
 test("a player reading carries the contract's fields and not the watchdog's own ids", async () => {
   const idle = { watchdogExecutionId: "arn:watchdog", consecutiveEmpty: 2, lastObservationId: "cmd-1", playersOnline: 0, lastObservedAtEpochSeconds: 1_000 };
   const record = { ...initialLifecycleRecord("minecraft", 100), observedState: "ready" as const, idle };
-  const snapshot = await readControlPlaneSnapshot({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, { includeInfrastructure: true, includeDesiredRelease: true });
+  const snapshot = await readControlPlaneSnapshot(withRecords({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, configuredCatalog), { includeInfrastructure: true, includeDesiredRelease: true });
   assert.deepEqual(Object.keys(snapshot.games[0]?.lifecycle?.idle ?? {}).sort(), ["consecutiveEmpty", "freshUntilEpochSeconds", "lastObservedAtEpochSeconds", "playersOnline"]);
 });

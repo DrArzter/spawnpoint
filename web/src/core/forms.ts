@@ -159,7 +159,7 @@ export function gameSettingsPayload(
 export function useGameSettingsForm(game: Game, world: World, opts: Readonly<{ busy: boolean; onSave: (values: Readonly<Record<string, SettingValue>>) => void; onClose: () => void }>): GameSettingsModel {
   const definitions = settingDefinitions(game);
   const [drafts, setDrafts] = useState<Record<string, SettingDraft>>(() => Object.fromEntries(definitions.map((setting) => [setting.id, draftOf(setting, effectiveValue(setting, world))])));
-  const stored = world.gameSettings?.values ?? {};
+  const stored = world.gameSettings.values;
   const set = (id: string, value: SettingDraft) => setDrafts((current) => ({ ...current, [id]: value }));
   const draftFor = (setting: SettingDefinition) => drafts[setting.id] ?? draftOf(setting, setting.default);
   const { values, valid, changed, atDefaults } = gameSettingsPayload(definitions, stored, drafts);

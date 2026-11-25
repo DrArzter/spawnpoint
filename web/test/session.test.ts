@@ -18,8 +18,8 @@ const activeGame: Game = {
   },
   presets: [],
   worlds: [
-    { id: "world-a", displayName: "A", profileId: "a", sessionControlAvailable: true, connectivity: "zerotier", materialization: "existing", worldLifecycleAvailable: true, wipes: [], preset: null, connectionAddress: null, release: { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null } },
-    { id: "world-b", displayName: "B", profileId: "b", sessionControlAvailable: true, connectivity: "zerotier", materialization: "existing", worldLifecycleAvailable: true, wipes: [], preset: null, connectionAddress: null, release: { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null } },
+    { id: "world-a", displayName: "A", profileId: "a", sessionControlAvailable: true, connectivity: "zerotier", materialization: "existing", wipes: [], preset: null, connectionAddress: null, release: { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null } },
+    { id: "world-b", displayName: "B", profileId: "b", sessionControlAvailable: true, connectivity: "zerotier", materialization: "existing", wipes: [], preset: null, connectionAddress: null, release: { state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null } },
   ],
 };
 

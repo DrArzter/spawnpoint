@@ -36,7 +36,7 @@ export function aWorld(over: Partial<World> = {}): World {
     connectivity: "zerotier",
     placement: "configured",
     materialization: "existing",
-    worldLifecycleAvailable: true,
+    gameSettings: { values: {}, updatedAt: null },
     wipes: [],
     preset: null,
     connectionAddress: null,

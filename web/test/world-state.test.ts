@@ -17,7 +17,7 @@ import { NO_PENDING, pendingFor, withoutPending, withPending, type Pending } fro
 function world(id: string, placement: World["placement"], worldSession?: WorldSession | null): World {
   return {
     id, displayName: id.toUpperCase(), profileId: id, sessionControlAvailable: true, connectivity: "route53", placement, auth: "game",
-    materialization: "existing", worldLifecycleAvailable: true, wipes: [], preset: null, connectionAddress: null,
+    materialization: "existing", wipes: [], preset: null, connectionAddress: null,
     release: { state: "available", generationId: null, desiredRelease: "1.2", activeRelease: "1.2" },
     ...(worldSession !== undefined ? { session: worldSession } : {}),
   };

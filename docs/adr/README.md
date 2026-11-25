@@ -36,7 +36,7 @@ Eighty-six records is a wall, and a wall is not a plan. Read the two or three th
 | ~~M2~~ | **Done**, and re-based on Lifecycle V2 on 2026-09-11 — [docs/lifecycle-v2-rollout.md](../lifecycle-v2-rollout.md). The decisions: [0006](0006-on-demand-start-and-idle-shutdown.md), [0025](0025-step-functions-for-long-operations.md), [0032](0032-on-demand-single-instance.md) |
 | M3 — releases and the pipeline | [0008](0008-versioned-mod-releases.md), [0030](0030-desired-and-active-release.md), [0042](0042-preset-scoped-release-identity.md); then [0028](0028-update-proposals.md) and [0029](0029-preview-environments.md), still proposed |
 | M4 — surfaces and identity | Built on [0045](0045-provider-neutral-login-sessions.md), [0055](0055-sign-in-with-email-and-password-by-default.md), [0036](0036-observed-visitors-and-owner-approved-access.md) and [0012](0012-web-control-panel.md); [0016](0016-chat-integrations.md) stays open for Discord |
-| Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
+| Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0097](0097-every-world-is-a-record-in-the-registry.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
 | Fleet hosts, placement and several worlds at once | [0048](0048-one-instance-per-active-world.md), [0054](0054-place-a-session-on-a-host-with-room.md), [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md) |
 | Release storage by content | [0080](0080-store-release-files-by-content.md) |
 | The web console and its skins | [0059](0059-separate-the-console-into-bones-and-skins.md), [0072](0072-draw-the-console-in-the-c-a-grammar.md) |
@@ -161,6 +161,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0094](0094-read-a-world-log-and-ask-a-model-about-it.md) | Read a world's log, and ask a model about it | Accepted | M6 |
 | [0095](0095-every-route-declares-its-tool-once.md) | Every route declares its tool once | Accepted | M6 |
 | [0096](0096-the-assistant-reads-as-the-owner-and-proposes-writes.md) | The assistant reads as the Owner and proposes every write | Accepted | M6 |
+| [0097](0097-every-world-is-a-record-in-the-registry.md) | Every world is a record in the registry | Accepted | M6 |
 
 ## Decisions still to record
 

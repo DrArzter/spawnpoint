@@ -2,8 +2,8 @@ import type { Context } from "grammy";
 
 import { replies } from "../../domain/telegram-bot.ts";
 import { statusKeyboard } from "../keyboards/main-menu.ts";
-import { describeHost, env, readPointer } from "../services/aws.ts";
-import { worldAddress } from "../../control-plane/catalog.ts";
+import { describeHost, readPointer } from "../services/aws.ts";
+import { botWorldAddress } from "./info.ts";
 import { render, type RenderMode } from "../ui/render.ts";
 import { contextIsAuthorized } from "../middleware/auth.ts";
 
@@ -13,7 +13,7 @@ export async function statusCommand(ctx: Context, mode: RenderMode = "reply"): P
   const state = host.state;
   // Composed per strategy, like the panel: the overlay address for an overlay
   // world, the instance's current public address for a public one.
-  const connectionAddress = worldAddress(env("WORLD_ID"), { connectionHost: env("CONNECTION_HOST"), publicIp: host.publicIp });
+  const connectionAddress = authorized ? await botWorldAddress(host.publicIp) : null;
   await render(
     ctx,
     authorized ? replies.status({

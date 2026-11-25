@@ -59,7 +59,7 @@ test("a ready preset remains reusable after several worlds are materialized", ()
   const second = newWorldRecord(preset, { worldId: "factorio-gosha-b1c2d3e4", displayName: "Gosha", release: "2.0" }, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "2026-09-07T19:00:00.000Z");
   const materialized = catalogWithPresets([preset], gameCatalog, [first, second]).find((game) => game.id === "factorio")!;
   assert.deepEqual(materialized.worlds.map((world) => world.displayName), ["Rostik", "Gosha"]);
-  assert.ok(materialized.worlds.every((world) => world.sessionControl === "v1" && world.worldLifecycle === "v1"));
+  assert.ok(materialized.worlds.every((world) => world.sessionControl === "v1"));
   assert.equal(materialized.presets?.length, 1, "creating worlds never consumes the preset");
 
   const archived = { ...first, status: "archived" as const };
@@ -68,7 +68,6 @@ test("a ready preset remains reusable after several worlds are materialized", ()
   const archivedWorld = afterArchive.find((world) => world.profileId === preset.id)!;
   assert.equal(archivedWorld.materialization, "archived");
   assert.equal(archivedWorld.sessionControl, null);
-  assert.equal(archivedWorld.worldLifecycle, "v1");
   assert.equal(afterArchive.filter((world) => world.profileId === preset.id).length, 1);
 });
 

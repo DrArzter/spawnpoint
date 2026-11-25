@@ -192,7 +192,7 @@ export function rowActions(game: Game, world: World, granted: ReadonlySet<string
   if (granted.has("invitation.send")) items.push(action("world.invite", "Invite players", () => callbacks.onInvite(game, world), { icon: "send" }));
   if (granted.has("connection.read")) items.push(packAction(game, world, busy, callbacks));
   items.push(...promoteActions(game, world, granted, busy, callbacks));
-  if (!granted.has("world.manage") || !world.worldLifecycleAvailable) return items;
+  if (!granted.has("world.manage")) return items;
   items.push(...lifecycleActions(game, world, busy, callbacks));
   return items;
 }
@@ -263,12 +263,12 @@ export function worldMoreActions(game: Game, world: World, granted: ReadonlySet<
   const items: Action[] = [];
   if (granted.has("connection.read")) items.push(packAction(game, world, busy, callbacks));
   items.push(...promoteActions(game, world, granted, busy, callbacks));
-  if (!granted.has("world.manage") || !world.worldLifecycleAvailable) return items;
+  if (!granted.has("world.manage")) return items;
   if (world.materialization !== "archived" && callbacks.onEditSettings) {
     const edit = callbacks.onEditSettings;
     items.push(action("world.settings", "Hosting & connection", () => edit(game, world), { icon: "dns", disabled: busy }));
   }
-  if (world.materialization !== "archived" && callbacks.onEditGameSettings && settingsAvailable(game, world)) {
+  if (world.materialization !== "archived" && callbacks.onEditGameSettings && settingsAvailable(game)) {
     const edit = callbacks.onEditGameSettings;
     items.push(action("world.game-settings", "Game settings", () => edit(game, world), { icon: "tune", disabled: busy }));
   }
@@ -331,7 +331,7 @@ export function buildWorldRow(game: Game, world: World, opts: Readonly<{ fleet: 
     presetName: presetOf(game, world)?.displayName ?? world.profileId,
     releaseSummary: releaseSummary(world),
     wipe: wipe ? { number: wipe.number } : null,
-    wipeAbsent: world.worldLifecycleAvailable ? "No wipes yet" : "Legacy world",
+    wipeAbsent: "No wipes yet",
     address: addressFacts(world),
     addressAbsent: missingAddressLabel(world, worldState(game, world, opts.sharedSession)),
     actions: rowActions(game, world, opts.granted, pendingFor(opts.pending, world.id) !== null, opts.callbacks),
@@ -357,7 +357,7 @@ export function siblingRow(row: WorldRow): SiblingRow {
 
 export function worldTabs(world: World, offered: Readonly<{ releases: boolean; whitelist: boolean; config: boolean; console: boolean; log: boolean; metrics: boolean }>): { id: WorldTab; label: string; count?: number }[] {
   const tabs: { id: WorldTab; label: string; count?: number }[] = [{ id: "details", label: "Details" }];
-  if (world.worldLifecycleAvailable) tabs.push({ id: "wipes", label: "Wipes", count: world.wipes.length });
+  tabs.push({ id: "wipes", label: "Wipes", count: world.wipes.length });
   tabs.push({ id: "backups", label: "Backups" });
   if (offered.releases) tabs.push({ id: "releases", label: "Releases" });
   if (offered.whitelist) tabs.push({ id: "whitelist", label: "Whitelist" });
@@ -420,7 +420,7 @@ export function worldDetails(game: Game, world: World, serverState: ServerState)
   const address = addressFacts(world);
   return [
     { key: "world-id", label: "World ID", value: { type: "text", text: world.id, mono: true } },
-    { key: "availability", label: "Availability", value: { type: "status", status: availability }, explain: world.worldLifecycleAvailable ? undefined : "Legacy world without wipe management" },
+    { key: "availability", label: "Availability", value: { type: "status", status: availability } },
     {
       key: "preset",
       label: "Preset",
@@ -432,7 +432,7 @@ export function worldDetails(game: Game, world: World, serverState: ServerState)
       explain: world.preset ? undefined : "Not built from a Git preset",
     },
     { key: "release", label: "Release", value: hasRelease ? { type: "release", active: world.release.activeRelease, desired: world.release.desiredRelease } : { type: "absent", text: releaseSummary(world) } },
-    { key: "wipe", label: "Current wipe", value: currentWipe ? { type: "text", text: `#${currentWipe.number}` } : { type: "absent", text: world.worldLifecycleAvailable ? "No wipes yet" : "Not tracked" } },
+    { key: "wipe", label: "Current wipe", value: currentWipe ? { type: "text", text: `#${currentWipe.number}` } : { type: "absent", text: "No wipes yet" } },
     { key: "address", label: "Address", value: address ? { type: "address", address } : { type: "absent", text: missingAddressLabel(world, serverState) }, copy: world.connectionAddress ?? undefined },
     { key: "hosting", label: "Hosting", value: { type: "text", text: world.placement === "fleet" ? "On-demand fleet" : "Persistent host" } },
     { key: "connection", label: "Connection", value: { type: "text", text: connectionLabels[world.connectivity] } },
@@ -442,13 +442,13 @@ export function worldDetails(game: Game, world: World, serverState: ServerState)
 
 // The game settings this world changed from its game's defaults (ADR-0064).
 function gameSettingsDetail(game: Game, world: World): Detail[] {
-  if (!settingsAvailable(game, world)) return [];
+  if (!settingsAvailable(game)) return [];
   const changed = changedSettings(game, world);
   return [{
     key: "game-settings",
     label: "Game settings",
     value: changed.length > 0 ? { type: "text", text: changed.join(", ") } : { type: "absent", text: "Game defaults" },
-    ...(world.gameSettings?.updatedAt ? { hint: "Changed", hintTime: world.gameSettings.updatedAt } : {}),
+    ...(world.gameSettings.updatedAt ? { hint: "Changed", hintTime: world.gameSettings.updatedAt } : {}),
   }];
 }
 

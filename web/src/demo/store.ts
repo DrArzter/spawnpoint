@@ -504,7 +504,6 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
     displayName: displayName.trim(),
     profileId: preset.id,
     sessionControlAvailable: true,
-    worldLifecycleAvailable: true,
     connectivity,
     placement,
     session: null,
@@ -799,7 +798,6 @@ export function backupLink(gameId: string, worldId: string, key: string): FileLi
 // A world's whitelist (ADR-0066): kept on its record; a running world reloads it.
 export function whitelist(gameId: string, worldId: string): WorldWhitelist {
   settle();
-  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
   const kept = state.whitelists[worldKey(gameId, worldId)];
   if (kept) return { managed: true, names: [...kept.names], updatedAt: kept.updatedAt, updatedBy: kept.updatedBy };
   // No list of its own: a running server's list is shown, a stopped world has none.
@@ -810,7 +808,6 @@ export function whitelist(gameId: string, worldId: string): WorldWhitelist {
 export function updateWhitelist(gameId: string, worldId: string, names: readonly string[]): SavedWhitelist {
   settle();
   const target = world(gameId, worldId);
-  if (!target.worldLifecycleAvailable) throw new Error("This world has no record to keep a whitelist in.");
   names.forEach((name, index) => {
     const error = whitelistNameError(name, names.slice(0, index), game(gameId).playerName);
     if (error) throw new Error(`${name}: ${error}`);
@@ -843,7 +840,6 @@ const configRules = (gameId: string) => DEMO_CONFIG_RELEASE[gameId] ?? null;
 const configEdits = (gameId: string, worldId: string) => (state.configEdits[worldKey(gameId, worldId)] ??= {});
 
 function configTarget(gameId: string, worldId: string) {
-  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep config files in.");
   const rules = configRules(gameId);
   if (rules === null) refuse(409, "game_has_no_config_files");
   return rules;
@@ -851,7 +847,6 @@ function configTarget(gameId: string, worldId: string) {
 
 export function configFiles(gameId: string, worldId: string): ConfigFileList {
   settle();
-  if (!world(gameId, worldId).worldLifecycleAvailable) throw new Error("This world has no record to keep config files in.");
   const rules = configRules(gameId);
   if (rules === null) return { release: null, roots: [], maxBytes: 0, files: [] };
   const edits = configEdits(gameId, worldId);
@@ -922,7 +917,6 @@ export function updateGameSettings(gameId: string, worldId: string, values: Read
   settle();
   const definitions = state.snapshot.games.find((game) => game.id === gameId)?.settings ?? [];
   const target = world(gameId, worldId);
-  if (!target.gameSettings) throw new Error("This world has no record to keep settings in.");
   for (const [id, value] of Object.entries(values)) {
     const setting = definitions.find((candidate) => candidate.id === id);
     if (!setting || !settingValueValid(setting, value)) throw new Error(`${setting?.label ?? id} has a value the game does not accept.`);
@@ -1330,7 +1324,7 @@ export function startConversation(model: AssistantModel, message: string): Assis
   };
   state.conversations[id] = conversation;
   const stopped = state.snapshot.games.flatMap((game) => game.worlds.map((item) => ({ game, world: item })))
-    .find(({ game, world: candidate }) => game.id === "minecraft" && heldSession(game.id, candidate) === null && candidate.worldLifecycleAvailable);
+    .find(({ game, world: candidate }) => game.id === "minecraft" && heldSession(game.id, candidate) === null);
   answerLater(id, stopped === undefined
     ? [{ kind: "read", tool: "get_control_plane", title: "Get Spawnpoint control plane", ok: true }, { kind: "assistant", text: "Every Minecraft world is already running." }]
     : [

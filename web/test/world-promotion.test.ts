@@ -25,7 +25,7 @@ function session(players: number | null): WorldSession {
 function world(values: Partial<World> = {}): World {
   return {
     id: "prom", displayName: "Prominence", profileId: "prominence", sessionControlAvailable: true, connectivity: "route53", placement: "fleet", auth: "game",
-    materialization: "existing", worldLifecycleAvailable: true, wipes: [], connectionAddress: null,
+    materialization: "existing", wipes: [], connectionAddress: null,
     preset: { ...preset },
     release: { state: "available", generationId: `gen-${"c".repeat(32)}`, desiredRelease: "100.1", activeRelease: "100.1" },
     session: null, ...values,

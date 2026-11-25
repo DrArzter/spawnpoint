@@ -182,17 +182,17 @@ function changesSource(world: World, open: boolean): Readonly<{ presetId: string
 }
 
 // A whitelist kept on the world's record (ADR-0066): a game that keeps one, a
-// live world with a record, a role and a deployment that manage it.
+// live world, a role and a deployment that manage it.
 function whitelistOffered(console: ConsoleController, game: Game, world: World): boolean {
   return console.granted.has("whitelist.manage") && console.capabilities.has("whitelist") && game.whitelist === true &&
-    world.worldLifecycleAvailable && world.materialization !== "archived";
+    world.materialization !== "archived";
 }
 
 // A world's own config files (ADR-0093): a role that edits them, a deployment
-// that serves them and a world with a record. A game with no config rules
+// that serves them and a live world. A game with no config rules
 // lists no files.
 function configOffered(console: ConsoleController, world: World): boolean {
-  return console.granted.has("config.edit") && console.capabilities.has("configFiles") && world.worldLifecycleAvailable && world.materialization !== "archived";
+  return console.granted.has("config.edit") && console.capabilities.has("configFiles") && world.materialization !== "archived";
 }
 
 // The world page's tabs, and what each reads, only while it is open: a closed

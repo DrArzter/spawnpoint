@@ -376,15 +376,34 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
   };
 }
 
-function defaultPlacement(connectivity: unknown): "configured" | "fleet" {
-  return connectivity === "zerotier" ? "configured" : "fleet";
-}
+// --- Translations (ADR-0097) -----------------------------------------------------
+// A record keeps the shape of the day it was written; nothing rewrites it in
+// place. Each translation lifts one older shape by one step, in order, so the
+// rest of the code reads one shape. A writer always writes the newest shape.
+// A new field with a meaning for old records gets a translation here, never a
+// default at the place that reads it.
+type Translation = Readonly<{ name: string; applies: (root: ObjectValue) => boolean; apply: (root: ObjectValue) => ObjectValue }>;
 
-// ZeroTier never runs on a fleet host (ADR-0033). The configured host serves
-// any connection (ADR-0085). A record that names no placement keeps its old
-// meaning: ZeroTier on the configured host, anything else on the fleet.
-function placementConflicts(placement: unknown, connectivity: unknown): boolean {
-  return (placement ?? defaultPlacement(connectivity)) === "fleet" && connectivity === "zerotier";
+export const WORLD_RECORD_TRANSLATIONS: readonly Translation[] = [
+  {
+    // Before ADR-0085 the connection decided the host: ZeroTier on the
+    // configured host, anything else on the fleet.
+    name: "placement-from-connectivity",
+    applies: (root) => root.placement === undefined,
+    apply: (root) => ({ ...root, placement: root.connectivity === "zerotier" ? "configured" : "fleet" }),
+  },
+];
+
+/** The stored document lifted to the newest shape; the names of the translations it needed. */
+export function translateWorldDocument(root: ObjectValue): Readonly<{ document: ObjectValue; applied: readonly string[] }> {
+  let document = root;
+  const applied: string[] = [];
+  for (const translation of WORLD_RECORD_TRANSLATIONS) {
+    if (!translation.applies(document)) continue;
+    document = translation.apply(document);
+    applied.push(translation.name);
+  }
+  return { document, applied };
 }
 
 function parseRecordPreset(value: unknown): WorldRecord["preset"] | null {
@@ -409,7 +428,8 @@ function backupSourceBelongs(worldId: string, source: BackupSource, history: rea
 }
 
 export function parseWorldRecord(value: unknown): WorldRecord | null {
-  const root = object(value);
+  const stored = object(value);
+  const root = stored === null ? null : translateWorldDocument(stored).document;
   const preset = parseRecordPreset(root?.preset);
   const generation = parseGeneration(root?.current_generation, false);
   const previousValues = root?.previous_generations ?? [];
@@ -426,9 +446,10 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     (root.connectivity !== "zerotier" && root.connectivity !== "raw" && root.connectivity !== "route53") ||
     (root.auth !== undefined && root.auth !== "game" && root.auth !== "external") ||
     (root.connectivity !== "zerotier" && root.auth === undefined) ||
-    (root.placement !== undefined && root.placement !== "configured" && root.placement !== "fleet") ||
+    (root.placement !== "configured" && root.placement !== "fleet") ||
     (root.warm !== undefined && typeof root.warm !== "boolean") ||
-    placementConflicts(root.placement, root.connectivity) ||
+    // ZeroTier never runs on a fleet host (ADR-0033); the configured host serves any connection (ADR-0085).
+    (root.placement === "fleet" && root.connectivity === "zerotier") ||
     preset === null ||
     generation === null || previous === null || previous.includes(null) ||
     gameSettings === null || whitelist === null || configFiles === null
@@ -447,7 +468,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     gameId: root.game,
     displayName: root.display_name,
     status: root.status,
-    placement: (root.placement ?? defaultPlacement(root.connectivity)) as WorldRecord["placement"],
+    placement: root.placement,
     connectivity: root.connectivity,
     ...(root.auth === undefined ? {} : { auth: root.auth }),
     ...(root.warm === true ? { warm: true as const } : {}),

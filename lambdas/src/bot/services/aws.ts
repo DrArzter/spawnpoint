@@ -10,6 +10,7 @@ import { attachmentDisposition, packAttachmentName, releaseManifestKey } from ".
 import { releasePackStorageKey } from "../../control-plane/release-objects.ts";
 import { S3ReleaseStateReader } from "../../control-plane/s3-release-state-store.ts";
 import { S3WorldReader } from "../../control-plane/s3-world-repository.ts";
+import type { WorldRecord } from "../../control-plane/world-registry.ts";
 
 export const env = (name: string): string => {
   const value = process.env[name];
@@ -38,19 +39,27 @@ export async function parameter(name: string, ttlSeconds = Infinity): Promise<st
 
 export type Pointer = Readonly<{ game: string; preset: string; desired_release: string | null; active_release: string | null }>;
 
+/** The bot's world as the registry keeps it (ADR-0097); null when it has no record or S3 does not answer. */
+export async function readWorldRecord(): Promise<WorldRecord | null> {
+  try {
+    return (await new S3WorldReader(s3, env("RELEASE_BUCKET")).read(env("WORLD_ID")))?.record ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function readPointer(): Promise<Pointer | null> {
   try {
-    const bucket = env("RELEASE_BUCKET");
-    const world = await new S3WorldReader(s3, bucket).read(env("WORLD_ID"));
+    const world = await readWorldRecord();
     if (world === null) return null;
-    const release = await new S3ReleaseStateReader(s3, bucket).read({
-      worldId: world.record.worldId,
-      generationId: world.record.currentGeneration.id,
+    const release = await new S3ReleaseStateReader(s3, env("RELEASE_BUCKET")).read({
+      worldId: world.worldId,
+      generationId: world.currentGeneration.id,
     });
     if (release === null) return null;
     return {
-      game: world.record.gameId,
-      preset: world.record.preset.id,
+      game: world.gameId,
+      preset: world.preset.id,
       desired_release: release.state.desiredRelease,
       active_release: release.state.activeRelease,
     };

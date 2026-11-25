@@ -98,14 +98,13 @@ export type World = Readonly<{
   placement: "configured" | "fleet";
   auth: "game" | "external" | null;
   materialization: "existing" | "not_created" | "archived";
-  worldLifecycleAvailable: boolean;
   preset: WorldPreset | null;
   wipes: readonly Wipe[];
   release: ReleasePointer;
   /** This world's session, wherever it lives (ADR-0062); null when it has none. */
   session: WorldSession | null;
   /** The game settings this world sets (ADR-0064); null when it has no record to keep them in. */
-  gameSettings: WorldGameSettings | null;
+  gameSettings: WorldGameSettings;
 }>;
 
 export type Game = Readonly<{

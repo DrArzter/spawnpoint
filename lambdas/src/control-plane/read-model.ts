@@ -205,7 +205,6 @@ export async function readControlPlaneSnapshot(
           placement: world.placement ?? "configured",
           auth: record?.auth ?? null,
           materialization: world.materialization ?? "existing",
-          worldLifecycleAvailable: world.worldLifecycle !== null && world.worldLifecycle !== undefined,
           preset: world.preset ?? null,
           wipes: generations.map((generation, index) => ({
             id: generation.id,
@@ -220,7 +219,7 @@ export async function readControlPlaneSnapshot(
           connectionAddress,
           release: options.includeDesiredRelease ? release : { ...release, desiredRelease: null },
           session: sessionView(session.serverId, session.record),
-          gameSettings: record === undefined ? null : { values: record.gameSettings?.values ?? {}, updatedAt: record.gameSettings?.updatedAt ?? null },
+          gameSettings: { values: record?.gameSettings?.values ?? {}, updatedAt: record?.gameSettings?.updatedAt ?? null },
         };
       }),
     })),

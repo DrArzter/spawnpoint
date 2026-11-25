@@ -4,7 +4,8 @@ import test from "node:test";
 import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import {
   archiveWorldRecord, newWorldRecord, parseWorldRecord, regenerateWorldRecord,
-  purgeGenerationIds, restoreWorldRecord, withGameSettings, withConfigFiles, withWhitelist, withWorldAccess, worldIdForName, worldRecordDocument,
+  purgeGenerationIds, restoreWorldRecord, translateWorldDocument, withGameSettings, withConfigFiles, withWhitelist, withWorldAccess, worldIdForName, worldRecordDocument,
+  WORLD_RECORD_TRANSLATIONS,
 } from "../src/control-plane/world-registry.ts";
 
 const preset: PresetObservation = {
@@ -215,4 +216,32 @@ test("a world's config files round-trip, outlive its wipes and hold only paths i
   const document = worldRecordDocument(kept) as Record<string, Record<string, unknown>>;
   assert.equal(parseWorldRecord({ ...document, config_files: { "ops.json": document.config_files!["config/claims.toml"] } }), null);
   assert.equal(parseWorldRecord({ ...document, config_files: { "config/a.toml": { ...(document.config_files!["config/claims.toml"] as object), sha256: "x" } } }), null);
+});
+
+// ADR-0097: a record keeps the shape it was written in; the reader lifts it.
+test("a record written before placements reads as the placement its connection meant, and is written back in the newest shape", () => {
+  // The shape of the first world's record in production, written in 2026-08.
+  const stored = {
+    schema_version: 1, world_id: "world", game: "minecraft", display_name: "Main modded", status: "active",
+    connectivity: "zerotier", storage_layout: "generation",
+    preset: { id: "main", repository: "https://github.com/DrArzter/config", commit: "c".repeat(40), profile_digest: "d".repeat(64) },
+    current_generation: { id: `gen-${"e".repeat(32)}`, release: "1.1", created_at: "2026-08-26T16:39:31.469Z", source: { kind: "preset" } },
+    previous_generations: [],
+  };
+  assert.deepEqual(translateWorldDocument(stored).applied, ["placement-from-connectivity"]);
+  const record = parseWorldRecord(stored);
+  assert.equal(record?.placement, "configured");
+  assert.equal(worldRecordDocument(record!).placement, "configured", "a writer writes the newest shape");
+  assert.deepEqual(translateWorldDocument(worldRecordDocument(record!)).applied, [], "the newest shape needs no translation");
+  const publicWorld = parseWorldRecord({ ...stored, connectivity: "raw", auth: "game" });
+  assert.equal(publicWorld?.placement, "fleet", "before ADR-0085 a public world ran on the fleet");
+});
+
+test("every translation is named once, and a new record needs none", () => {
+  const names = WORLD_RECORD_TRANSLATIONS.map((translation) => translation.name);
+  assert.equal(new Set(names).size, names.length);
+  const created = worldRecordDocument(newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z"));
+  for (const translation of WORLD_RECORD_TRANSLATIONS) {
+    assert.equal(translation.applies(created), false, `${translation.name}: a new record needs no translation`);
+  }
 });

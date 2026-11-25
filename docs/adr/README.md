@@ -39,7 +39,7 @@ Eighty-six records is a wall, and a wall is not a plan. Read the two or three th
 | Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0097](0097-every-world-is-a-record-in-the-registry.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
 | Fleet hosts, placement and several worlds at once | [0048](0048-one-instance-per-active-world.md), [0054](0054-place-a-session-on-a-host-with-room.md), [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md) |
 | Release storage by content | [0080](0080-store-release-files-by-content.md) |
-| The web console and its skins | [0059](0059-separate-the-console-into-bones-and-skins.md), [0072](0072-draw-the-console-in-the-c-a-grammar.md) |
+| The web console and its skins | [0059](0059-separate-the-console-into-bones-and-skins.md), [0072](0072-draw-the-console-in-the-c-a-grammar.md), [0098](0098-the-console-speaks-from-one-message-catalogue.md) |
 | Deploying a change to production | [0043](0043-deploy-production-from-reviewed-pull-requests.md), [0044](0044-apply-github-identities-behind-an-owner-gate.md) |
 | Everything else | Later. Read when the milestone arrives |
 
@@ -162,6 +162,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0095](0095-every-route-declares-its-tool-once.md) | Every route declares its tool once | Accepted | M6 |
 | [0096](0096-the-assistant-reads-as-the-owner-and-proposes-writes.md) | The assistant reads as the Owner and proposes every write | Accepted | M6 |
 | [0097](0097-every-world-is-a-record-in-the-registry.md) | Every world is a record in the registry | Accepted | M6 |
+| [0098](0098-the-console-speaks-from-one-message-catalogue.md) | The console speaks from one message catalogue | Accepted — implemented | M6 |
 
 ## Decisions still to record
 

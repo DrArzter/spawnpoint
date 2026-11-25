@@ -11,11 +11,12 @@ import { Segmented } from "../ui/Segmented";
 import { Skeleton, SkeletonGroup } from "../ui/Skeleton";
 import { StatCard, StatSkeleton } from "../ui/StatCard";
 import { ChartSkeleton, chartNotes, chartSummary, TimeSeriesChart } from "../ui/TimeSeriesChart";
+import { intlLocale, t } from "../../../i18n";
 
 // A5: the charts draw in on the first view of a world's metrics in this session.
 const seen = new Set<string>();
 
-const clock = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const clock = new Intl.DateTimeFormat(intlLocale(), { hour: "2-digit", minute: "2-digit" });
 
 /** A reading's value in its series' unit: a percentage, else bytes. */
 export function metricFormat(unit: string): (value: number) => string {
@@ -64,7 +65,7 @@ export function stripRuns(states: readonly StripState[]): StripRun[] {
   return runs;
 }
 
-const STRIP_LABEL: Readonly<Record<StripState, string>> = { on: "Host running", off: "No host", pending: "Not reported yet" };
+const STRIP_LABEL: Readonly<Record<StripState, string>> = { on: t("metrics.hostRunning"), off: t("metrics.noHost"), pending: t("common.notReportedYet") };
 const STRIP_CLASS: Readonly<Record<StripState, string>> = { on: "c-strip-run c-strip-on", off: "c-strip-run", pending: "c-strip-run c-strip-pending" };
 
 // A host reports four series (CPU, memory and the two networks); the skeleton draws that many.
@@ -80,14 +81,14 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
     <>
       <div className="c-metrics-bar">
         <Segmented
-          label="Range"
+          label={t("metrics.range")}
           onChange={(range) => { setReveal(true); model.setRange(range); }}
           options={model.ranges.map((range) => ({ value: range.id, label: range.label }))}
           value={model.range}
         />
         {metrics.status === "loading" && <span className="c-metrics-window"><Skeleton text width="15em" /></span>}
         {value && (
-          <span className="c-metrics-window" data-tip={`${Math.round(value.periodSeconds / 60)}-minute readings`} tabIndex={0 /* NOSONAR focusable tooltip trigger */}>
+          <span className="c-metrics-window" data-tip={t("metrics.roundMinuteReadings", { round: Math.round(value.periodSeconds / 60) })} tabIndex={0 /* NOSONAR focusable tooltip trigger */}>
             {shortDateTime(value.startedAt)} – {shortDateTime(value.endedAt)}
           </span>
         )}
@@ -99,8 +100,8 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
           <Grid kind="metrics">{SERIES.map((cell) => <Card key={cell} loading><ChartSkeleton /></Card>)}</Grid>
         </SkeletonGroup>
       )}
-      {metrics.status === "error" && <Card label="Metrics"><LoadError error={metrics.error} kind={metrics.kind} retry={metrics.retry} title="Metrics could not be loaded" verb="read metrics" /></Card>}
-      {metrics.status === "ready" && value === null && <Card label="Metrics"><Empty icon="monitoring" title="No session in this window" /></Card>}
+      {metrics.status === "error" && <Card label={t("common.metrics")}><LoadError error={metrics.error} kind={metrics.kind} retry={metrics.retry} title={t("metrics.metricsCouldNotLoaded")} verb={t("metrics.readMetrics")} /></Card>}
+      {metrics.status === "ready" && value === null && <Card label={t("common.metrics")}><Empty icon="monitoring" title={t("metrics.noSessionWindow")} /></Card>}
       {value && <Readings metrics={value} range={rangeLabel} reveal={reveal} />}
     </>
   );
@@ -111,7 +112,7 @@ function Readings({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; r
   return (
     <>
       <Strip metrics={metrics} range={range} reveal={reveal} />
-      <Grid kind="stat" label="Latest readings">
+      <Grid kind="stat" label={t("metrics.latestReadings")}>
         {metrics.series.map((series) => <Stat key={series.id} series={series} time={time} />)}
       </Grid>
       <Grid kind="metrics">
@@ -130,7 +131,7 @@ function Stat({ series, time }: Readonly<{ series: HostMetricSeries; time: (at: 
   // arrives once per watchdog check, so its first reading stands alone.
   return (
     <StatCard
-      detail={summary.count < 2 ? undefined : <><span>Peak {format(summary.peak.value)} at {time(summary.peak.at)}</span><span>Avg {format(summary.average)}</span></>}
+      detail={summary.count < 2 ? undefined : <><span>{t("metrics.peakAt", { value: format(summary.peak.value), time: time(summary.peak.at) })}</span><span>{t("metrics.average", { value: format(summary.average) })}</span></>}
       label={series.label}
       unit={unit.join(" ")}
       value={value ?? null}
@@ -143,16 +144,16 @@ function Chart({ series, range, reveal, time }: Readonly<{ series: HostMetricSer
   const notes = chartNotes(series.points, series.pendingFrom);
   const legend = (
     <span className="c-legend">
-      <span className="c-legend-item"><span aria-hidden="true" className="c-legend-line" />{series.unit === "percent" ? "%" : "Bytes"}</span>
-      {notes.gaps && known && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-gap" />No host</span>}
-      {notes.pending && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-pending" />Not reported yet</span>}
+      <span className="c-legend-item"><span aria-hidden="true" className="c-legend-line" />{series.unit === "percent" ? "%" : t("metrics.bytes")}</span>
+      {notes.gaps && known && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-gap" />{t("metrics.noHost")}</span>}
+      {notes.pending && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-pending" />{t("common.notReportedYet")}</span>}
     </span>
   );
   return (
     <Card actions={known ? legend : undefined} title={series.label}>
       {known
         ? <TimeSeriesChart format={metricFormat(series.unit)} label={series.label} pendingFrom={series.pendingFrom} percent={series.unit === "percent"} points={series.points} range={range} reveal={reveal} time={time} />
-        : <Empty icon="monitoring" size="sm" title="The host reported nothing in this window." />}
+        : <Empty icon="monitoring" size="sm" title={t("metrics.hostReportedNothingWindow")} />}
     </Card>
   );
 }
@@ -160,9 +161,9 @@ function Chart({ series, range, reveal, time }: Readonly<{ series: HostMetricSer
 /** The Host running card's shell, shared by the strip and its skeleton: the label with its share, the track, the time axis. */
 function StripCard({ share, track, axis }: Readonly<{ share: ReactNode; track: ReactNode; axis: ReactNode }>) {
   return (
-    <Card label="Host running">
+    <Card label={t("metrics.hostRunning")}>
       <div className="c-strip">
-        <span className="c-strip-label">Host running<strong>{share}</strong></span>
+        <span className="c-strip-label">{t("metrics.hostRunning")}<strong>{share}</strong></span>
         {track}
         <div aria-hidden="true" className="c-strip-axis">{axis}</div>
       </div>
@@ -182,10 +183,10 @@ function Strip({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; rang
   const end = (run: StripRun) => run.from + run.length >= slots.length ? "now" : time(points[run.from + run.length]?.at ?? metrics.endedAt);
   return (
     <StripCard
-      axis={<><span>{shortDateTime(metrics.startedAt)}</span><span>Now</span></>}
+      axis={<><span>{shortDateTime(metrics.startedAt)}</span><span>{t("metrics.now")}</span></>}
       share={`${share} %`}
       track={(
-        <div aria-label={`Host running ${share} % of the last ${range}`} className={reveal ? "c-strip-track c-strip-reveal" : "c-strip-track"} role="img">
+        <div aria-label={t("metrics.hostRunningShareLast", { share, range })} className={reveal ? "c-strip-track c-strip-reveal" : "c-strip-track"} role="img">
           {stripRuns(slots).map((run) => (
             <span
               className={STRIP_CLASS[run.state]}

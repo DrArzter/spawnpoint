@@ -119,7 +119,8 @@ jobs:
   ui:
     name: Breakpoint gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Every page, state and width in English and in Russian (ADR-0098).
+    timeout-minutes: 25
     steps:
       # The whole history, so the gate can see whether a pull request changed web/.
       - name: Check out the commit under test

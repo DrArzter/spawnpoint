@@ -5,6 +5,8 @@
 //   { click: selector }   press the first visible match
 //   { focus: selector }   focus the first visible match (a tooltip shows)
 //   { key: "?" }          press a key on the page
+// A selector that names words is a function of `m`, the catalogue of the job's locale: `m(id, params)` is a message
+// and `m.prefix(id)` its words before the first placeholder, so a state opens in every language the gate runs.
 // `onTop: ["tip", "toast"]` names the floating layers that must show above the
 // dialog the state opened: the gate hit-tests each layer's centre and fails
 // when anything else is topmost (a layer in the page, under a modal).
@@ -43,15 +45,15 @@ export const STATES = [
   { name: "role-create", route: "/?demo&latency=0#/access/roles", steps: [{ action: "access.role.create" }] },
   { name: "role-edit", route: "/?demo&latency=0#/access/roles", steps: [{ action: "access.role.read" }, { action: "access.role.edit" }] },
   // Guest is the demo's one custom role nobody holds: the only one Delete reaches.
-  { name: "delete-role", route: "/?demo&latency=0#/access/roles", steps: [{ click: "button[aria-label='Guest permissions']" }, { action: "access.role.delete" }], skins: ["console"] },
-  { name: "delete-role-terminal", route: "/?demo&latency=0#/access/roles", steps: [{ click: "button[aria-label='Actions for Guest']" }, { click: "[role=menuitem][data-action='access.role.delete']" }], skins: ["terminal"] },
+  { name: "delete-role", route: "/?demo&latency=0#/access/roles", steps: [{ click: (m) => `button[aria-label='${m("access.roleNamePermissions", { roleName: "Guest" })}']` }, { action: "access.role.delete" }], skins: ["console"] },
+  { name: "delete-role-terminal", route: "/?demo&latency=0#/access/roles", steps: [{ click: (m) => `button[aria-label='${m("common.actionsMemberName", { memberName: "Guest" })}']` }, { click: "[role=menuitem][data-action='access.role.delete']" }], skins: ["terminal"] },
   // The terminal draws the password form in the page, not on a surface.
   { name: "password", route: "/?demo&latency=0#/profile", steps: [{ action: "accounts.password.change" }], skins: ["console"] },
   { name: "shortcuts", route: "/?demo&latency=0#/worlds/minecraft", steps: [{ key: "?" }], skins: ["console"] },
   { name: "tooltip", route: WORLD, steps: [{ focus: "[data-tip]" }], skins: ["console"] },
   // A mod's source is a mark with its name in the tooltip. The mods sit below the fold: the second focus lands after the scroll that closed the first tip.
-  { name: "mod-source", route: `${WORLD}/releases`, steps: [{ focus: "table[aria-label=Mods] [data-tip]" }, { focus: "table[aria-label=Mods] [data-tip]" }], skins: ["console"] },
-  { name: "mod-source-terminal", route: `${WORLD}/releases`, steps: [{ focus: "table[aria-label^='Mods of'] .t-indicator" }], skins: ["terminal"] },
+  { name: "mod-source", route: `${WORLD}/releases`, steps: [{ focus: (m) => `table[aria-label='${m("releases.mods")}'] [data-tip]` }, { focus: (m) => `table[aria-label='${m("releases.mods")}'] [data-tip]` }], skins: ["console"] },
+  { name: "mod-source-terminal", route: `${WORLD}/releases`, steps: [{ focus: (m) => `table[aria-label^='${m.prefix("world.modsWorldNameReleaseRelease")}'] .t-indicator` }], skins: ["terminal"] },
   { name: "toast", route: "/?demo&latency=0#/releases/minecraft", steps: [{ click: "[aria-disabled=true][data-action]" }], skins: ["console"] },
   // Layers over a modal. The console raises its toast from the dialog's own
 // disabled button, or from the page behind it. The terminal's snackbar comes

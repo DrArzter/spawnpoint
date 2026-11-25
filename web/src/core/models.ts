@@ -210,7 +210,7 @@ export type DetailValue =
   | Readonly<{ type: "preset"; name: string; source: Readonly<{ commit: string; short: string; href: string }> | null }>;
 
 /** What a detail is about, so a skin that shows a fact elsewhere can leave it out here. */
-export type DetailKey = "session" | "host" | "launched" | "players" | "observed" | "world-id" | "availability" | "preset" | "release" | "wipe" | "address" | "hosting" | "connection" | "game-settings";
+export type DetailKey = "session" | "host" | "launched" | "players" | "observed" | "world-id" | "availability" | "preset" | "release" | "wipe" | "address" | "hosting" | "connection" | "game-settings" | "cause" | "caught-cause";
 
 export type Detail = Readonly<{
   key?: DetailKey;
@@ -658,6 +658,8 @@ export type ProfileModel = Readonly<{
   avatar: AvatarModel;
   appearance: AppearanceModel;
   look: LookModel;
+  /** The language the console speaks, chosen per browser; the same shape as the look. */
+  language: LookModel;
   signOut: Action;
   openInBrowser: Action | null;
   loginAccounts: LoginAccountsModel;

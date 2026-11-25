@@ -1,5 +1,6 @@
 import type { PermissionInfo, Role } from "../model";
 import type { RoleChoice, RoleEditorModel } from "./models";
+import { t } from "../i18n";
 
 /** Everything the API serves about roles: who may be given which, the permission words, and the role an approval gives. */
 export type RoleDirectory = Readonly<{
@@ -17,7 +18,7 @@ export type RoleDirectory = Readonly<{
 export function roleChoice(roles: readonly Role[], value: string, busy: boolean): RoleChoice {
   const options = roles.filter((role) => role.assignable).map((role) => ({ value: role.id, label: role.name }));
   if (options.some((option) => option.value === value)) return { value, options, disabled: busy };
-  return { value, options: [{ value, label: roles.find((role) => role.id === value)?.name ?? (value || "Loading roles…") }], disabled: true };
+  return { value, options: [{ value, label: roles.find((role) => role.id === value)?.name ?? (value || t("access.loadingRoles")) }], disabled: true };
 }
 
 /** The name of the protected role, which the owner bootstrap hands out. */
@@ -27,7 +28,7 @@ export function protectedRoleName(roles: readonly Role[]): string | null {
 
 /** A permission as the catalogue words it; an id the catalogue lacks still shows, as itself. */
 export function permissionInfo(catalogue: readonly PermissionInfo[], id: string): PermissionInfo {
-  return catalogue.find((entry) => entry.id === id) ?? { id, group: "Other", label: id, description: "", reserved: false };
+  return catalogue.find((entry) => entry.id === id) ?? { id, group: t("common.other"), label: id, description: "", reserved: false };
 }
 
 /** Every catalogue permission in catalogue order (which is grouped), then any id a role holds that the catalogue lacks. */
@@ -41,7 +42,7 @@ export function permissionRows(catalogue: readonly PermissionInfo[], roles: read
 export const ROLE_ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
 
 /** The tooltip of the id field. */
-export const ROLE_ID_HINT = "It names the role in the API and cannot change later.";
+export const ROLE_ID_HINT = t("access.namesRoleAPICannot");
 
 /** What each text field of the role form takes, the same in every skin: the API's limits (name 40, id 32, description 200) and the model's setters. */
 export function roleFormFields(model: RoleEditorModel) {
@@ -70,23 +71,23 @@ export function defaultRoleChoice(roles: readonly Role[], value: string | null, 
   const options = defaultRoleOptions(roles);
   const current = value ?? "";
   if (options.some((option) => option.value === current)) return { value: current, options, disabled };
-  return { value: current, options: [{ value: current, label: roles.find((role) => role.id === current)?.name ?? (current || "Loading roles…") }], disabled: true };
+  return { value: current, options: [{ value: current, label: roles.find((role) => role.id === current)?.name ?? (current || t("access.loadingRoles")) }], disabled: true };
 }
 
 /** Why a role cannot be edited, or null. The API's `editable` decides; the words only say why. */
 export function roleEditRefusal(role: Role): string | null {
   if (role.editable) return null;
-  return role.protected ? "This role cannot be changed." : "You cannot change this role.";
+  return role.protected ? t("access.roleCannotChanged") : t("access.cannotChangeRole");
 }
 
 /** Why a role cannot be deleted, or null. The API's `deletable` decides; the words only say why. */
 export function roleDeleteRefusal(role: Role, defaultRoleId: string | null = null): string | null {
   if (role.deletable) return null;
-  if (role.protected) return "This role cannot be deleted.";
-  if (role.builtIn) return "A built-in role cannot be deleted.";
-  if (role.id === defaultRoleId) return "This is the default role. Choose another first.";
-  if (role.holders > 0) return `${role.holders} ${role.holders === 1 ? "person holds" : "people hold"} this role. Move them first.`;
-  return "You cannot delete this role.";
+  if (role.protected) return t("access.roleCannotDeleted");
+  if (role.builtIn) return t("error.role_built_in");
+  if (role.id === defaultRoleId) return t("access.defaultRoleChooseAnother");
+  if (role.holders > 0) return t("access.holdersMoveFirst", { count: role.holders });
+  return t("access.cannotDeleteRole");
 }
 
 /** One permission the editor draws: the catalogue's words and whether the caller may change it. */

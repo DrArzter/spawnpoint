@@ -7,6 +7,7 @@ import { relativeTime } from "./Ago";
 import { ActionButton } from "./ActionButton";
 import { useNow } from "./Flashbar";
 import { IconButton } from "./IconButton";
+import { t } from "../../../i18n";
 
 /*
  * The frame: the top bar, the rail at 760px and up, the bottom bar under it.
@@ -30,9 +31,9 @@ export function frameItems(model: ShellModel): FrameItem[] {
   });
   const pages = model.navigation.filter((item) => item.id !== "profile").map(nav);
   return [
-    ...(home ? [{ key: "home", label: "Home", href: home.href, current: home.current }] : []),
+    ...(home ? [{ key: "home", label: t("shell.home"), href: home.href, current: home.current }] : []),
     ...pages,
-    { key: "profile", label: "Profile", href: "#/profile", current: model.page === "profile", divider: !pages.some((item) => item.key === "access") },
+    { key: "profile", label: t("common.profile"), href: "#/profile", current: model.page === "profile", divider: !pages.some((item) => item.key === "access") },
   ];
 }
 
@@ -56,14 +57,14 @@ function NavLink({ item, place }: Readonly<{ item: FrameItem; place: "rail" | "b
         <span className="c-nav-glyph" style={{ viewTransitionName: `c-${place}-${item.key}` }}><Icon name={icons[item.key] ?? "chevron_right"} size={22} /></span>
       </span>
       <span className="c-nav-label">{item.label}</span>
-      {item.badge !== undefined && <span aria-label={`${item.badge} requests`} className="c-badge" data-layer="glyph">{item.badge}</span>}
+      {item.badge !== undefined && <span aria-label={t("shell.badgeRequests", { badge: item.badge })} className="c-badge" data-layer="glyph">{item.badge}</span>}
     </a>
   );
 }
 
 export function Rail({ model }: Readonly<{ model: ShellModel }>) {
   return (
-    <nav aria-label="Main navigation" className="c-rail">
+    <nav aria-label={t("shell.mainNavigation")} className="c-rail">
       {frameItems(model).map((item) => (
         <span className="c-rail-slot" key={item.key}>
           {item.divider && <hr className="c-rail-divider" />}
@@ -76,7 +77,7 @@ export function Rail({ model }: Readonly<{ model: ShellModel }>) {
 
 export function BottomBar({ model }: Readonly<{ model: ShellModel }>) {
   return (
-    <nav aria-label="Main navigation" className="c-bottom">
+    <nav aria-label={t("shell.mainNavigation")} className="c-bottom">
       {frameItems(model).map((item) => <NavLink item={item} key={item.key} place="bottom" />)}
     </nav>
   );
@@ -89,8 +90,8 @@ function Refreshed({ model }: Readonly<{ model: ShellModel }>) {
   const ago = relativeTime(model.observedAtIso, now);
   return (
     <span className="c-refreshed">
-      <span className="c-refreshed-text"><Icon name="schedule" size={17} /><span>Refreshed {ago}</span></span>
-      <ActionButton action={{ ...refresh, label: `Refresh · Refreshed ${ago}` }} className="c-band-btn" iconOnly />
+      <span className="c-refreshed-text"><Icon name="schedule" size={17} /><span>{t("shell.refreshedAgo", { ago })}</span></span>
+      <ActionButton action={{ ...refresh, label: t("shell.refreshRefreshedAgo", { ago }) }} className="c-band-btn" iconOnly />
     </span>
   );
 }
@@ -107,14 +108,14 @@ export function TopBar({ model, scope, onSearch }: Readonly<{ model: ShellModel;
       <span className="c-topbar-gap" />
       <button aria-keyshortcuts="Control+K Meta+K /" className="c-search" onClick={onSearch} type="button">
         <Icon name="search" size={18} />
-        <span className="c-search-text">Search</span>
+        <span className="c-search-text">{t("shell.search")}</span>
         <kbd>Ctrl K</kbd>
       </button>
-      <IconButton className="c-search-icon" icon="search" label="Search" onClick={onSearch} tone="band" />
+      <IconButton className="c-search-icon" icon="search" label={t("shell.search")} onClick={onSearch} tone="band" />
       <Refreshed model={model} />
       {/* The Owner's assistant opens over any page (ADR-0096). */}
       {model.assistant && <IconButton data-action={model.assistant.open.id} icon="bolt" label={model.assistant.open.label} onClick={model.assistant.open.run} tone="band" />}
-      {model.demo && <span className="c-demo">Demo</span>}
+      {model.demo && <span className="c-demo">{t("shell.demo")}</span>}
       <button aria-label={model.openProfile.label} className="c-account" data-action={model.openProfile.id} data-tip={model.viewer.displayName} onClick={model.openProfile.run} type="button">
         <Avatar name={model.viewer.displayName} photoUrl={model.viewer.photoUrl} size="md" />
       </button>

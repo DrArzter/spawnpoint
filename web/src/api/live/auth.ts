@@ -2,6 +2,7 @@ import { describeProviderSignInFailure, describeRegistrationFailure, describeSig
 import { ApiError, type AccountProfile, type AuthState, type LinkedLoginAccounts, type LoginOptions, type SpawnpointApi, type SpawnpointSession } from "../contract";
 import { request } from "./request";
 import { apiUrl, refreshBrowserSession } from "./transport";
+import { t } from "../../i18n";
 
 const LEGACY_TOKEN_KEY = "spawnpoint.auth.session";
 export const telegramOidcClientId = (import.meta.env.VITE_TELEGRAM_OIDC_CLIENT_ID ?? "").trim();
@@ -34,8 +35,8 @@ function loginPayloadFromQuery(): Record<string, string> | null {
 type FailureDescription = (status: number, code: string | undefined) => string;
 
 async function exchangeLogin(path: string, body: unknown, describe: FailureDescription): Promise<void> {
-  const result = await request<{ authenticated?: unknown }>(path, { method: "POST", body, renew: false, failure: "Sign-in did not complete. Try again.", describe });
-  if (result.authenticated !== true) throw new ApiError("failed", "Spawnpoint did not create a valid session.");
+  const result = await request<{ authenticated?: unknown }>(path, { method: "POST", body, renew: false, failure: t("signin.signInDidNotComplete"), describe });
+  if (result.authenticated !== true) throw new ApiError("failed", t("signin.spawnpointDidNotCreate"));
 }
 
 function exchangeTelegram(body: { idToken: string } | { login: Record<string, string> } | { initData: string }): Promise<void> {
@@ -46,7 +47,7 @@ async function sessionFromProviderToken(provider: "telegram" | "google", label: 
   try {
     return await sessionFromLogin(`/auth/${provider}`, { idToken }, (status, code) => describeProviderSignInFailure(label, status, code));
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : `${label} sign-in failed.` };
+    return { status: "error", message: error instanceof Error ? error.message : t("signin.labelSignInFailed", { label }) };
   }
 }
 
@@ -69,7 +70,7 @@ function accountProfile(profile: Partial<AccountProfile>): AccountProfile {
 }
 
 async function loadSession(): Promise<SpawnpointSession> {
-  const parsed = await request<SpawnpointSession & { capabilities?: readonly string[] }>("/session", { renew: false, failure: "Your Spawnpoint session expired.", describe: () => "Your Spawnpoint session expired." });
+  const parsed = await request<SpawnpointSession & { capabilities?: readonly string[] }>("/session", { renew: false, failure: t("signin.spawnpointSessionExpired"), describe: () => t("signin.spawnpointSessionExpired") });
   if (parsed.state === "active") return { ...parsed, capabilities: parsed.capabilities ?? [], profile: accountProfile(parsed.profile) };
   return { ...parsed, candidate: { ...accountProfile(parsed.candidate), displayName: parsed.candidate.displayName, status: parsed.candidate.status } };
 }
@@ -84,7 +85,7 @@ async function restoreLogin(login: Record<string, string>): Promise<AuthState> {
     clearLegacyTokens();
     return { status: "authenticated", session: await loadSession() };
   } catch (error) {
-    return authError(error, "Telegram sign-in failed.");
+    return authError(error, t("signin.telegramSignInFailed"));
   } finally {
     clearLoginQuery();
   }
@@ -108,16 +109,16 @@ async function restoreMiniApp(initData: string): Promise<AuthState> {
     await exchangeTelegram({ initData });
     return { status: "authenticated", session: await loadSession() };
   } catch (error) {
-    return authError(error, "Telegram Mini App sign-in failed.");
+    return authError(error, t("signin.telegramMiniAppSignIn"));
   }
 }
 
 async function linkProofAccount(provider: "telegram" | "google", label: string, idToken: string): Promise<void> {
   await request<unknown>(`/me/accounts/${provider}`, {
-    method: "POST", body: { idToken }, failure: `${label} could not verify or link this account.`,
+    method: "POST", body: { idToken }, failure: t("signin.labelCouldNotVerify", { label }),
     refusals: {
-      account_already_linked: `This ${label} account already belongs to another Spawnpoint identity.`,
-      provider_already_linked: `This Spawnpoint identity already has a ${label} account.`,
+      account_already_linked: t("signin.labelAccountAlreadyBelongs", { label }),
+      provider_already_linked: t("signin.spawnpointIdentityAlreadyHas", { label }),
     },
   });
 }
@@ -136,7 +137,7 @@ export const authApi = {
 
   async loadLoginOptions(): Promise<LoginOptions> {
     try {
-      const body = await request<{ providers?: unknown; selfRegistration?: unknown; emailActions?: unknown }>("/auth/providers", { renew: false, failure: "Sign-in options could not be loaded." });
+      const body = await request<{ providers?: unknown; selfRegistration?: unknown; emailActions?: unknown }>("/auth/providers", { renew: false, failure: t("signin.signInOptionsCouldNot") });
       return {
         providers: Array.isArray(body.providers) ? body.providers.filter(isLoginProviderId) : ["telegram"],
         selfRegistration: Array.isArray(body.selfRegistration) ? body.selfRegistration.filter(isLoginProviderId) : [],
@@ -154,37 +155,37 @@ export const authApi = {
   async registerWithPassword(email: string, password: string, displayName: string, invitationToken?: string) {
     const body = await request<{ result?: unknown; email?: unknown }>("/auth/password/register", {
       method: "POST", renew: false, body: { email, password, displayName, ...(invitationToken ? { invitationToken } : {}) },
-      failure: "The account could not be created. Try again.", describe: describeRegistrationFailure,
+      failure: t("signin.accountCouldNotCreated"), describe: describeRegistrationFailure,
     });
-    if (body.result !== "verification_sent" || typeof body.email !== "string") throw new ApiError("failed", "Spawnpoint returned an invalid registration response.");
+    if (body.result !== "verification_sent" || typeof body.email !== "string") throw new ApiError("failed", t("signin.spawnpointReturnedInvalidRegistration"));
     return { result: "verification_sent" as const, email: body.email };
   },
 
   async resendEmailVerification(email: string, invitationToken?: string): Promise<void> {
     await request<unknown>("/auth/email/verification/resend", {
-      method: "POST", renew: false, body: { email, ...(invitationToken ? { invitationToken } : {}) }, failure: "A new verification email could not be sent.",
+      method: "POST", renew: false, body: { email, ...(invitationToken ? { invitationToken } : {}) }, failure: t("signin.newVerificationEmailCould"),
     });
   },
 
-  verifyEmail: (token: string) => sessionFromLogin("/auth/email/verification", { token }, () => "This verification link is invalid, expired, or has already been used."),
+  verifyEmail: (token: string) => sessionFromLogin("/auth/email/verification", { token }, () => t("signin.verificationLinkInvalidExpired")),
 
   async requestPasswordReset(email: string): Promise<void> {
-    await request<unknown>("/auth/password/forgot", { method: "POST", renew: false, body: { email }, failure: "The reset request could not be sent." });
+    await request<unknown>("/auth/password/forgot", { method: "POST", renew: false, body: { email }, failure: t("signin.resetRequestCouldNot") });
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
     await request<unknown>("/auth/password/reset", {
-      method: "POST", renew: false, body: { token, password }, failure: "The password could not be reset. Try again.", describe: describeRegistrationFailure,
+      method: "POST", renew: false, body: { token, password }, failure: t("signin.passwordCouldNotReset"), describe: describeRegistrationFailure,
     });
   },
 
   async revokeSession(): Promise<void> {
     clearLegacyTokens();
-    await request<unknown>("/auth/logout", { method: "POST", renew: false, failure: "Sign-out could not be confirmed." }).catch(() => undefined);
+    await request<unknown>("/auth/logout", { method: "POST", renew: false, failure: t("signin.signOutCouldNotConfirmed") }).catch(() => undefined);
   },
 
   async loadLinkedAccounts(): Promise<LinkedLoginAccounts> {
-    const body = await request<Partial<LinkedLoginAccounts>>("/me/accounts", { failure: "Linked sign-in accounts could not be loaded." });
+    const body = await request<Partial<LinkedLoginAccounts>>("/me/accounts", { failure: t("signin.linkedSignInAccountsCould") });
     return {
       accounts: body.accounts ?? [],
       linkableProviders: body.linkableProviders ?? [],
@@ -197,25 +198,25 @@ export const authApi = {
 
   async linkPassword(email: string, password: string, displayName: string): Promise<void> {
     await request<unknown>("/me/password", {
-      method: "POST", body: { email, password, displayName }, failure: "The account could not be created. Try again.", describe: describeRegistrationFailure,
+      method: "POST", body: { email, password, displayName }, failure: t("signin.accountCouldNotCreated"), describe: describeRegistrationFailure,
     });
   },
 
   async changePassword(email: string, currentPassword: string, password: string): Promise<void> {
     await request<unknown>("/me/password/change", {
-      method: "POST", body: { email, currentPassword, password }, failure: "The password could not be changed. Try again.",
-      describe: (status, code) => status === 401 ? "The current password is not correct." : describeRegistrationFailure(status, code),
+      method: "POST", body: { email, currentPassword, password }, failure: t("signin.passwordCouldNotChanged"),
+      describe: (status, code) => status === 401 ? t("error.invalid_current_password") : describeRegistrationFailure(status, code),
     });
   },
 
   async uploadAvatar(image: string): Promise<string> {
     const body = await request<{ photoUrl: string }>("/me/avatar", {
-      method: "POST", body: { image }, failure: "The picture could not be saved. Try again.", valid: (answer) => typeof answer?.photoUrl === "string",
+      method: "POST", body: { image }, failure: t("signin.pictureCouldNotSaved"), valid: (answer) => typeof answer?.photoUrl === "string",
     });
     return body.photoUrl;
   },
 
   async removeAvatar(): Promise<void> {
-    await request<unknown>("/me/avatar/delete", { method: "POST", failure: "The picture could not be removed. Try again." });
+    await request<unknown>("/me/avatar/delete", { method: "POST", failure: t("signin.pictureCouldNotRemoved") });
   },
 } satisfies Partial<SpawnpointApi>;

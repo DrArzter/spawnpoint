@@ -7,6 +7,7 @@ import { Icon } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { actionTip } from "./ActionButton";
 import { useToast } from "./Toast";
+import { t } from "../../../i18n";
 
 export type MenuGroup = Readonly<{ label?: string; actions: readonly Action[] }>;
 
@@ -90,7 +91,7 @@ export function Menu({ id, label, groups, open, anchor, onClose, side = "bottom"
               {action.icon && <Icon name={action.icon} size={20} />}
               <span className="c-menu-text">{action.label}</span>
               {action.detail && <span className="c-menu-end">{action.detail}</span>}
-              {action.disabled && action.hint && <span className="c-sr">, unavailable: {action.hint}</span>}
+              {action.disabled && action.hint && <span className="c-sr">{t("ui.unavailableBecause", { reason: action.hint })}</span>}
             </button>
           ))}
         </div>

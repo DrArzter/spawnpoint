@@ -1,4 +1,5 @@
 import type { ControlPlaneSnapshot, Game, Host, Operation, ServerState, World, WorldSession } from "./model";
+import { t } from "./i18n";
 
 export type SharedHostSession = Readonly<{
   state: ServerState;
@@ -139,25 +140,25 @@ export function sessionReason(session: SharedHostSession, game: Game | undefined
   const lifecycle = game?.lifecycle;
   const owner = sharedSessionOwnerLabel(session);
   const mine = world !== undefined && game !== undefined && worldOwnsSharedSession(session, game, world);
-  const subject = mine ? "this world" : owner;
+  const subject = mine ? t("world.world") : owner;
   const detail = lifecycle
-    ? `Spawnpoint asked for ${lifecycle.desiredState}. The host reports ${lifecycle.observedState}.`
-    : "No lifecycle record for this game.";
+    ? t("world.spawnpointAskedDesiredStateHost", { desiredState: lifecycle.desiredState, observedState: lifecycle.observedState })
+    : t("world.noLifecycleRecordGame");
 
   if (session.recoveryPending) {
-    return { text: "The host stopped without being asked. Spawnpoint is reconciling the session record.", detail, attention: true };
+    return { text: t("world.hostStoppedWithoutBeing"), detail, attention: true };
   }
   switch (session.state) {
     case "starting":
-      return { text: subject ? `Starting ${subject}` : "Starting a session", detail, attention: false };
+      return { text: subject ? t("world.startingSubject", { subject }) : t("world.startingSession2"), detail, attention: false };
     case "stopping":
-      return { text: subject ? `Stopping ${subject}` : "Stopping the session", detail, attention: false };
+      return { text: subject ? t("world.stoppingSubject", { subject }) : t("world.stoppingSession2"), detail, attention: false };
     case "running":
-      return { text: subject ? `The host is up for ${subject}` : "The host is up, but no world claims the session", detail, attention: subject === null };
+      return { text: subject ? t("world.hostUpSubject", { subject }) : t("world.hostUpButNo"), detail, attention: subject === null };
     case "stopped":
-      return { text: "Nothing is running. The host starts when somebody starts a world.", detail, attention: false };
+      return { text: t("world.nothingRunningHostStarts"), detail, attention: false };
     default:
-      return { text: "Spawnpoint cannot prove what the host is doing.", detail, attention: true };
+      return { text: t("world.spawnpointCannotProveWhat"), detail, attention: true };
   }
 }
 

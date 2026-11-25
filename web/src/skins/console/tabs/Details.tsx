@@ -8,6 +8,7 @@ import { Grid } from "../ui/Grid";
 import { TrackList, TrackTitle } from "../ui/TrackList";
 import { RunningTime } from "../ui/Flashbar";
 import { OperationProgress } from "../OperationProgress";
+import { t } from "../../../i18n";
 
 /** The overflow items the World card draws instead of the header menu. */
 export const CARD_ACTIONS: readonly string[] = ["world.settings", "world.game-settings"];
@@ -36,19 +37,19 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
     <>
       <Grid kind="detail">
         <SessionSlot details={session} live={live} model={model} />
-        <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} iconOnly={phone} key={item.id} size="sm" />) : undefined} body="kv" title="World">
+        <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} iconOnly={phone} key={item.id} size="sm" />) : undefined} body="kv" title={t("common.world")}>
           <DetailList columns="two" details={activeOnly(model.worldDetails)} omit={omit} />
         </Card>
       </Grid>
       {model.operations.length > 0 && (
-        <Card body="flush" count={model.operations.length} title="Operations">
+        <Card body="flush" count={model.operations.length} title={t("common.operations")}>
           <TrackList
-            label="Operations"
+            label={t("common.operations")}
             rowKey={(row) => row.operation.id}
             rows={model.operations}
             tracks={[
-              { id: "operation", header: "Operation", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle line={<span className="c-mono">{row.operation.id}</span>} title={row.label} /> },
-              { id: "running", header: "Running for", width: "auto", kind: "num", render: (row) => <RunningTime expectation={row.operation} since={row.operation.startedAt} /> },
+              { id: "operation", header: t("common.operation"), width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle line={<span className="c-mono">{row.operation.id}</span>} title={row.label} /> },
+              { id: "running", header: t("common.running2"), width: "auto", kind: "num", render: (row) => <RunningTime expectation={row.operation} since={row.operation.startedAt} /> },
             ]}
           />
         </Card>
@@ -60,6 +61,6 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
 /** The session's place: the operation that holds it, else the live session, else a boxed "No session". */
 function SessionSlot({ model, live, details }: Readonly<{ model: WorldModel; live: boolean | undefined; details: readonly Detail[] }>) {
   if (model.progress) return <OperationProgress model={model.progress} />;
-  if (live === false) return <Card title="Session"><Empty icon="power_settings_new" size="sm" title="No session" /></Card>;
-  return details.length > 0 ? <Card body="kv" title="Session"><DetailList columns="two" details={details} /></Card> : null;
+  if (live === false) return <Card title={t("world.session")}><Empty icon="power_settings_new" size="sm" title={t("world.noSession")} /></Card>;
+  return details.length > 0 ? <Card body="kv" title={t("world.session")}><DetailList columns="two" details={details} /></Card> : null;
 }

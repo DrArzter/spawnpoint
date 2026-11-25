@@ -24,6 +24,7 @@ import { PageHeader } from "./ui/PageHeader";
 import { SidePanel } from "./ui/SidePanel";
 import { useToast } from "./ui/Toast";
 import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
+import { t } from "../../i18n";
 
 // Profile: the name, its role and its id at the start, the verbs at the end edge; the skin's only theme control.
 export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
@@ -39,17 +40,17 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
           <>
           {role && <Chip icon="shield_person">{role.name}</Chip>}
           <span className="c-profile-id">
-            <span className="c-mono c-faint" data-tip="Identity ID" tabIndex={0 /* NOSONAR focusable tooltip trigger */}>{member.id}</span>
-            <Copy value={member.id} what="identity ID" />
+            <span className="c-mono c-faint" data-tip={t("profile.identityID")} tabIndex={0 /* NOSONAR focusable tooltip trigger */}>{member.id}</span>
+            <Copy value={member.id} what={t("profile.identityID2")} />
           </span>
           </>
         )}
-        lead={<Overflow actions={avatarActions(model.avatar)} avatar={{ name: member.name, photoUrl: viewer.photoUrl, size: "lg" }} label="Change your picture" />}
+        lead={<Overflow actions={avatarActions(model.avatar)} avatar={{ name: member.name, photoUrl: viewer.photoUrl, size: "lg" }} label={t("profile.changePicture")} />}
         title={member.name}
       />
       <Grid kind="profile">
         <SignInMethods model={model.loginAccounts} />
-        <Appearance look={model.look} model={model.appearance} />
+        <Appearance language={model.language} look={model.look} model={model.appearance} />
       </Grid>
       {model.loginAccounts.form && <PasswordPanel form={model.loginAccounts.form} />}
     </div>
@@ -61,39 +62,46 @@ function avatarActions(model: AvatarModel): readonly Action[] {
 }
 
 const THEMES: readonly { value: ThemePreference; label: string; icon: IconName }[] = [
-  { value: "light", label: "Light", icon: "light_mode" },
-  { value: "dark", label: "Dark", icon: "dark_mode" },
-  { value: "system", label: "System", icon: "contrast" },
+  { value: "light", label: t("profile.light"), icon: "light_mode" },
+  { value: "dark", label: t("profile.dark"), icon: "dark_mode" },
+  { value: "system", label: t("profile.system"), icon: "contrast" },
 ];
 
-function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: LookModel }>) {
+function Appearance({ model, look, language }: Readonly<{ model: AppearanceModel; look: LookModel; language: LookModel }>) {
   const toast = useToast();
   const choose = (next: ThemePreference) => {
-    model.setPreference(next).catch((error: unknown) => toast(error instanceof Error ? error.message : "The theme could not be saved.", "err"));
+    model.setPreference(next).catch((error: unknown) => toast(error instanceof Error ? error.message : t("profile.themeCouldNotSaved"), "err"));
   };
   // The iris is the face's own accent; a colour picked here overrides it until Reset.
   const pick = (next: string) => {
     if (parseHex(next) === null) return;
-    model.setAccent(next.trim().toLowerCase()).catch((error: unknown) => toast(error instanceof Error ? error.message : "The accent could not be saved.", "err"));
+    model.setAccent(next.trim().toLowerCase()).catch((error: unknown) => toast(error instanceof Error ? error.message : t("profile.accentCouldNotSaved"), "err"));
   };
   const chosen = model.accent.toLowerCase() !== DEFAULT_ACCENT;
   // Without a pick the well shows what the console draws: its own iris.
   const shown = chosen && parseHex(model.accent) ? model.accent : IRIS;
-  const reset = action("appearance.accent.reset", "Reset", () => pick(DEFAULT_ACCENT), { icon: "restore", disabled: !chosen, hint: chosen ? undefined : "The default accent is in use" });
+  const reset = action("appearance.accent.reset", t("profile.reset"), () => pick(DEFAULT_ACCENT), { icon: "restore", disabled: !chosen, hint: chosen ? undefined : t("profile.defaultAccentUse") });
   return (
-    <Card title="Appearance">
+    <Card title={t("profile.appearance")}>
       <div className="c-profile-settings">
-        <RadioCards legend="Theme" name="theme" onChange={choose} options={THEMES} value={model.preference} />
+        <RadioCards legend={t("profile.theme")} name="theme" onChange={choose} options={THEMES} value={model.preference} />
         {look.options.length > 0 && (
           <RadioCards
-            legend="Look"
+            legend={t("profile.look")}
             name="look"
             onChange={() => undefined}
             options={look.options.map((option) => ({ value: option.id, label: option.name, action: option.choose }))}
             value={look.current}
           />
         )}
-        <Field label="Accent">
+        <RadioCards
+          legend={t("profile.language")}
+          name="language"
+          onChange={() => undefined}
+          options={language.options.map((option) => ({ value: option.id, label: option.name, action: option.choose }))}
+          value={language.current}
+        />
+        <Field label={t("profile.accent")}>
           <span className="c-profile-accent">
             <ColourInput onChange={(event) => pick(event.target.value)} value={shown} />
             <ActionButton action={reset} size="sm" />
@@ -105,7 +113,7 @@ function Appearance({ model, look }: Readonly<{ model: AppearanceModel; look: Lo
 }
 
 const providers: Readonly<Record<string, { label: string; icon: IconName }>> = {
-  password: { label: "Email", icon: "mail" },
+  password: { label: t("common.email"), icon: "mail" },
   telegram: { label: "Telegram", icon: "send" },
   google: { label: "Google", icon: "account_circle" },
   discord: { label: "Discord", icon: "group" },
@@ -126,7 +134,7 @@ type MethodRow = Readonly<{
 
 /** The provider's own sign-in widget for a method not linked yet; none for a provider without one. */
 function linkWidget(id: string, model: LoginAccountsModel): ReactNode {
-  if (id === "telegram" && model.connectTelegram) return <TelegramLoginButton label="Link" onToken={model.connectTelegram} variant="outlined" />;
+  if (id === "telegram" && model.connectTelegram) return <TelegramLoginButton label={t("profile.link")} onToken={model.connectTelegram} variant="outlined" />;
   if (id === "google" && model.connectGoogle) return <GoogleLoginButton onToken={model.connectGoogle} />;
   return undefined;
 }
@@ -149,12 +157,12 @@ function methodRows(model: LoginAccountsModel, accounts: readonly LinkedLoginAcc
 }
 
 function accountText(account: LinkedLoginAccount | null): ReactNode {
-  if (!account) return <span className="c-faint">Not linked</span>;
+  if (!account) return <span className="c-faint">{t("profile.notLinked")}</span>;
   const text = account.email ?? (account.username ? `@${account.username}` : account.displayName ?? "");
   return (
     <span className="c-profile-account">
       <span className="c-profile-account-text" title={text}>{text}</span>
-      {!account.verified && <Indicator status={{ kind: "pending", label: "Pending verification" }} />}
+      {!account.verified && <Indicator status={{ kind: "pending", label: t("common.pendingVerification") }} />}
     </span>
   );
 }
@@ -165,7 +173,7 @@ function RowActions({ row }: Readonly<{ row: MethodRow }>) {
     <span className="c-profile-row-actions">
       {row.widget}
       {first && <ActionButton action={first} size="sm" />}
-      {rest.length > 0 && <Overflow actions={rest} label={`More for ${provider(row.provider).label}`} size="sm" />}
+      {rest.length > 0 && <Overflow actions={rest} label={t("common.moreLabel", { label: provider(row.provider).label })} size="sm" />}
     </span>
   );
 }
@@ -173,7 +181,7 @@ function RowActions({ row }: Readonly<{ row: MethodRow }>) {
 const tracks: readonly Track<MethodRow>[] = [
   {
     id: "method",
-    header: "Method",
+    header: t("profile.method"),
     width: "minmax(140px, auto)",
     compactWidth: "minmax(0, 1fr)",
     kind: "stack",
@@ -183,38 +191,38 @@ const tracks: readonly Track<MethodRow>[] = [
       return <TrackTitle compactLine={accountText(row.account)} title={<span className="c-profile-method"><Icon name={look.icon} size={18} />{look.label}</span>} />;
     },
   },
-  { id: "account", header: "Account", width: "minmax(0, 1fr)", kind: "optional", render: (row) => accountText(row.account) },
-  { id: "action", header: "Action", width: "auto", kind: "end", quietHeader: true, render: (row) => <RowActions row={row} /> },
+  { id: "account", header: t("common.account"), width: "minmax(0, 1fr)", kind: "optional", render: (row) => accountText(row.account) },
+  { id: "action", header: t("common.action"), width: "auto", kind: "end", quietHeader: true, render: (row) => <RowActions row={row} /> },
 ];
 
 function SignInMethods({ model }: Readonly<{ model: LoginAccountsModel }>) {
   const accounts = model.accounts;
   return (
-    <Card body="flush" title="Sign-in methods">
-      {accounts.status === "error" && <LoadError error={accounts.error} kind={accounts.kind} retry={accounts.retry} title="Sign-in methods could not be loaded" verb="read sign-in methods" />}
-      {accounts.status !== "error" && <TrackList label="Sign-in methods" loading={accounts.status === "loading"} rowKey={(row) => row.key} rows={accounts.status === "ready" ? methodRows(model, accounts.value) : []} tracks={tracks} />}
+    <Card body="flush" title={t("profile.signInMethods")}>
+      {accounts.status === "error" && <LoadError error={accounts.error} kind={accounts.kind} retry={accounts.retry} title={t("profile.signInMethodsCouldNot")} verb={t("profile.readSignInMethods")} />}
+      {accounts.status !== "error" && <TrackList label={t("profile.signInMethods")} loading={accounts.status === "loading"} rowKey={(row) => row.key} rows={accounts.status === "ready" ? methodRows(model, accounts.value) : []} tracks={tracks} />}
     </Card>
   );
 }
 
 function PasswordPanel({ form }: Readonly<{ form: NonNullable<LoginAccountsModel["form"]> }>) {
-  const length = `${PASSWORD_MINIMUM_LENGTH} to ${PASSWORD_MAXIMUM_LENGTH} characters`;
+  const length = t("profile.pASSWORDMINIMUMLENGTHPASSWORD", { PASSWORD_MINIMUM_LENGTH, PASSWORD_MAXIMUM_LENGTH });
   return (
-    <SidePanel actions={<ActionButton action={form.submit} variant="primary" />} cancel={form.cancel} title={form.kind === "add" ? "Add email and password" : "Change password"}>
+    <SidePanel actions={<ActionButton action={form.submit} variant="primary" />} cancel={form.cancel} title={form.kind === "add" ? t("profile.addEmailPassword") : t("common.changePassword")}>
       {form.kind === "add" && (
-        <Field label="Email">
+        <Field label={t("common.email")}>
           <TextInput autoComplete="email" disabled={form.busy} inputMode="email" onChange={(event) => form.setEmail(event.target.value)} required type="email" value={form.email} />
         </Field>
       )}
       {form.kind === "change" && (
-        <Field label="Current password">
+        <Field label={t("profile.currentPassword")}>
           <TextInput autoComplete="current-password" disabled={form.busy} maxLength={PASSWORD_MAXIMUM_LENGTH} onChange={(event) => form.setCurrentPassword(event.target.value)} required type="password" value={form.currentPassword} />
         </Field>
       )}
-      <Field label="New password">
+      <Field label={t("common.newPassword")}>
         <TextInput autoComplete="new-password" data-tip={length} disabled={form.busy} maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => form.setPassword(event.target.value)} required type="password" value={form.password} />
       </Field>
-      <Field label="Confirm password">
+      <Field label={t("profile.confirmPassword")}>
         <TextInput autoComplete="new-password" disabled={form.busy} maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => form.setConfirmation(event.target.value)} required type="password" value={form.confirmation} />
       </Field>
       {form.error && <Notice notice={{ id: "password-error", tone: "error", title: form.error }} />}

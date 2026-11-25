@@ -7,6 +7,7 @@ import type { Operation } from "../model";
 import type { Detail, DetailValue, HostLogRow, OperationProgressModel } from "./models";
 import type { StatusDescriptor } from "./status";
 import { operationLabel } from "./worlds";
+import { intlLocale, t } from "../i18n";
 
 /*
  * How far a running world operation has come. The page lists running
@@ -21,21 +22,21 @@ export const MAX_FAILURES = 3;
 
 /** The words of the rows, in one place. */
 export const PROGRESS_LABELS = {
-  step: "Step",
-  child: "Sub-step",
-  elapsed: "Elapsed",
-  expected: "Expected",
-  error: "Error",
-  cause: "Cause",
-  caught: "Caught",
-  caughtCause: "Caught cause",
-  caughtAt: "Caught at",
+  step: t("operation.step"),
+  child: t("operation.subStep"),
+  elapsed: t("operation.elapsed"),
+  expected: t("operation.expected"),
+  error: t("operation.error"),
+  cause: t("operation.cause"),
+  caught: t("operation.caught"),
+  caughtCause: t("operation.caughtCause"),
+  caughtAt: t("operation.caught2"),
 } as const;
 
 const failureStatus: Readonly<Record<string, StatusDescriptor>> = {
-  failed: { kind: "error", label: "Failed" },
-  timed_out: { kind: "error", label: "Timed out" },
-  aborted: { kind: "error", label: "Aborted" },
+  failed: { kind: "error", label: t("common.failed") },
+  timed_out: { kind: "error", label: t("common.timedOut") },
+  aborted: { kind: "error", label: t("operation.aborted") },
 };
 
 /** The newest running operation that names this world. */
@@ -54,9 +55,9 @@ export function endedBadly(progress: OperationProgress): boolean {
 }
 
 function statusOf(progress: OperationProgress): StatusDescriptor {
-  if (progress.status === "running") return { kind: "progress", label: "Running" };
-  if (progress.status === "succeeded") return endedBadly(progress) ? { kind: "warning", label: "Rolled back" } : { kind: "ok", label: "Done" };
-  return failureStatus[progress.status] ?? { kind: "error", label: "Failed" };
+  if (progress.status === "running") return { kind: "progress", label: t("common.running") };
+  if (progress.status === "succeeded") return endedBadly(progress) ? { kind: "warning", label: t("operation.rolledBack") } : { kind: "ok", label: t("common.done") };
+  return failureStatus[progress.status] ?? { kind: "error", label: t("common.failed") };
 }
 
 /** What the page tells: the running operation with what the API knows of it, else one kept after it ended badly. */
@@ -74,7 +75,7 @@ function build(id: string, type: Operation["type"], startedAt: string, expected:
   return {
     id,
     title: operationLabel(type),
-    status: progress === null ? { kind: "progress", label: "Running" } : statusOf(progress),
+    status: progress === null ? { kind: "progress", label: t("common.running") } : statusOf(progress),
     running,
     known: progress !== null,
     nests: type !== "world",
@@ -111,7 +112,7 @@ export function hostLogRows(lines: readonly HostLogLine[]): HostLogRow[] {
 /** The time a log line is printed at: the clock of the person reading it. */
 export function logTime(at: string): string {
   const date = new Date(at);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString("en-GB", { hour12: false });
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString(intlLocale(), { hour12: false });
 }
 
 // While it runs, the step rows keep their place: a placeholder until the API answers, then "—" when there is none.
@@ -144,13 +145,13 @@ export function progressDetails(model: OperationProgressModel, now: number): Det
   if (model.failure !== null) {
     rows.push(
       { label: PROGRESS_LABELS.error, value: text(model.failure.error, { mono: true, wrap: true }) },
-      { label: PROGRESS_LABELS.cause, value: text(model.failure.cause, { wrap: true }) },
+      { key: "cause", label: PROGRESS_LABELS.cause, value: text(model.failure.cause, { wrap: true }) },
     );
   }
   if (model.caught !== null) {
     rows.push(
       { label: PROGRESS_LABELS.caught, value: text(model.caught.error, { mono: true, wrap: true }) },
-      { label: PROGRESS_LABELS.caughtCause, value: text(model.caught.cause, { wrap: true }) },
+      { key: "caught-cause", label: PROGRESS_LABELS.caughtCause, value: text(model.caught.cause, { wrap: true }) },
     );
     if (model.caught.step !== null) rows.push({ label: PROGRESS_LABELS.caughtAt, value: text(model.caught.step) });
   }

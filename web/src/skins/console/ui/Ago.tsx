@@ -1,5 +1,6 @@
 import { formatDateTime, type Instant } from "../../../lib/format";
 import { useNow } from "./Flashbar";
+import { t } from "../../../i18n";
 
 /** Milliseconds since the epoch for a time given as milliseconds or an ISO string; NaN when unknown. */
 export function instantMs(at: Instant): number {
@@ -12,12 +13,12 @@ export function relativeTime(at: Instant, now: number): string {
   const time = instantMs(at);
   if (Number.isNaN(time)) return "";
   const seconds = Math.max(0, Math.round((now - time) / 1000));
-  if (seconds < 45) return "just now";
+  if (seconds < 45) return t("ui.justNow");
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60) return t("ui.minutesMinAgo", { minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} d ago`;
+  if (hours < 48) return t("ui.hoursHAgo", { hours });
+  return t("ui.roundDAgo", { round: Math.round(hours / 24) });
 }
 
 /** A relative time that changes its text once a clock tick, with the full time as its tooltip. */

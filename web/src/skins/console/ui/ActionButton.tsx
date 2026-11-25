@@ -4,6 +4,7 @@ import type { Action } from "../../../core/actions";
 import { Icon, ProgressRing, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { useToast } from "./Toast";
+import { t } from "../../../i18n";
 
 export type ButtonVariant = "primary" | "default" | "danger" | "ghost";
 export type ButtonSize = "md" | "sm";
@@ -60,7 +61,7 @@ export const ActionButton = forwardRef<HTMLButtonElement, Readonly<{ action: Act
         {action.busy ? <ProgressRing className="c-spin" size={18} /> : action.icon && <Icon name={action.icon} size={18} />}
         {!iconOnly && <span>{action.label}</span>}
         {menu && !iconOnly && <Icon className="c-btn-caret" name="expand_more" size={18} />}
-        {refused && action.hint && <span className="c-sr">, unavailable: {action.hint}</span>}
+        {refused && action.hint && <span className="c-sr">{t("ui.unavailableBecause", { reason: action.hint })}</span>}
       </button>
     );
   },

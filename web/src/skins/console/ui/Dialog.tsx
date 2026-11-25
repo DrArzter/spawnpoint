@@ -5,6 +5,7 @@ import { cx } from "../../../lib/cx";
 import { ActionButton } from "./ActionButton";
 import { IconButton } from "./IconButton";
 import { PANEL_MIN_WIDTH, usePanelWidth } from "./panel-width";
+import { t } from "../../../i18n";
 
 const FIRST_FIELD = "input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not(:disabled), select:not(:disabled), textarea:not(:disabled)";
 
@@ -72,13 +73,13 @@ export function DialogFrame({ kind, title, cancel, actions, start, children, cla
     <dialog aria-labelledby={titleId} className={cx(part.root, className)} data-resizing={width.dragging || undefined} ref={ref} style={style}>
       {resizable && (
         <div
-          aria-label="Panel width"
+          aria-label={t("ui.panelWidth")}
           aria-orientation="vertical"
           aria-valuemax={width.max}
           aria-valuemin={PANEL_MIN_WIDTH}
           aria-valuenow={width.width ?? undefined}
           className="c-panel-grip"
-          data-tip="Drag to resize. Double-click to reset."
+          data-tip={t("ui.dragResizeDoubleClickReset")}
           onDoubleClick={width.reset}
           onKeyDown={width.onKeyDown}
           onPointerDown={width.onPointerDown}
@@ -88,7 +89,7 @@ export function DialogFrame({ kind, title, cancel, actions, start, children, cla
       )}
       <div className={part.head}>
         <h2 id={titleId} title={title}>{title}</h2>
-        <IconButton data-action={footer ? undefined : cancel.id} disabled={cancel.disabled} icon="close" label={footer ? "Close" : cancel.label} onClick={close} />
+        <IconButton data-action={footer ? undefined : cancel.id} disabled={cancel.disabled} icon="close" label={footer ? t("common.close") : cancel.label} onClick={close} />
       </div>
       <div className="c-dialog-body">{children}</div>
       {footer && (

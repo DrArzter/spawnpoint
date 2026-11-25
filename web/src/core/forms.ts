@@ -9,6 +9,7 @@ import { releaseBuildCopy } from "./release-builds";
 import { connectionLabel, neverStarted, promotionTargets } from "./worlds";
 import type { ConfirmationModel, ConnectionFieldsModel, ConnectionOption, CreateWorldModel, GameSettingField, GameSettingsModel, WorldPlacement, WorldSettingsModel } from "./models";
 import { effectiveValue, settingDefinitions, settingValueValid } from "./settings";
+import { t } from "../i18n";
 
 /*
  * The forms the console opens over a page. Their drafts live here so a skin
@@ -32,7 +33,7 @@ function offered(placement: WorldPlacement, connectivity: World["connectivity"],
 
 export function connectionOptions(placement: WorldPlacement, dnsAvailable: boolean): readonly ConnectionOption[] {
   return [
-    { value: "zerotier", label: connectionLabel("zerotier"), disabled: placement === "fleet", ...(placement === "fleet" ? { hint: "Fleet hosts do not join ZeroTier" } : {}) },
+    { value: "zerotier", label: connectionLabel("zerotier"), disabled: placement === "fleet", ...(placement === "fleet" ? { hint: t("world.fleetHostsDoNot") } : {}) },
     { value: "raw", label: connectionLabel("raw"), disabled: false },
     ...(dnsAvailable ? [{ value: "route53" as const, label: connectionLabel("route53"), disabled: false }] : []),
   ];
@@ -81,8 +82,8 @@ export function useCreateWorldForm(game: Game, initialPreset: Preset | null, dep
     setRelease,
     connection,
     valid,
-    submit: action("world.create", "Create world", () => { if (preset && valid) opts.onCreate(preset, name.trim(), release, connection.placement, connection.connectivity, connection.auth); }, { icon: "add", disabled: !valid || opts.busy, busy: opts.busy }),
-    cancel: action("sheet.close", "Close panel", opts.onClose),
+    submit: action("world.create", t("common.createWorld"), () => { if (preset && valid) opts.onCreate(preset, name.trim(), release, connection.placement, connection.connectivity, connection.auth); }, { icon: "add", disabled: !valid || opts.busy, busy: opts.busy }),
+    cancel: action("sheet.close", t("common.closePanel"), opts.onClose),
   };
 }
 
@@ -96,8 +97,8 @@ export function useWorldSettingsForm(game: Game, world: World, deployment: Deplo
     stopped,
     connection,
     valid: connection.valid,
-    save: action("world.settings.save", "Save settings", () => opts.onSave(connection.placement, connection.connectivity, connection.auth), { disabled: !connection.valid || !stopped || opts.busy, busy: opts.busy, hint: stopped ? undefined : "Stop this world's session before changing hosting." }),
-    cancel: action("sheet.close", "Cancel", opts.onClose, { disabled: opts.busy }),
+    save: action("world.settings.save", t("world.saveSettings"), () => opts.onSave(connection.placement, connection.connectivity, connection.auth), { disabled: !connection.valid || !stopped || opts.busy, busy: opts.busy, hint: stopped ? undefined : t("world.stopWorldsSessionBefore") }),
+    cancel: action("sheet.close", t("common.cancel"), opts.onClose, { disabled: opts.busy }),
   };
 }
 
@@ -122,15 +123,15 @@ function parsedValue(setting: SettingDefinition, draft: SettingDraft): SettingVa
 }
 
 function saveHint(valid: boolean, changed: boolean): string | undefined {
-  if (!valid) return "Correct the marked settings first.";
-  return changed ? undefined : "Nothing has changed.";
+  if (!valid) return t("world.correctMarkedSettingsFirst");
+  return changed ? undefined : t("world.nothingHasChanged");
 }
 
 function fieldError(setting: SettingDefinition, draft: SettingDraft): string | null {
   if (parsedValue(setting, draft) !== undefined) return null;
-  if (setting.type === "integer") return `A whole number from ${setting.min} to ${setting.max}.`;
-  if (setting.type === "text") return String(draft).length === 0 ? "Required." : `Up to ${setting.maxLength} characters, and only the ones listed.`;
-  return "Not a value this game accepts.";
+  if (setting.type === "integer") return t("world.wholeNumberFromMin", { min: setting.min, max: setting.max });
+  if (setting.type === "text") return String(draft).length === 0 ? t("world.required") : t("world.upMaxLengthCharactersOnly", { maxLength: setting.maxLength });
+  return t("world.notValueGameAccepts");
 }
 
 /**
@@ -180,23 +181,23 @@ export function useGameSettingsForm(game: Game, world: World, opts: Readonly<{ b
     world,
     running: worldSessionActive(game, world),
     fields,
-    save: action("game-settings.save", "Save settings", () => { if (valid && changed) opts.onSave(values); }, {
+    save: action("game-settings.save", t("world.saveSettings"), () => { if (valid && changed) opts.onSave(values); }, {
       disabled: !valid || !changed || opts.busy,
       busy: opts.busy,
       hint: saveHint(valid, changed),
     }),
-    restoreDefaults: action("game-settings.defaults", "Restore defaults", () => setDrafts(Object.fromEntries(definitions.map((setting) => [setting.id, draftOf(setting, setting.default)]))), { disabled: atDefaults || opts.busy }),
-    cancel: action("sheet.close", "Cancel", opts.onClose, { disabled: opts.busy }),
+    restoreDefaults: action("game-settings.defaults", t("world.restoreDefaults"), () => setDrafts(Object.fromEntries(definitions.map((setting) => [setting.id, draftOf(setting, setting.default)]))), { disabled: atDefaults || opts.busy }),
+    cancel: action("sheet.close", t("common.cancel"), opts.onClose, { disabled: opts.busy }),
   };
 }
 
 // What a start does, in one line: a first start also creates the world.
 function startDescription(world: World): string {
-  return world.materialization === "not_created" ? "Creates wipe #1 and starts a billed host." : "Starts a billed host. It may take a few minutes.";
+  return world.materialization === "not_created" ? t("world.createsWipe1Starts") : t("world.startsBilledHostMay");
 }
 
 function playerCount(count: number): string {
-  return count === 1 ? "1 player" : `${count} players`;
+  return t("common.playerCount", { count });
 }
 
 export function confirmationCopy(confirmation: Confirmation): { title: string; description: string; label: string; destructive: boolean } {
@@ -208,47 +209,47 @@ export function confirmationCopy(confirmation: Confirmation): { title: string; d
     case "session":
       return confirmation.action === "start"
         ? {
-          title: "Start a billed AWS session?",
+          title: t("world.startBilledAWSSession"),
           description: startDescription(world),
-          label: "Start session",
+          label: t("world.startSession"),
           destructive: false,
         }
         : confirmation.disconnect !== undefined
           ? {
-            title: `Disconnect ${playerCount(confirmation.disconnect)} and stop?`,
-            description: "Disconnects them, saves and backs up, then stops the host.",
-            label: "Disconnect and stop",
+            title: t("world.disconnectPlayerCountStop", { playerCount: playerCount(confirmation.disconnect) }),
+            description: t("world.disconnectsThemSavesBacks"),
+            label: t("world.disconnectStop"),
             destructive: true,
           }
-          : { title: "Save, back up and stop this session?", description: "Saves and backs up, then stops the host. Refused while players are online.", label: "Stop session", destructive: true };
+          : { title: t("world.saveBackUpStop"), description: t("world.savesBacksUpThen"), label: t("world.stopSession"), destructive: true };
     case "archive":
-      return { title: `Archive ${world.displayName}?`, description: "Stops and backs up, then hides it from session control. Wipes and backups stay.", label: "Archive world", destructive: false };
+      return { title: t("world.archiveWorldDisplayName", { worldDisplayName: world.displayName }), description: t("world.stopsBacksUpThen"), label: t("world.archiveWorld"), destructive: false };
     case "wipe":
-      return { title: `Start a new wipe of ${world.displayName}?`, description: "Backs up and closes the current wipe, then opens an empty one from the chosen release.", label: "Start new wipe", destructive: true };
+      return { title: t("world.startNewWipeWorldDisplayName", { worldDisplayName: world.displayName }), description: t("world.backsUpClosesCurrent"), label: t("world.startNewWipe"), destructive: true };
     case "purge":
-      return { title: `Permanently delete ${world.displayName}?`, description: "Deletes the world, its release pointer and every backup. This cannot be undone.", label: "Delete forever", destructive: true };
+      return { title: t("world.permanentlyDeleteWorldDisplayName", { worldDisplayName: world.displayName }), description: t("world.deletesWorldReleasePointer"), label: t("world.deleteForever"), destructive: true };
     case "promote":
       if (neverStarted(world)) {
         return {
-          title: `Update ${world.displayName} to another release?`,
-          description: "Switches the release before the first start. Nothing is started or backed up.",
-          label: "Update release",
+          title: t("world.updateWorldDisplayNameAnotherRelease", { worldDisplayName: world.displayName }),
+          description: t("world.switchesReleaseBeforeFirst"),
+          label: t("world.updateRelease"),
           destructive: false,
         };
       }
       return {
-        title: `Update ${world.displayName} to another release?`,
-        description: `Keeps the save. Stops the world, keeps its backup, then starts it on the chosen release and leaves it running. If that start fails, ${world.release.activeRelease ?? "the active release"} stays. Refused while players are online.`,
-        label: "Update release",
+        title: t("world.updateWorldDisplayNameAnotherRelease", { worldDisplayName: world.displayName }),
+        description: t("world.keepsSaveStopsWorld", { value: world.release.activeRelease ?? t("world.activeRelease") }),
+        label: t("world.updateRelease"),
         destructive: true,
       };
     default:
       return {
-        title: `Restore ${confirmation.backupName}?`,
+        title: t("world.restoreBackupName", { backupName: confirmation.backupName }),
         description: confirmation.release === null
-          ? "Backs up the current wipe, then restores this backup as a new wipe."
-          : `Backs up the current wipe, then restores this backup as a new wipe on release ${confirmation.release}, the release it ran.`,
-        label: "Restore backup",
+          ? t("world.backsUpCurrentWipe")
+          : t("world.backsUpCurrentWipeThen", { release: confirmation.release }),
+        label: t("world.restoreBackup"),
         destructive: true,
       };
   }
@@ -274,11 +275,11 @@ export function useConfirmationForm(confirmation: Confirmation | null, opts: Rea
     description: copy.description,
     destructive: copy.destructive,
     confirm: action("confirm", copy.label, () => opts.onConfirm(confirmation, chosen), { disabled: blocked, danger: copy.destructive }),
-    cancel: action("cancel", "Cancel", opts.onClose),
+    cancel: action("cancel", t("common.cancel"), opts.onClose),
     releaseChoice: options === null ? null : {
-      label: confirmation.kind === "promote" ? "Release to update to" : "Release for the new wipe", value: release, options, set: setRelease,
+      label: confirmation.kind === "promote" ? t("world.releaseUpdate") : t("world.releaseNewWipe"), value: release, options, set: setRelease,
     },
-    typedConfirmation: typedTarget === null ? null : { label: "World ID", expected: typedTarget, value: typed, set: setTyped },
+    typedConfirmation: typedTarget === null ? null : { label: t("world.worldID"), expected: typedTarget, value: typed, set: setTyped },
   };
 }
 

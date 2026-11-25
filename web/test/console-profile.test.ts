@@ -21,6 +21,7 @@ const profile: ProfileModel = {
   avatar: { change: spy("profile.avatar.change", "Change picture"), remove: null },
   appearance: { preference: "dark", theme: "dark", accent: "#5b47d6", setPreference: async () => undefined, setAccent: async () => undefined },
   look: { current: "console", options: [{ id: "terminal", name: "Terminal", choose: spy("look.terminal", "Terminal") }] },
+  language: { current: "en", options: [{ id: "en", name: "English", choose: spy("language.en", "English", { disabled: true }) }, { id: "ru", name: "Русский", choose: spy("language.ru", "Русский") }] },
   signOut: spy("profile.signout", "Sign out"),
   openInBrowser: null,
   loginAccounts: {

@@ -5,6 +5,7 @@ import { cx } from "../../../lib/cx";
 import { clock, elapsedSeconds, eta, type Expectation } from "../../../lib/operation-time";
 import { IconButton } from "./IconButton";
 import { MOTION } from "./motion";
+import { t } from "../../../i18n";
 
 export type FlashKind = "busy" | "ok" | "err";
 
@@ -63,7 +64,7 @@ const icons = { ok: "check_circle", err: "error" } as const;
  */
 export function Flashbar({ items }: Readonly<{ items: readonly FlashItem[] }>) {
   return (
-    <div aria-label="Notifications" aria-live="polite" className="c-flashbar" role="status">
+    <div aria-label={t("common.notifications")} aria-live="polite" className="c-flashbar" role="status">
       {items.slice(-4).map((item) => (
         <div className={cx("c-flash", `c-flash-${item.kind}`)} key={item.id}>
           {item.kind === "busy" ? <ProgressRing className="c-spin" size={20} /> : <Icon name={icons[item.kind]} size={20} />}
@@ -71,7 +72,7 @@ export function Flashbar({ items }: Readonly<{ items: readonly FlashItem[] }>) {
             <span>{item.message}</span>
             {item.since && <RunningTime className="c-flash-time" expectation={item.expectation} since={item.since} />}
           </span>
-          {item.onDismiss && <IconButton icon="close" label="Dismiss" onClick={item.onDismiss} tone="flash" />}
+          {item.onDismiss && <IconButton icon="close" label={t("common.dismiss")} onClick={item.onDismiss} tone="flash" />}
         </div>
       ))}
     </div>

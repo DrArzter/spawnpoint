@@ -6,6 +6,7 @@ import { cx } from "../../../lib/cx";
 import { Avatar } from "./Avatar";
 import { Skeleton } from "./Skeleton";
 import { Status } from "./Status";
+import { t } from "../../../i18n";
 
 export type FilterChip = Readonly<{ id: string; label: string; count: number; pressed: boolean; onPress: () => void }>;
 export type ListGroup = Readonly<{ id: string; label?: string; end?: ReactNode; items: ReactNode }>;
@@ -39,7 +40,7 @@ export function ListColumn({ label, filter, end, chips = [], groups, empty }: Re
           {end}
         </div>
         {chips.length > 0 && (
-          <div aria-label="Show" className="c-lcol-chips" role="group" /* NOSONAR a labelled set of toggle buttons; <fieldset> adds a frame and a legend */>
+          <div aria-label={t("ui.show")} className="c-lcol-chips" role="group" /* NOSONAR a labelled set of toggle buttons; <fieldset> adds a frame and a legend */>
             {chips.map((chip) => (
               <button aria-pressed={chip.pressed} className="c-lcol-chip" key={chip.id} onClick={chip.onPress} type="button">
                 <span>{chip.label}</span>

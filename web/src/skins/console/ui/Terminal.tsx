@@ -4,6 +4,7 @@ import type { ConsoleLine } from "../../../core/models";
 import { shortDateTime } from "./DetailList";
 import { Status } from "./Status";
 import { Table } from "./Table";
+import { t } from "../../../i18n";
 
 /**
  * A console's log as a terminal prints it: newest last, the region scrolled
@@ -22,14 +23,14 @@ export function Terminal({ label, lines, loading = false }: Readonly<{ label: st
     <div aria-label={label} aria-live="polite" className="c-terminal" ref={region} role="log">
       <Table
         columns={[
-          { id: "time", header: "Time", className: "c-term-time", render: (line) => shortDateTime(line.at) ?? line.at },
-          { id: "who", header: "Who", className: "c-term-who", render: (line) => <span title={line.who}>{line.who}</span> },
-          { id: "command", header: "Command", kind: "lead", className: "c-term-command", render: (line) => <span className="c-mono" title={line.command}>{line.command}</span> },
-          { id: "status", header: "Status", className: "c-term-status", render: (line) => <span title={line.status.label}><Status status={line.status} /></span> },
-          { id: "output", header: "Output", className: "c-term-output", render: (line) => line.output === null ? <span className="c-faint">—</span> : <span className="c-mono" title={line.output}>{line.output}</span> },
+          { id: "time", header: t("common.time"), className: "c-term-time", render: (line) => shortDateTime(line.at) ?? line.at },
+          { id: "who", header: t("rcon.who"), className: "c-term-who", render: (line) => <span title={line.who}>{line.who}</span> },
+          { id: "command", header: t("rcon.command"), kind: "lead", className: "c-term-command", render: (line) => <span className="c-mono" title={line.command}>{line.command}</span> },
+          { id: "status", header: t("common.status"), className: "c-term-status", render: (line) => <span title={line.status.label}><Status status={line.status} /></span> },
+          { id: "output", header: t("rcon.output"), className: "c-term-output", render: (line) => line.output === null ? <span className="c-faint">—</span> : <span className="c-mono" title={line.output}>{line.output}</span> },
         ]}
         arrivals
-        label="Commands"
+        label={t("rcon.commands")}
         loading={loading}
         rowKey={(line) => line.id}
         rows={lines}

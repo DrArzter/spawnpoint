@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 
 import { cx } from "../../lib/cx";
 import { IconButton } from "./Button";
+import { t } from "../../i18n";
 
 // Native <dialog> in modal mode: top layer, focus trap, Escape, restored focus.
 function useModal(open: boolean, onClose: () => void) {
@@ -60,7 +61,7 @@ export function Dialog({ open, onClose, title, children, actions, className, dis
           {brand && (
             <div className="dialog-brand">
               {brand}
-              <IconButton data-action={closeActionId} icon="close" label="Close" onClick={onClose} size="small" />
+              <IconButton data-action={closeActionId} icon="close" label={t("common.close")} onClick={onClose} size="small" />
             </div>
           )}
           <h2 id={titleId}>{title}</h2>

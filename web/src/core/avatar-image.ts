@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 // Prepares a profile picture in the browser: a centred square, 256 by 256,
 // WebP (JPEG where the browser cannot encode WebP). The backend takes only
 // JPEG, PNG or WebP of at most 256 KB, so the page never sends more.
@@ -6,7 +7,7 @@ export const AVATAR_SIZE = 256;
 export const AVATAR_MAX_BYTES = 256 * 1024;
 export const AVATAR_ACCEPT = "image/*";
 const QUALITY = 0.85;
-const NOT_A_PICTURE = "Choose a JPEG, PNG or WebP picture.";
+const NOT_A_PICTURE = t("error.invalid_avatar");
 
 export type AvatarSource = Readonly<{ width: number; height: number }>;
 
@@ -55,8 +56,8 @@ export async function prepareAvatar(file: Blob, environment: AvatarEnvironment):
     type = "image/jpeg";
     blob = await surface.encode(type, QUALITY);
   }
-  if (blob?.type !== type) throw new Error("This browser cannot prepare the picture.");
-  if (blob.size > AVATAR_MAX_BYTES) throw new Error("The picture is too large. Choose a simpler one.");
+  if (blob?.type !== type) throw new Error(t("profile.browserCannotPreparePicture"));
+  if (blob.size > AVATAR_MAX_BYTES) throw new Error(t("error.avatar_too_large"));
   return { base64: base64Of(new Uint8Array(await blob.arrayBuffer())), type, bytes: blob.size };
 }
 
@@ -70,7 +71,7 @@ export const browserAvatarEnvironment: AvatarEnvironment = {
     const context = canvas.getContext("2d");
     return {
       draw: (source, x, y, side) => {
-        if (!context) throw new Error("This browser cannot prepare the picture.");
+        if (!context) throw new Error(t("profile.browserCannotPreparePicture"));
         context.drawImage(source as ImageBitmap, x, y, side, side, 0, 0, size, size);
       },
       encode: (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality)),

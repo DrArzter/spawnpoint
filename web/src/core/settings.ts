@@ -1,5 +1,6 @@
 import type { Game, SettingDefinition, SettingValue, World } from "../model";
 import { settingValueValid } from "../../../contract/settings";
+import { t } from "../i18n";
 
 export { settingValueValid };
 
@@ -28,7 +29,7 @@ export function effectiveValue(setting: SettingDefinition, world: World): Settin
 export function settingValueLabel(setting: SettingDefinition, value: SettingValue): string {
   switch (setting.type) {
     case "choice": return setting.choices.find((choice) => choice.value === value)?.label ?? String(value);
-    case "boolean": return value ? "On" : "Off";
+    case "boolean": return value ? t("world.settingOn") : t("world.settingOff");
     default: return String(value);
   }
 }

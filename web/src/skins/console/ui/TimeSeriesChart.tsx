@@ -5,6 +5,7 @@ import { cx } from "../../../lib/cx";
 import { ActionButton } from "./ActionButton";
 import { Skeleton } from "./Skeleton";
 import { Table } from "./Table";
+import { t } from "../../../i18n";
 
 /** `interpolated`: joined between two real readings by the server (memory only, see DESIGN.md). */
 export type ChartPoint = Readonly<{ at: string; value: number | null; interpolated?: boolean }>;
@@ -115,8 +116,8 @@ export function chartSummary(points: readonly ChartPoint[]): Readonly<{ latest: 
 
 /** What a reading says for itself: its value, "Joined" beside a joined one, "No reading" for a gap, "Not reported yet" for the pending tail. */
 export function readingValue(point: ChartPoint, format: (value: number) => string, pending: boolean): string {
-  if (point.value === null) return pending ? "Not reported yet" : "No reading";
-  return point.interpolated ? `${format(point.value)} (joined)` : format(point.value);
+  if (point.value === null) return pending ? t("common.notReportedYet") : t("ui.noReading");
+  return point.interpolated ? t("ui.valueJoined", { value: format(point.value) }) : format(point.value);
 }
 
 /** What a series draws besides its line, for the legend. */
@@ -160,7 +161,7 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
   const shape = chartGeometry(points, max, pendingFrom);
   const pendingAt = pendingIndex(points, pendingFrom);
   const summary = chartSummary(points);
-  const name = [label, range, summary ? `latest ${format(summary.latest)}` : "no readings", summary ? `peak ${format(summary.peak.value)}` : null].filter(Boolean).join(", ");
+  const name = [label, range, summary ? t("ui.latestValue", { value: format(summary.latest) }) : t("ui.noReadings"), summary ? t("ui.peakValue", { value: format(summary.peak.value) }) : null].filter(Boolean).join(", ");
   const at = cursor === null ? null : points[cursor] ?? null;
   const reading = readingText(at, time, format, pendingAt !== null && cursor !== null && cursor >= pendingAt);
 
@@ -228,15 +229,15 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
         </div>
       </div>
       <div className="c-chart-foot">
-        <ActionButton action={action("chart.data", table ? "Hide data" : "Show data", () => setTable((open) => !open), { icon: table ? "expand_less" : "expand_more" })} size="sm" variant="ghost" />
+        <ActionButton action={action("chart.data", table ? t("ui.hideData") : t("ui.showData"), () => setTable((open) => !open), { icon: table ? "expand_less" : "expand_more" })} size="sm" variant="ghost" />
       </div>
       {table && (
         <Table
           columns={[
-            { id: "time", header: "Time", kind: "lead", render: (point) => time(point.at) },
+            { id: "time", header: t("common.time"), kind: "lead", render: (point) => time(point.at) },
             { id: "value", header: label, kind: "num", render: (point) => point.value === null ? <span className="c-faint">{readingValue(point, format, pendingAt !== null && point.at >= (pendingFrom ?? ""))}</span> : readingValue(point, format, false) },
           ]}
-          label={`${label} readings`}
+          label={t("ui.labelReadings", { label })}
           rowKey={(point) => point.at}
           rows={points}
         />

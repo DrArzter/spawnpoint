@@ -7,13 +7,14 @@ import { GOOGLE_CLIENT_ID, GoogleLoginButton } from "./GoogleLogin";
 import { TelegramLoginButton } from "./TelegramLogin";
 import { Button } from "./ui/Button";
 import { TextField } from "./ui/Fields";
+import { t } from "../i18n";
 
 export type SignInMode = "sign-in" | "register" | "forgot";
 
 function submitLabel(registering: boolean, recovering: boolean): string {
-  if (registering) return "Create account";
-  if (recovering) return "Send reset link";
-  return "Sign in";
+  if (registering) return t("signin.createAccount");
+  if (recovering) return t("common.sendResetLink");
+  return t("common.sign");
 }
 
 // The one way in, drawn wherever somebody is asked to sign in: the email and
@@ -69,7 +70,7 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
         onChange(await api.signInWithPassword(email, password));
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Sign-in did not complete. Try again.");
+      setError(cause instanceof Error ? cause.message : t("signin.signInDidNotComplete"));
     } finally {
       setBusy(false);
     }
@@ -82,17 +83,17 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
     onModeChange?.(next);
   }
 
-  if (options === null) return <output aria-label="Loading the ways to sign in" className="boot-progress" />;
+  if (options === null) return <output aria-label={t("signin.loadingWaysSign")} className="boot-progress" />;
 
   if (sent !== null) {
     return (
       <output className="signin signin-sent">
         <div className="boot-copy">
-          <h2>Check your email</h2>
+          <h2>{t("signin.checkEmail")}</h2>
           <p>
             {sent.kind === "verification"
-              ? `We sent a verification link to ${sent.email}. Open it to finish creating your account.`
-              : `If ${sent.email} belongs to an account, its reset link is on the way.`}
+              ? t("signin.weSentVerificationLink", { email: sent.email })
+              : t("signin.ifEmailBelongsAccount", { email: sent.email })}
           </p>
         </div>
         {sent.kind === "verification" && (
@@ -100,12 +101,12 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
             setBusy(true);
             setError("");
             void api.resendEmailVerification(sent.email, invitationToken)
-              .catch((cause) => setError(cause instanceof Error ? cause.message : "A new verification email could not be sent."))
+              .catch((cause) => setError(cause instanceof Error ? cause.message : t("signin.newVerificationEmailCould")))
               .finally(() => setBusy(false));
-          }} variant="outlined">Send another link</Button>
+          }} variant="outlined">{t("signin.sendAnotherLink")}</Button>
         )}
         {error && <p className="boot-error" role="alert">{error}</p>}
-        <Button onClick={() => switchMode("sign-in")} variant="text">Back to sign in</Button>
+        <Button onClick={() => switchMode("sign-in")} variant="text">{t("signin.backSign")}</Button>
       </output>
     );
   }
@@ -115,13 +116,13 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
       {passwordOffered && (
         <form className="signin-form" onSubmit={(event) => void submit(event)}>
           {registering && (
-            <TextField autoComplete="nickname" label="Display name" maxLength={DISPLAY_NAME_MAXIMUM_LENGTH} onChange={(event) => setDisplayName(event.target.value)} placeholder="How other players see you" required value={displayName} />
+            <TextField autoComplete="nickname" label={t("signin.displayName")} maxLength={DISPLAY_NAME_MAXIMUM_LENGTH} onChange={(event) => setDisplayName(event.target.value)} placeholder={t("signin.howOtherPlayersSee")} required value={displayName} />
           )}
-          <TextField autoComplete="email" data-autofocus inputMode="email" label="Email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
+          <TextField autoComplete="email" data-autofocus inputMode="email" label={t("common.email")} onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
           {!recovering && <TextField
             autoComplete={registering ? "new-password" : "current-password"}
-            hint={registering ? `At least ${PASSWORD_MINIMUM_LENGTH} characters. Length matters more than symbols.` : undefined}
-            label="Password"
+            hint={registering ? t("signin.leastPASSWORDMINIMUMLENGTH", { PASSWORD_MINIMUM_LENGTH }) : undefined}
+            label={t("common.password")}
             maxLength={PASSWORD_MAXIMUM_LENGTH}
             minLength={registering ? PASSWORD_MINIMUM_LENGTH : undefined}
             onChange={(event) => setPassword(event.target.value)}
@@ -131,31 +132,31 @@ export function SignInPanel({ onChange, onModeChange, initialMode = "sign-in", i
           />}
           {!registering && !recovering && options.emailActions && (
             <div className="signin-forgot">
-              <Button onClick={() => switchMode("forgot")} size="small" variant="text">Forgot password?</Button>
+              <Button onClick={() => switchMode("forgot")} size="small" variant="text">{t("signin.forgotPassword")}</Button>
             </div>
           )}
           {error && <p className="boot-error" role="alert">{error}</p>}
           {/* One row, as every dialog here ends: the way out of this mode on the
               left, the one filled action on the right. */}
           <div className="signin-actions">
-            {recovering && <Button onClick={() => switchMode("sign-in")} variant="text">Back to sign in</Button>}
+            {recovering && <Button onClick={() => switchMode("sign-in")} variant="text">{t("signin.backSign")}</Button>}
             {!recovering && (registering || passwordRegistrationOffered) && (
               <Button onClick={() => switchMode(registering ? "sign-in" : "register")} variant="text">
-                {registering ? "Sign in instead" : "Create an account"}
+                {registering ? t("signin.signInstead") : t("common.createAccount")}
               </Button>
             )}
             <Button loading={busy} type="submit" variant="filled">{submitLabel(registering, recovering)}</Button>
           </div>
         </form>
       )}
-      {passwordOffered && alternativesOffered && <div aria-hidden="true" className="signin-divider"><span>or</span></div>}
+      {passwordOffered && alternativesOffered && <div aria-hidden="true" className="signin-divider"><span>{t("signin.or")}</span></div>}
       {alternativesOffered && (
         <div className="signin-alternatives">
-          {telegramOffered && <TelegramLoginButton className="telegram-login signin-alternative" label="Continue with Telegram" onChange={onChange} variant={passwordOffered ? "outlined" : "filled"} />}
+          {telegramOffered && <TelegramLoginButton className="telegram-login signin-alternative" label={t("signin.continueTelegram")} onChange={onChange} variant={passwordOffered ? "outlined" : "filled"} />}
           {googleOffered && <GoogleLoginButton className="google-login signin-alternative" onChange={onChange} />}
         </div>
       )}
-      {!passwordOffered && !alternativesOffered && <p className="boot-error" role="alert">This deployment offers no way to sign in from a browser.</p>}
+      {!passwordOffered && !alternativesOffered && <p className="boot-error" role="alert">{t("signin.deploymentOffersNoWay")}</p>}
     </div>
   );
 }

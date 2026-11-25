@@ -31,6 +31,7 @@ import { Status } from "./ui/Status";
 import { nextSort, Table, type Column, type SortDirection } from "./ui/Table";
 import { ARRIVED, useArrivals } from "./ui/Tick";
 import { Tile, Tiles } from "./ui/Tile";
+import { t } from "../../i18n";
 
 /*
  * A state the game home hands to the list it opens (the Worlds by state
@@ -90,11 +91,11 @@ function propertyOf(row: WorldRow, property: string): string {
 const textOf = (row: WorldRow) => `${row.world.displayName} ${row.presetName} ${row.releaseSummary} ${row.address?.value ?? ""}`;
 
 const PROPERTIES: readonly Readonly<{ id: string; label: string }>[] = [
-  { id: "status", label: "Status" },
-  { id: "hosting", label: "Hosting" },
-  { id: "preset", label: "Preset" },
-  { id: "release", label: "Release" },
-  { id: "connection", label: "Connection" },
+  { id: "status", label: t("common.status") },
+  { id: "hosting", label: t("world.hosting") },
+  { id: "preset", label: t("common.preset") },
+  { id: "release", label: t("common.release") },
+  { id: "connection", label: t("world.connection") },
 ];
 
 /**
@@ -160,8 +161,8 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
   // While the first read runs, the page is the loaded one with placeholders in the table and the tiles.
   const loading = model.status === "loading" && rows.length === 0;
   const states = statesOf(rows);
-  const stateTiles = useSkeletonRows("Worlds states", states.length, loading);
-  const listRows = useSkeletonRows("Worlds", paged.rows.length, loading);
+  const stateTiles = useSkeletonRows(t("world.worldsStates"), states.length, loading);
+  const listRows = useSkeletonRows(t("common.worlds"), paged.rows.length, loading);
   const header = (count: number | undefined, start?: ReactNode, creates = true) => (
     <PageHeader
       actions={<>
@@ -169,7 +170,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
         {create && creates && <ActionButton action={create} variant="primary" />}
       </>}
       count={count}
-      title="Worlds"
+      title={t("common.worlds")}
       trail={game ? [{ label: game.displayName, href: model.views?.overview ?? "#/home", game: true }] : []}
     />
   );
@@ -178,7 +179,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
     return (
       <div className="c-page">
         {header(undefined)}
-        <Card label="Games">
+        <Card label={t("common.games")}>
           <GamesEmpty refresh={model.refresh} unavailable={model.unavailable} />
         </Card>
       </div>
@@ -188,7 +189,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
     return (
       <div className="c-page">
         {header(undefined)}
-        <Card label="Worlds table"><LoadError error={model.error} kind={model.errorKind} retry={withIcon(model.refresh, "refresh")} title="Worlds could not be loaded" verb="view worlds" /></Card>
+        <Card label={t("world.worldsTable")}><LoadError error={model.error} kind={model.errorKind} retry={withIcon(model.refresh, "refresh")} title={t("common.worldsCouldNotLoaded")} verb={t("common.viewWorlds")} /></Card>
       </div>
     );
   }
@@ -197,8 +198,8 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
       <div className="c-page">
         {header(0, undefined, false)}
         <Notices notices={model.notices} />
-        <Card label="Worlds table">
-          <Empty action={create} icon="public" message={create ? undefined : model.emptyDescription ?? undefined} title="No worlds" />
+        <Card label={t("world.worldsTable")}>
+          <Empty action={create} icon="public" message={create ? undefined : model.emptyDescription ?? undefined} title={t("common.noWorlds")} />
         </Card>
       </div>
     );
@@ -207,32 +208,32 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
   const columns: Column<WorldRow>[] = [
     {
       id: "select",
-      header: "Select",
+      header: t("world.select"),
       kind: "check",
-      headerCell: <Checkbox checked={pageChecked(onPage, pageIds.length)} label="Select all on this page" labelHidden onChange={(on) => setChosen((current) => { const next = new Set(current); for (const id of pageIds) { if (on) next.add(id); else next.delete(id); } return next; })} />,
-      render: (row) => <Checkbox checked={chosen.has(row.world.id)} label={`Select ${row.world.displayName}`} labelHidden onChange={(on) => toggle(row.world.id, on)} />,
+      headerCell: <Checkbox checked={pageChecked(onPage, pageIds.length)} label={t("world.selectAllPage")} labelHidden onChange={(on) => setChosen((current) => { const next = new Set(current); for (const id of pageIds) { if (on) next.add(id); else next.delete(id); } return next; })} />,
+      render: (row) => <Checkbox checked={chosen.has(row.world.id)} label={t("world.selectWorldDisplayName", { worldDisplayName: row.world.displayName })} labelHidden onChange={(on) => toggle(row.world.id, on)} />,
     },
-    { id: "name", header: "Name", kind: "lead", ...sortable("name"), render: (row) => <span className="c-worlds-name"><a href={row.href} title={row.world.displayName}>{row.world.displayName}</a><HostingMark className="c-worlds-hostmark" row={row} /></span> },
-    { id: "status", header: "Status", ...sortable("status"), render: (row) => <Status status={row.status} /> },
-    { id: "players", header: "Players", kind: "num", ...sortable("players"), render: (row) => <Players count={row.players} /> },
-    { id: "release", header: "Preset · release", clip: true, ...sortable("release"), render: (row) => <ReleaseCell row={row} /> },
-    { id: "wipe", header: "Wipe", kind: "num", ...sortable("wipe"), render: (row) => row.wipe ? `#${row.wipe.number}` : <span className="c-faint">{row.wipeAbsent}</span> },
-    { id: "hosting", header: "Hosting", className: "c-worlds-host", render: (row) => <HostingChip row={row} /> },
-    { id: "address", header: "Address", kind: "optional", render: (row) => row.address ? <Address address={row.address} copy /> : <span className="c-faint">{row.addressAbsent}</span> },
+    { id: "name", header: t("common.name"), kind: "lead", ...sortable("name"), render: (row) => <span className="c-worlds-name"><a href={row.href} title={row.world.displayName}>{row.world.displayName}</a><HostingMark className="c-worlds-hostmark" row={row} /></span> },
+    { id: "status", header: t("common.status"), ...sortable("status"), render: (row) => <Status status={row.status} /> },
+    { id: "players", header: t("common.players"), kind: "num", ...sortable("players"), render: (row) => <Players count={row.players} /> },
+    { id: "release", header: t("world.presetRelease"), clip: true, ...sortable("release"), render: (row) => <ReleaseCell row={row} /> },
+    { id: "wipe", header: t("common.wipe"), kind: "num", ...sortable("wipe"), render: (row) => row.wipe ? `#${row.wipe.number}` : <span className="c-faint">{row.wipeAbsent}</span> },
+    { id: "hosting", header: t("world.hosting"), className: "c-worlds-host", render: (row) => <HostingChip row={row} /> },
+    { id: "address", header: t("common.address"), kind: "optional", render: (row) => row.address ? <Address address={row.address} copy /> : <span className="c-faint">{row.addressAbsent}</span> },
     {
       id: "actions",
-      header: "Actions",
+      header: t("common.actions"),
       kind: "act",
-      render: (row) => <span className="c-worlds-acts"><QuickLookButton onPeek={setPeekId} open={peekId === row.world.id} row={row} /><Overflow actions={row.sessionAction ? [row.sessionAction(), ...row.actions] : row.actions} label={`More for ${row.world.displayName}`} size="sm" /></span>,
+      render: (row) => <span className="c-worlds-acts"><QuickLookButton onPeek={setPeekId} open={peekId === row.world.id} row={row} /><Overflow actions={row.sessionAction ? [row.sessionAction(), ...row.actions] : row.actions} label={t("common.moreLabel", { label: row.world.displayName })} size="sm" /></span>,
     },
   ];
-  const noMatches = <Empty action={action("worlds.filter.clear", "Clear filters", clear, { icon: "filter_alt_off" })} icon="filter_alt_off" title="No matches" />;
+  const noMatches = <Empty action={action("worlds.filter.clear", t("common.clearFilters"), clear, { icon: "filter_alt_off" })} icon="filter_alt_off" title={t("common.noMatches")} />;
 
   return (
     <div className="c-page">
       {header(loading ? undefined : rows.length, <BulkActions clear={() => setChosen(new Set())} rows={selected} />)}
       <Notices notices={model.notices} />
-      <Tiles label="Filter by status">
+      <Tiles label={t("world.filterByStatus")}>
         {loading
           ? Array.from({ length: stateTiles }, (_, tile) => <Skeleton height="var(--c-tile)" key={tile} />)
           : states.map(({ status, count }) => (
@@ -240,16 +241,16 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
           ))}
       </Tiles>
       <div className={peek ? "c-worlds-layout c-worlds-layout-open" : "c-worlds-layout"}>
-        <Card body="flush" label="Worlds table">
+        <Card body="flush" label={t("world.worldsTable")}>
           <FilterBar
             end={<>
               {paged.pages > 1 && <><Pager onPage={setPage} page={paged.page} pages={paged.pages} /><span aria-hidden="true" className="c-worlds-sep" /></>}
               <TablePreferences pageSize={{ value: size, set: setSize }} />
             </>}
-            label="Filter worlds by property or text"
+            label={t("world.filterWorldsByProperty")}
             matches={shown.length}
             onChange={filter}
-            placeholder="Filter by property or text"
+            placeholder={t("world.filterByPropertyText")}
             properties={properties}
             tokens={tokens}
           />
@@ -257,7 +258,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
             className="c-worlds-table"
             columns={columns}
             empty={noMatches}
-            label="Worlds"
+            label={t("common.worlds")}
             loading={loading}
             rowKey={(row) => row.world.id}
             arrivals={arrived}
@@ -267,7 +268,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
           />
           <div className="c-worlds-list">
             {loading && (
-              <ul aria-busy="true" aria-label="Loading" className="c-worlds-rows">
+              <ul aria-busy="true" aria-label={t("common.loading")} className="c-worlds-rows">
                 {Array.from({ length: listRows }, (_, row) => (
                   <li className="c-worlds-row" key={row}>
                     <Skeleton height={20} width={20} />
@@ -279,7 +280,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
             )}
             {!loading && (paged.rows.length === 0 ? noMatches : <ul className="c-worlds-rows">{paged.rows.map((row) => (
               <li className={cx("c-worlds-row", (chosen.has(row.world.id) || peekId === row.world.id) && "c-worlds-row-selected", arrived.has(row.world.id) && ARRIVED)} key={row.world.id}>
-                <Checkbox checked={chosen.has(row.world.id)} label={`Select ${row.world.displayName}`} labelHidden onChange={(on) => toggle(row.world.id, on)} />
+                <Checkbox checked={chosen.has(row.world.id)} label={t("world.selectWorldDisplayName", { worldDisplayName: row.world.displayName })} labelHidden onChange={(on) => toggle(row.world.id, on)} />
                 <ListItemWorld
                   address={row.address ? <Address address={row.address} /> : undefined}
                   current={false}
@@ -307,13 +308,13 @@ function ReleaseCell({ row }: Readonly<{ row: WorldRow }>) {
   return (
     <span className="c-worlds-release">
       <span className="c-mono" title={`${row.presetName} · ${row.releaseSummary}`}>{row.presetName} · {row.releaseSummary}</span>
-      {desiredRelease !== null && desiredRelease !== activeRelease && <Chip tip={`Desired ${desiredRelease}`}>→ {desiredRelease}</Chip>}
+      {desiredRelease !== null && desiredRelease !== activeRelease && <Chip tip={t("common.desiredDesiredRelease", { desiredRelease })}>→ {desiredRelease}</Chip>}
     </span>
   );
 }
 
 function QuickLookButton({ row, open, onPeek }: Readonly<{ row: WorldRow; open: boolean; onPeek: (id: string | null) => void }>) {
-  return <IconButton aria-pressed={open} className="c-icon-btn-sm" icon="view_sidebar" label={`Quick look at ${row.world.displayName}`} onClick={() => onPeek(open ? null : row.world.id)} />;
+  return <IconButton aria-pressed={open} className="c-icon-btn-sm" icon="view_sidebar" label={t("world.quickLookWorldDisplayName", { worldDisplayName: row.world.displayName })} onClick={() => onPeek(open ? null : row.world.id)} />;
 }
 
 /** The header checkbox: none, all or some of the page selected. */
@@ -325,7 +326,7 @@ function pageChecked(selected: number, total: number): boolean | "mixed" {
 /** Why a bulk action waits: nothing fits it, or more than one world does. */
 function bulkHint(count: number, none: string): string | undefined {
   if (count === 0) return none;
-  return count > 1 ? "Select one world to confirm" : undefined;
+  return count > 1 ? t("world.selectOneWorldConfirm") : undefined;
 }
 
 /**
@@ -337,7 +338,7 @@ function BulkActions({ rows, clear }: Readonly<{ rows: readonly WorldRow[]; clea
   const verbs = rows.map((row) => ({ row, session: row.sessionAction?.() ?? null }));
   const item = (key: string, label: string, icon: Action["icon"], picked: readonly Action[], none: string) => action(`worlds.bulk.${key}`, label, () => picked[0]?.run(), {
     icon,
-    detail: `${picked.length} of ${rows.length}`,
+    detail: t("world.pickedCountRowCount", { pickedCount: picked.length, rowCount: rows.length }),
     disabled: picked.length !== 1,
     hint: bulkHint(picked.length, none),
   });
@@ -349,12 +350,12 @@ function BulkActions({ rows, clear }: Readonly<{ rows: readonly WorldRow[]; clea
     <MenuButton
       disabled={rows.length === 0}
       groups={[
-        { actions: [item("start", "Start", "play_arrow", starts, "No selected world can start"), item("stop", "Stop", "stop", stops, "No selected world is online"), item("archive", "Archive", "archive", archives, "Only stopped worlds can be archived")] },
-        { actions: [action("worlds.bulk.clear", "Clear selection", clear, { icon: "close" })] },
+        { actions: [item("start", t("common.start"), "play_arrow", starts, t("world.noSelectedWorldCan")), item("stop", t("common.stop"), "stop", stops, t("world.noSelectedWorldOnline")), item("archive", t("world.archive"), "archive", archives, t("world.onlyStoppedWorldsCan"))] },
+        { actions: [action("worlds.bulk.clear", t("common.clearSelection"), clear, { icon: "close" })] },
       ]}
-      hint={rows.length === 0 ? "Select worlds first" : undefined}
+      hint={rows.length === 0 ? t("world.selectWorldsFirst") : undefined}
       id="worlds.bulk"
-      label={rows.length > 0 ? `Actions (${rows.length})` : "Actions"}
+      label={rows.length > 0 ? t("world.actionsRowCount", { rowCount: rows.length }) : t("common.actions")}
     />
   );
 }
@@ -386,31 +387,31 @@ function QuickLook({ model, row, onClose }: Readonly<{ model: WorldsModel; row: 
   const operation = (model.operations ?? []).find((item) => item.operation.worldId === row.world.id);
   const uptime = formatUptime(row.launchedAt, now);
   const details: Detail[] = [
-    { key: "players", label: "Players online", value: row.players === null || row.players === undefined ? { type: "absent", text: "—" } : { type: "number", value: row.players } },
-    { key: "launched", label: "Uptime", value: uptime === null ? { type: "absent", text: "—" } : { type: "text", text: uptime, mono: true } },
-    { key: "hosting", label: "Hosting", value: { type: "text", text: hostingLabel(row) } },
-    { key: "release", label: "Release", value: { type: "release", active: row.world.release.activeRelease, desired: row.world.release.desiredRelease } },
-    { key: "wipe", label: "Current wipe", value: row.wipe ? { type: "text", text: `#${row.wipe.number}` } : { type: "absent", text: row.wipeAbsent } },
-    ...(operation ? [{ label: "Operation", value: { type: "text", text: [operation.operation.id, elapsed(operation.operation.startedAt, now) ?? "", eta(operation.operation.startedAt, operation.operation, now)?.text].filter(Boolean).join(" · "), mono: true } } satisfies Detail] : []),
-    { key: "address", label: "Address", value: row.address ? { type: "address", address: row.address } : { type: "absent", text: row.addressAbsent } },
+    { key: "players", label: t("world.playersOnline"), value: row.players === null || row.players === undefined ? { type: "absent", text: "—" } : { type: "number", value: row.players } },
+    { key: "launched", label: t("common.uptime"), value: uptime === null ? { type: "absent", text: "—" } : { type: "text", text: uptime, mono: true } },
+    { key: "hosting", label: t("world.hosting"), value: { type: "text", text: hostingLabel(row) } },
+    { key: "release", label: t("common.release"), value: { type: "release", active: row.world.release.activeRelease, desired: row.world.release.desiredRelease } },
+    { key: "wipe", label: t("world.currentWipe"), value: row.wipe ? { type: "text", text: `#${row.wipe.number}` } : { type: "absent", text: row.wipeAbsent } },
+    ...(operation ? [{ label: t("common.operation"), value: { type: "text", text: [operation.operation.id, elapsed(operation.operation.startedAt, now) ?? "", eta(operation.operation.startedAt, operation.operation, now)?.text].filter(Boolean).join(" · "), mono: true } } satisfies Detail] : []),
+    { key: "address", label: t("common.address"), value: row.address ? { type: "address", address: row.address } : { type: "absent", text: row.addressAbsent } },
   ];
   return (
     <>
       <div aria-hidden="true" className="c-worlds-scrim" onClick={onClose} />
-      <aside aria-label={`Quick look: ${row.world.displayName}`} className="c-worlds-peek" ref={panel}>
+      <aside aria-label={t("world.quickLookWorldDisplayName2", { worldDisplayName: row.world.displayName })} className="c-worlds-peek" ref={panel}>
         <Card
           actions={<>
             <Status className="c-worlds-peek-status" status={row.status} variant="pill" />
-            <IconButton className="c-worlds-peek-close" icon="close" label="Close quick look" onClick={onClose} />
+            <IconButton className="c-worlds-peek-close" icon="close" label={t("world.closeQuickLook")} onClick={onClose} />
           </>}
           body="flush"
           title={row.world.displayName}
         >
           <div className="c-worlds-peek-acts">
             {row.sessionAction && <ActionButton action={row.sessionAction()} size="sm" />}
-            <LinkButton href={row.href} icon="open_in_new" label="Open" size="sm" />
+            <LinkButton href={row.href} icon="open_in_new" label={t("world.open")} size="sm" />
           </div>
-          <DetailList columns="two" details={details} label={`${row.world.displayName} at a glance`} spans={{ address: "full", Operation: "full" }} />
+          <DetailList columns="two" details={details} label={t("world.worldDisplayNameGlance", { worldDisplayName: row.world.displayName })} spans={{ address: "full", Operation: "full" }} />
         </Card>
       </aside>
     </>

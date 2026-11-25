@@ -3,6 +3,7 @@ import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "rea
 import { Icon } from "../../../icons";
 import { action } from "../../../core/actions";
 import { ActionButton } from "./ActionButton";
+import { t } from "../../../i18n";
 
 /** A property a list can be narrowed by, with the values its rows hold and how many hold each. */
 export type FilterProperty = Readonly<{ id: string; label: string; values: readonly Readonly<{ value: string; count: number }>[] }>;
@@ -32,7 +33,7 @@ function filterOptions(properties: readonly FilterProperty[], property: FilterPr
       .filter((item) => item.value.toLowerCase().includes(query))
       .map((item) => ({ key: `${property.id}=${item.value}`, label: item.value, count: item.count, pick: () => pick.add({ property: property.id, value: item.value }) }));
   }
-  const free: Option[] = query ? [{ key: "text", label: `Text: ${text.trim()}`, pick: () => pick.add({ property: null, value: text.trim() }) }] : [];
+  const free: Option[] = query ? [{ key: "text", label: t("ui.textTrim", { trim: text.trim() }), pick: () => pick.add({ property: null, value: text.trim() }) }] : [];
   const named = properties.filter((item) => item.label.toLowerCase().includes(query)).map((item) => ({ key: item.id, label: item.label, pick: () => pick.choose(item) }));
   return [...free, ...named];
 }
@@ -63,7 +64,7 @@ function keyCommand(key: string, now: Readonly<{ open: boolean; picks: boolean; 
  * input removes the last token. "N matches" shows only while filtering, Clear
  * only with two tokens or more (R3).
  */
-export function FilterBar({ label, properties, tokens, onChange, matches, end, placeholder = "Filter", disabled = false }: Readonly<{
+export function FilterBar({ label, properties, tokens, onChange, matches, end, placeholder = t("ui.filter"), disabled = false }: Readonly<{
   label: string;
   properties: readonly FilterProperty[];
   tokens: readonly FilterToken[];
@@ -93,7 +94,7 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
   const choose = (item: FilterProperty) => { setProperty(item); setText(""); setActive(0); input.current?.focus(); };
   const options = filterOptions(properties, property, text, { add, choose });
   const at = Math.min(active, Math.max(options.length - 1, 0));
-  const labelOf = (id: string | null) => id === null ? "Text" : properties.find((item) => item.id === id)?.label ?? id;
+  const labelOf = (id: string | null) => id === null ? t("ui.text") : properties.find((item) => item.id === id)?.label ?? id;
 
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
     const command = keyCommand(event.key, { open, picks: options[at] !== undefined, typed: query !== "", property: property !== null, empty: text === "", tokens: tokens.length });
@@ -136,7 +137,7 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
           {tokens.map((token, index) => (
             <span className="c-filter-token" key={`${token.property}:${token.value}`}>
               <span><span className="c-filter-token-key">{labelOf(token.property)}{token.property === null ? ": " : " = "}</span>{token.value}</span>
-              <button aria-label={`Remove ${labelOf(token.property)} ${token.value}`} onClick={() => onChange(tokens.filter((_, place) => place !== index))} type="button"><Icon name="close" size={16} /></button>
+              <button aria-label={t("ui.removeLabelOfTokenValue", { labelOf: labelOf(token.property), tokenValue: token.value })} onClick={() => onChange(tokens.filter((_, place) => place !== index))} type="button"><Icon name="close" size={16} /></button>
             </span>
           ))}
           {property && <span className="c-filter-token c-filter-token-draft">{property.label} =</span>}
@@ -151,15 +152,15 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
             onChange={(event) => { setText(event.target.value); setOpen(true); setActive(0); }}
             onFocus={() => setOpen(true)}
             onKeyDown={onKey}
-            placeholder={property ? `${property.label} value` : placeholder}
+            placeholder={property ? t("ui.propertyLabelValue", { propertyLabel: property.label }) : placeholder}
             ref={input}
             role="combobox"
             value={text}
           />
         </div>
-        <div aria-label={property ? `${property.label} values` : "Filter by"} className="c-filter-menu" hidden={!open || options.length === 0} id={listId} role="listbox">
+        <div aria-label={property ? t("ui.propertyLabelValues", { propertyLabel: property.label }) : t("ui.filterBy")} className="c-filter-menu" hidden={!open || options.length === 0} id={listId} role="listbox">
           <div aria-labelledby={`${listId}-label`} role="group">
-            <div className="c-filter-menu-label" id={`${listId}-label`}>{property ? property.label : "Filter by"}</div>
+            <div className="c-filter-menu-label" id={`${listId}-label`}>{property ? property.label : t("ui.filterBy")}</div>
             {options.map((option, index) => (
               <div
                 aria-selected={index === at}
@@ -178,8 +179,8 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
         </div>
       </div>
       <div className="c-filterbar-end">
-        {filtering && matches !== undefined && <span className="c-filter-matches">{matches} {matches === 1 ? "match" : "matches"}</span>}
-        {tokens.length >= 2 && <ActionButton action={action("filter.clear", "Clear", () => onChange([]))} size="sm" variant="ghost" />}
+        {filtering && matches !== undefined && <span className="c-filter-matches">{t("ui.matchCount", { count: matches })}</span>}
+        {tokens.length >= 2 && <ActionButton action={action("filter.clear", t("ui.clear"), () => onChange([]))} size="sm" variant="ghost" />}
         {end}
       </div>
     </div>

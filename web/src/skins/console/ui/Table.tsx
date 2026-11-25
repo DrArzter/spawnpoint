@@ -5,6 +5,7 @@ import { cx } from "../../../lib/cx";
 import { ARRIVED, useArrivals } from "./Tick";
 import { Skeleton } from "./Skeleton";
 import { useSkeletonRows } from "./rows";
+import { t } from "../../../i18n";
 
 /**
  * A column's role decides its layout:
@@ -110,7 +111,7 @@ function placeholder(kind: ColumnKind | undefined) {
 /** The rows of a table that is loading: the same cells, classes and labels as a loaded row. */
 function LoadingBody<Row>({ columns, count }: Readonly<{ columns: readonly Column<Row>[]; count: number }>) {
   return (
-    <tbody aria-busy="true" aria-label="Loading">
+    <tbody aria-busy="true" aria-label={t("common.loading")}>
       {Array.from({ length: count }, (_, row) => (
         <tr key={row}>
           {columns.map((column, index) => (

@@ -1,12 +1,13 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import { cx } from "../../../lib/cx";
+import { t } from "../../../i18n";
 
 /**
  * One announced loading region. Placeholders inside it keep the final
  * geometry, so nothing jumps when the content arrives; they carry no copy.
  */
-export function SkeletonGroup({ label = "Loading", className, children }: Readonly<{ label?: string; className?: string; children: ReactNode }>) {
+export function SkeletonGroup({ label = t("common.loading"), className, children }: Readonly<{ label?: string; className?: string; children: ReactNode }>) {
   return <output aria-busy="true" aria-label={label} className={cx("c-skeleton-group", className)}>{children}</output>;
 }
 

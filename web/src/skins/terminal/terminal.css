@@ -10,7 +10,7 @@
 /* --- tokens --------------------------------------------------------------------------- */
 
 html[data-skin="terminal"] {
-  --font-ui: "B612 Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-ui: "B612 Mono", "Roboto Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-title: var(--font-ui);
   --font-mono: var(--font-ui);
   /* Box-drawing lines: dimmer than ink, darker than a hairline. */

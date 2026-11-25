@@ -5,6 +5,7 @@ import { Chip } from "./ui/Chip";
 import { useNow } from "./ui/Flashbar";
 import { Indicator } from "./ui/Indicator";
 import { formatUptime } from "../../lib/format";
+import { t } from "../../i18n";
 
 /*
  * Facts about a world that the game home, the Worlds list and the quick
@@ -31,7 +32,7 @@ export function statesOf(rows: readonly WorldRow[]): readonly Readonly<{ status:
 }
 
 export function hostingLabel(row: WorldRow): string {
-  return row.world.placement === "fleet" ? "Fleet" : "Persistent";
+  return row.world.placement === "fleet" ? t("world.fleet") : t("world.persistent");
 }
 
 const hostingIcon = (row: WorldRow) => row.world.placement === "fleet" ? "bolt" : "dns";

@@ -6,7 +6,7 @@ import { useApi } from "../api/context";
 import { endSession } from "../api/end-session";
 import { startableReleases } from "./presets";
 import { sessionStatus } from "./status";
-import { formatDateTime } from "../lib/format";
+import { capitalize, formatDateTime } from "../lib/format";
 import { useAccessDirectory, type AccessDirectory } from "./access-directory";
 import type { ControlPlaneSnapshot, Game, OwnerBootstrap, Page, Preset, ServerState, SettingValue, World } from "../model";
 import { routeHash, type AppRoute } from "../routing";
@@ -22,6 +22,8 @@ import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from
 import { useAssistantChat } from "./assistant-chat";
 import { visibleNavigation } from "./navigation";
 import { presetOf, stopDisconnect, type WorldCallbacks } from "./worlds";
+import { t } from "../i18n";
+import { operationNoun } from "../lib/operation-words";
 
 /*
  * The console's bones: what is loaded, what is pending, what is open, and
@@ -82,15 +84,10 @@ export function createLoadSequence() {
 
 // A fleet world has no fixed host, so the answer names the world.
 export function sessionAcceptedMessage(world: World, sessionAction: SessionAction, result: "requested" | "already_stopped"): string {
-  if (result === "already_stopped") return `${world.displayName} is already stopped.`;
-  return `${sessionAction === "start" ? "Start" : "Stop"} of ${world.displayName} accepted. It appears in Operations while it runs.`;
+  if (result === "already_stopped") return t("world.worldDisplayNameAlreadyStopped", { worldDisplayName: world.displayName });
+  return t("common.valueWorldDisplayNameAcceptedAppears", { value: capitalize(operationNoun(sessionAction)), worldDisplayName: world.displayName });
 }
 
-const lifecycleLabels: Record<WorldActionKind, string> = { wipe: "New wipe", archive: "Archive", restore: "Restore", purge: "Delete" };
-
-function lifecycleLabel(kind: WorldActionKind): string {
-  return lifecycleLabels[kind];
-}
 
 function listStatusOf(controlPlane: ControlPlaneState): "loading" | "ready" | "error" {
   if (controlPlane.status === "loading" && controlPlane.snapshot === null) return "loading";
@@ -253,7 +250,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       const next = await api.loadControlPlane();
       if (loads.current.keep(ticket)) setControlPlane({ status: "ready", snapshot: next, error: "" });
     } catch (error) {
-      if (loads.current.keep(ticket)) setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : "The control-plane state could not be loaded.", kind: failureKind(error) }));
+      if (loads.current.keep(ticket)) setControlPlane((current) => ({ status: "error", snapshot: current.snapshot, error: error instanceof Error ? error.message : t("common.controlPlaneStateCouldNot"), kind: failureKind(error) }));
     } finally {
       publish(() => setBooted(true));
       if (!silent) setPending((current) => withoutPending(current, mine));
@@ -304,10 +301,10 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     try {
       const expected = releaseBuildExpectation(preset);
       const result = await api.requestReleaseBuild(target.id, preset.id, expected.profileDigest, expected.retryRelease);
-      notify({ tone: "success", message: `Release ${result.release}: build attempt ${result.attempt} accepted.` });
+      notify({ tone: "success", message: t("app.releaseReleaseBuildAttempt", { release: result.release, attempt: result.attempt }) });
       await refresh(true);
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The build could not be requested." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("app.buildCouldNotRequested") });
       await refresh(true);
     } finally { releasePending(mine); }
   }
@@ -320,7 +317,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       notify({ tone: "success", message: sessionAcceptedMessage(targetWorld, sessionAction, result.result) });
       await refresh(true);
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : `The ${sessionAction} request failed.` });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("app.sessionActionRequestFailed", { sessionAction: operationNoun(sessionAction) }) });
     } finally {
       releasePending(mine);
     }
@@ -331,11 +328,11 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     holdPending(mine);
     try {
       await api.requestWorldLifecycle(target.id, targetWorld.id, kind === "wipe" ? "regenerate" : kind, backupKey, release);
-      notify({ tone: "success", message: `${lifecycleLabel(kind)} of ${targetWorld.displayName} accepted. It appears in Operations while it runs.` });
+      notify({ tone: "success", message: t("common.valueWorldDisplayNameAcceptedAppears", { value: capitalize(operationNoun(kind)), worldDisplayName: targetWorld.displayName }) });
       await refresh(true);
       if (kind === "purge") navigate({ page: "worlds", gameId: target.id, worldId: null });
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : `The ${kind} request failed.` });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("app.sessionActionRequestFailed", { sessionAction: operationNoun(kind) }) });
     } finally {
       releasePending(mine);
     }
@@ -347,11 +344,11 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     try {
       const { result } = await api.requestPromotion(target.id, targetWorld.id, release);
       notify({ tone: "success", message: result === "switched"
-        ? `${targetWorld.displayName} will start on release ${release}.`
-        : `Update of ${targetWorld.displayName} to release ${release} accepted. It appears in Operations while it runs.` });
+        ? t("app.targetWorldDisplayNameWillStartRelease", { targetWorldDisplayName: targetWorld.displayName, release })
+        : t("app.updateTargetWorldDisplayNameReleaseRelease", { targetWorldDisplayName: targetWorld.displayName, release }) });
       await refresh(true);
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The release update request failed." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("app.releaseUpdateRequestFailed") });
     } finally {
       releasePending(mine);
     }
@@ -362,9 +359,9 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     holdPending(mine);
     try {
       const { release } = await openDownload(() => api.requestPackDownload(target.id, targetWorld.id));
-      notify({ tone: "success", message: `Pack for release ${release} is downloading.` });
+      notify({ tone: "success", message: t("app.packReleaseReleaseDownloading", { release }) });
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The pack link failed." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("app.packLinkFailed") });
     } finally {
       releasePending(mine);
     }
@@ -372,22 +369,22 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
 
   function downloadBackup(target: Game, targetWorld: World, entry: BackupEntry) {
     openDownload(() => api.requestBackupDownload(target.id, targetWorld.id, entry.key)).then(
-      () => notify({ tone: "success", message: `${entry.archiveName} is downloading.` }),
-      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
+      () => notify({ tone: "success", message: t("app.archiveNameDownloading", { archiveName: entry.archiveName }) }),
+      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : t("common.downloadLinkCouldNot") }),
     );
   }
 
   function downloadMod(target: Game, presetId: string, release: string, mod: ReleaseMod) {
     openDownload(() => api.requestModDownload(target.id, presetId, release, mod.sha256)).then(
-      () => notify({ tone: "success", message: `${mod.file} is downloading.` }),
-      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
+      () => notify({ tone: "success", message: t("app.archiveNameDownloading", { archiveName: mod.file }) }),
+      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : t("common.downloadLinkCouldNot") }),
     );
   }
 
   function downloadReleasePack(target: Game, presetId: string, release: string, pack: ReleasePackName) {
     openDownload(() => api.requestReleasePack(target.id, presetId, release, pack)).then(
-      () => notify({ tone: "success", message: `The ${pack} pack of ${presetId} ${release} is downloading.` }),
-      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : "The download link could not be created." }),
+      () => notify({ tone: "success", message: t("app.packPackPresetIdRelease", { pack, presetId, release }) }),
+      (error: unknown) => notify({ tone: "error", message: error instanceof Error ? error.message : t("common.downloadLinkCouldNot") }),
     );
   }
 
@@ -397,12 +394,12 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       await api.updateGameSettings(target.id, targetWorld.id, values);
       // The host reads them when a session starts; a running game is not touched.
       notify({ tone: "success", message: worldSessionActive(target, targetWorld)
-        ? `Game settings saved. ${targetWorld.displayName} uses them from its next start.`
-        : `Game settings for ${targetWorld.displayName} saved.` });
+        ? t("app.gameSettingsSavedTargetWorldDisplayName", { targetWorldDisplayName: targetWorld.displayName })
+        : t("app.gameSettingsTargetWorldDisplayNameSaved", { targetWorldDisplayName: targetWorld.displayName }) });
       setEditingGameSettings(null);
       await refresh(true);
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "Game settings could not be saved." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("common.gameSettingsCouldNot") });
     } finally {
       setSavingGameSettings(false);
     }
@@ -413,12 +410,12 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     holdPending(mine);
     try {
       const created = await api.requestCreateWorld(target.id, preset.id, displayName, release, placement, connectivity, auth);
-      notify({ tone: "success", message: `${created.displayName} was created from ${preset.displayName} ${release}.` });
+      notify({ tone: "success", message: t("app.createdDisplayNameWasCreatedFrom", { createdDisplayName: created.displayName, presetDisplayName: preset.displayName, release }) });
       setCreating(null);
       await refresh(true);
       navigate({ page: "worlds", gameId: target.id, worldId: created.id });
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The world could not be created." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("common.worldCouldNotCreated") });
     } finally {
       releasePending(mine);
     }
@@ -428,11 +425,11 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     setSavingWorldSettings(true);
     try {
       await api.requestUpdateWorldSettings(target.id, targetWorld.id, placement, connectivity, auth);
-      notify({ tone: "success", message: `Connection settings for ${targetWorld.displayName} saved.` });
+      notify({ tone: "success", message: t("app.connectionSettingsTargetWorldDisplayNameSaved", { targetWorldDisplayName: targetWorld.displayName }) });
       setEditing(null);
       await refresh(true);
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "World settings could not be saved." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("common.worldSettingsCouldNot") });
     } finally {
       setSavingWorldSettings(false);
     }
@@ -464,22 +461,22 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   const assistant = useAssistantChat(granted.has("assistant.use") && capabilities.has("assistant"), notify);
 
   const shell: ShellModel = {
-    navigation: [...navItems, { id: "profile" as const, label: "Profile", href: "#/profile" }].map((item): NavigationItem => ({ ...item, current: item.id === page })),
+    navigation: [...navItems, { id: "profile" as const, label: t("common.profile"), href: "#/profile" }].map((item): NavigationItem => ({ ...item, current: item.id === page })),
     page,
     scope: {
       game,
       games,
       statusOf: (item) => sessionStatus(deriveServerState(item, snapshot)),
       open: scopeOpen,
-      show: action("scope.show", game?.displayName ?? "No game", () => setScopeOpen(true), { disabled: games.length === 0, hint: "Select a game" }),
-      close: action("scope.close", "Cancel", () => setScopeOpen(false)),
+      show: action("scope.show", game?.displayName ?? t("app.noGame"), () => setScopeOpen(true), { disabled: games.length === 0, hint: t("common.selectGame") }),
+      close: action("scope.close", t("common.cancel"), () => setScopeOpen(false)),
       select: (gameId) => { setScopeOpen(false); navigate({ gameId, worldId: null }); },
     },
     viewer,
     demo: session.demo === true,
     observedAt: snapshot ? formatDateTime(snapshot.observedAt) : undefined,
-    openProfile: action("shell.profile", "Open my profile", () => navigate({ page: "profile" }), { hint: viewer.displayName }),
-    overview: { id: "worlds", label: "Home", href: routeHash({ page: "worlds", accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null, worldsView: "overview" }), current: page === "worlds" && !route.worldId && route.worldsView === "overview" },
+    openProfile: action("shell.profile", t("profile.openMyProfile"), () => navigate({ page: "profile" }), { hint: viewer.displayName }),
+    overview: { id: "worlds", label: t("shell.home"), href: routeHash({ page: "worlds", accessTab: route.accessTab, gameId: game?.id ?? null, worldId: null, worldsView: "overview" }), current: page === "worlds" && !route.worldId && route.worldsView === "overview" },
     ...(snapshot ? { observedAtIso: snapshot.observedAt } : {}),
     requests: directory.requestCount,
     assistant,
@@ -491,7 +488,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       const prepared = await prepareAvatar(file, browserAvatarEnvironment);
       setPhotoUrl(await api.uploadAvatar(prepared.base64));
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The picture could not be saved." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("profile.pictureCouldNotSaved") });
     } finally {
       setAvatarBusy(false);
     }
@@ -502,7 +499,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       await api.removeAvatar();
       setPhotoUrl(null);
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The picture could not be removed." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("profile.pictureCouldNotRemoved") });
     } finally {
       setAvatarBusy(false);
     }

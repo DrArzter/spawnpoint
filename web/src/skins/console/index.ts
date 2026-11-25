@@ -8,12 +8,13 @@ import { ScopeDialog } from "./Scope";
 import { Shell } from "./Shell";
 import { World } from "./World";
 import { Worlds } from "./Worlds";
+import { t } from "../../i18n";
 
 // The console face (C+A, ADR-0072): an AWS-console grammar on a content grid,
 // without its brand. Every view and primitive is the face's own (ui/, styles/).
 export const consoleSkin: Skin = {
   id: "console",
-  name: "Cloud console",
+  name: t("shell.cloudConsole"),
   Shell,
   Boot,
   Worlds,

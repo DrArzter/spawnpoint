@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ApiProvider } from "./api/context";
 import { composition } from "./auth";
+import { currentLocale } from "./i18n";
 import { applyAccent, DEFAULT_ACCENT } from "./styles/accent";
 import { getStoredAccent, getThemePreference, resolveTheme } from "./telegram";
 import "./styles/tokens.css";
@@ -17,6 +18,7 @@ import "./skins/console/styles/index.css";
 // The remembered accent is painted before the first frame, not in an effect
 // after it: a colour that arrives a frame late is a flash of the default on
 // every load. The identity's copy overrides it once the session answers.
+document.documentElement.lang = currentLocale();
 applyAccent(document.documentElement, getStoredAccent() ?? DEFAULT_ACCENT, resolveTheme(getThemePreference()));
 
 createRoot(document.getElementById("root")!).render(

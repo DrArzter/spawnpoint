@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { AccessInvitation } from "../../api/contract";
 import type { Action } from "../../core/actions";
 import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RoleChoice, RoleEditorModel, RolesModel, UsersModel } from "../../core/models";
-import type { StatusDescriptor } from "../../core/status";
+import { invitationStatus, type StatusDescriptor } from "../../core/status";
 import { Icon } from "../../icons";
 import { permissionGroups, ROLE_ID_HINT, roleFormFields, permissionRows, rolePermissions } from "../../core/roles";
 import type { Member, PermissionInfo, Role } from "../../model";
@@ -28,6 +28,7 @@ import { SplitPage } from "./ui/SplitPage";
 import { Status } from "./ui/Status";
 import { Table, type Column } from "./ui/Table";
 import { TrackList, TrackTitle } from "./ui/TrackList";
+import { t } from "../../i18n";
 
 /*
  * Access (spec §6.5). The tab is core's route; which request, person or
@@ -65,11 +66,11 @@ function useSelection(): Selection {
 
 const notificationRows = (model: NotificationsModel) => [
   ...model.games.flatMap((game) => [
-    { id: `${game.id}.started`, label: `${game.displayName} started` },
-    { id: `${game.id}.stopped`, label: `${game.displayName} stopped` },
+    { id: `${game.id}.started`, label: t("access.gameDisplayNameStarted", { gameDisplayName: game.displayName }) },
+    { id: `${game.id}.stopped`, label: t("access.gameDisplayNameStopped", { gameDisplayName: game.displayName }) },
   ]),
-  { id: "invitation.broadcast", label: "Invitations sent to everyone" },
-  { id: "invitation.direct", label: "Invitations sent directly to me" },
+  { id: "invitation.broadcast", label: t("access.invitationsSentEveryone") },
+  { id: "invitation.direct", label: t("access.invitationsSentDirectlyMe") },
 ];
 
 export function Access({ model }: Readonly<{ model: AccessModel }>) {
@@ -110,38 +111,38 @@ function AccessList({ model, selection }: Readonly<{ model: AccessModel; selecti
   const roleName = (id: string) => users.roles.find((role) => role.id === id)?.name ?? id;
   const candidates = (users.candidates.status === "ready" ? users.candidates.value : []).filter((row) => match(row.candidate.displayName, row.account));
   const members = users.members.filter((row) => match(row.member.name, ...row.member.links.map((link) => link.value)));
-  const invitations = (users.invitations?.list.status === "ready" ? users.invitations.list.value : []).filter((row) => match(row.invitation.deliveryEmail ?? "One-time link"));
+  const invitations = (users.invitations?.list.status === "ready" ? users.invitations.list.value : []).filter((row) => match(row.invitation.deliveryEmail ?? t("access.oneTimeLink")));
   const on = Object.values(model.notifications.subscriptions).filter(Boolean).length;
   const groups: ListGroup[] = [
-    { id: "users", items: <ListItemIcon current={model.tab === "users" && selection === null} href={USERS} icon="group" name="All users" /> },
+    { id: "users", items: <ListItemIcon current={model.tab === "users" && selection === null} href={USERS} icon="group" name={t("access.allUsers")} /> },
     ...(candidates.length > 0 ? [{
       id: "requests",
-      label: "Requests",
+      label: t("access.requests"),
       end: <span>{candidates.length}</span>,
       items: candidates.map((row) => <ListItemPerson account={row.account} accountIcon={providerIcon(row.candidate.platform)} current={current("requests", row.id)} href={itemHref("requests", row.id)} key={row.id} meta={<Ago at={row.candidate.requestedAt ?? row.candidate.firstSeenAt} />} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" />),
     }] : []),
     {
       id: "people",
-      label: "People",
+      label: t("access.people"),
       end: <span>{members.length}</span>,
       items: members.map((row) => <ListItemPerson account={firstAccount(row.member)} accountIcon={row.member.links[0] ? providerIcon(row.member.links[0].kind) : undefined} current={current("people", row.member.id)} href={itemHref("people", row.member.id)} key={row.member.id} meta={<Chip>{roleName(row.member.roleId)}</Chip>} name={row.member.name} photoUrl={row.member.photoUrl} />),
     },
     ...(invitations.length > 0 ? [{
       id: "invitations",
-      label: "Invitations",
+      label: t("access.invitations"),
       end: <span>{invitations.length}</span>,
       items: invitations.map((row) => <ListItemPerson current={current("invitations", row.invitation.id)} href={itemHref("invitations", row.invitation.id)} key={row.invitation.id} meta={<Ago at={row.invitation.createdAt} />} name={recipientOf(row.invitation)} tone="request" />),
     }] : []),
     {
       id: "settings",
-      label: "Settings",
+      label: t("access.settings"),
       items: <>
-        <ListItemIcon current={model.tab === "roles"} href="#/access/roles" icon="admin_panel_settings" meta={<span>{model.roleCount}</span>} name="Roles" />
-        <ListItemIcon current={model.tab === "notifications"} href="#/access/notifications" icon="notifications" meta={<span>{on} on</span>} name="My notifications" />
+        <ListItemIcon current={model.tab === "roles"} href="#/access/roles" icon="admin_panel_settings" meta={<span>{model.roleCount}</span>} name={t("access.roles")} />
+        <ListItemIcon current={model.tab === "notifications"} href="#/access/notifications" icon="notifications" meta={<span>{t("access.subscriptionsOn", { count: on })}</span>} name={t("access.myNotifications")} />
       </>,
     },
   ];
-  return <ListColumn filter={{ value: filter, set: setFilter, placeholder: "Filter people" }} groups={groups} label="Access" />;
+  return <ListColumn filter={{ value: filter, set: setFilter, placeholder: t("access.filterPeople") }} groups={groups} label={t("common.access")} />;
 }
 
 function firstAccount(member: Member): string | undefined {
@@ -150,51 +151,45 @@ function firstAccount(member: Member): string | undefined {
   return rest.length > 0 ? `${first.value} +${rest.length}` : first.value;
 }
 
-const recipientOf = (invitation: AccessInvitation) => invitation.deliveryEmail ?? "One-time link";
+const recipientOf = (invitation: AccessInvitation) => invitation.deliveryEmail ?? t("access.oneTimeLink");
 
-const invitationStatus: Readonly<Record<AccessInvitation["status"], StatusDescriptor>> = {
-  PENDING: { kind: "pending", label: "Pending" },
-  USED: { kind: "ok", label: "Used" },
-  REVOKED: { kind: "off", label: "Revoked" },
-  EXPIRED: { kind: "off", label: "Expired" },
-};
 
 function RoleSelect({ label, choice, onChange }: Readonly<{ label: string; choice: RoleChoice; onChange: (roleId: string) => void }>) {
   return <Select aria-label={label} disabled={choice.disabled} inline onChange={(event) => onChange(event.target.value)} options={[...choice.options]} value={choice.value} />;
 }
 
-const ACCESS: Crumb = { label: "Access", href: USERS };
+const ACCESS: Crumb = { label: t("common.access"), href: USERS };
 
 // --- the default Users pane: every Users decision in one render -------------------
 
 function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
   const candidates = model.candidates;
   const requestColumns: Column<CandidateRow>[] = [
-    { id: "person", header: "Person", kind: "lead", render: (row) => <a href={itemHref("requests", row.id)}><Person detail={row.account} detailIcon={providerIcon(row.candidate.platform)} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" /></a> },
-    { id: "requested", header: "Requested", render: (row) => <Ago at={row.candidate.requestedAt ?? row.candidate.firstSeenAt} /> },
-    { id: "role", header: "Role", render: (row) => <RoleSelect choice={row.role} label={`Role for ${row.candidate.displayName}`} onChange={row.setRoleId} /> },
-    { id: "actions", header: "Actions", kind: "act", render: (row) => <><ActionButton action={row.approve} size="sm" /><ActionButton action={row.dismiss} size="sm" /></> },
+    { id: "person", header: t("common.person"), kind: "lead", render: (row) => <a href={itemHref("requests", row.id)}><Person detail={row.account} detailIcon={providerIcon(row.candidate.platform)} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" /></a> },
+    { id: "requested", header: t("common.requested"), render: (row) => <Ago at={row.candidate.requestedAt ?? row.candidate.firstSeenAt} /> },
+    { id: "role", header: t("access.role"), render: (row) => <RoleSelect choice={row.role} label={t("access.roleCandidateDisplayName", { candidateDisplayName: row.candidate.displayName })} onChange={row.setRoleId} /> },
+    { id: "actions", header: t("common.actions"), kind: "act", render: (row) => <><ActionButton action={row.approve} size="sm" /><ActionButton action={row.dismiss} size="sm" /></> },
   ];
   const peopleColumns: Column<MemberRow>[] = [
-    { id: "person", header: "Person", kind: "lead", render: (row) => <a href={itemHref("people", row.member.id)}><Person name={row.member.name} photoUrl={row.member.photoUrl} /></a> },
-    { id: "accounts", header: "Accounts", kind: "wide", render: (row) => firstAccount(row.member) ?? <span className="c-faint">—</span> },
-    { id: "role", header: "Role", render: (row) => <RoleSelect choice={row.role} label={`Role for ${row.member.name}`} onChange={row.setRoleId} /> },
-    { id: "actions", header: "Actions", kind: "act", render: (row) => <Overflow actions={row.remove ? [row.linkedAccounts, row.remove] : [row.linkedAccounts]} label={`Actions for ${row.member.name}`} size="sm" /> },
+    { id: "person", header: t("common.person"), kind: "lead", render: (row) => <a href={itemHref("people", row.member.id)}><Person name={row.member.name} photoUrl={row.member.photoUrl} /></a> },
+    { id: "accounts", header: t("access.accounts"), kind: "wide", render: (row) => firstAccount(row.member) ?? <span className="c-faint">—</span> },
+    { id: "role", header: t("access.role"), render: (row) => <RoleSelect choice={row.role} label={t("access.roleCandidateDisplayName", { candidateDisplayName: row.member.name })} onChange={row.setRoleId} /> },
+    { id: "actions", header: t("common.actions"), kind: "act", render: (row) => <Overflow actions={row.remove ? [row.linkedAccounts, row.remove] : [row.linkedAccounts]} label={t("common.actionsMemberName", { memberName: row.member.name })} size="sm" /> },
   ];
   const showRequests = candidates.status !== "ready" || candidates.value.length > 0;
   return (
     <>
-      <PageHeader count={model.members.length} title="Users" trail={[ACCESS]} />
+      <PageHeader count={model.members.length} title={t("access.users")} trail={[ACCESS]} />
       <Grid kind="stack">
         {showRequests && (
-          <Card body="flush" count={candidates.status === "ready" ? candidates.value.length : undefined} title="Requests">
+          <Card body="flush" count={candidates.status === "ready" ? candidates.value.length : undefined} title={t("access.requests")}>
             {candidates.status === "error"
-              ? <LoadError error={candidates.error} kind={candidates.kind} retry={candidates.retry} size="sm" title="Requests could not be loaded" verb="read requests" />
-              : <Table arrivals columns={requestColumns} label="Requests" loading={candidates.status === "loading"} rowKey={(row) => row.id} rows={candidates.status === "ready" ? candidates.value : []} />}
+              ? <LoadError error={candidates.error} kind={candidates.kind} retry={candidates.retry} size="sm" title={t("common.requestsCouldNotLoaded")} verb={t("common.readRequests")} />
+              : <Table arrivals columns={requestColumns} label={t("access.requests")} loading={candidates.status === "loading"} rowKey={(row) => row.id} rows={candidates.status === "ready" ? candidates.value : []} />}
           </Card>
         )}
-        <Card body="flush" count={model.members.length} title="People">
-          <Table arrivals columns={peopleColumns} empty={<Empty icon="group" size="sm" title="No people" />} label="People" rowKey={(row) => row.member.id} rows={model.members} />
+        <Card body="flush" count={model.members.length} title={t("access.people")}>
+          <Table arrivals columns={peopleColumns} empty={<Empty icon="group" size="sm" title={t("access.noPeople")} />} label={t("access.people")} rowKey={(row) => row.member.id} rows={model.members} />
         </Card>
         {model.invitations && <InviteCard model={model.invitations} />}
         {model.invitations && <InvitationsCard model={model.invitations} />}
@@ -205,10 +200,10 @@ function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
 
 function InviteCard({ model }: Readonly<{ model: InvitationsModel }>) {
   return (
-    <Card title="Invite to Spawnpoint">
+    <Card title={t("access.inviteSpawnpoint")}>
       <form className="c-access-invite" onSubmit={(event) => { event.preventDefault(); if (!model.create.disabled && !model.create.busy) model.create.run(); }}>
         {model.emailMode && (
-          <Field label="Email">
+          <Field label={t("common.email")}>
             <TextInput autoComplete="email" onChange={(event) => model.setEmail(event.target.value)} type="email" value={model.email} />
           </Field>
         )}
@@ -217,12 +212,12 @@ function InviteCard({ model }: Readonly<{ model: InvitationsModel }>) {
       {model.issued && (
         <div className="c-access-issued">
           <div className="c-access-invite">
-            <Field label="Invitation link">
+            <Field label={t("access.invitationLink")}>
               <TextInput mono onFocus={(event) => event.currentTarget.select()} readOnly value={model.issued.url} />
             </Field>
             <ActionButton action={model.issued.copy} />
           </div>
-          <p className="c-line">Copy this link now. It is shown once.</p>
+          <p className="c-line">{t("access.copyLinkNowShown")}</p>
         </div>
       )}
     </Card>
@@ -233,17 +228,17 @@ function InvitationsCard({ model }: Readonly<{ model: InvitationsModel }>) {
   const list = model.list;
   type Row = Readonly<{ invitation: AccessInvitation; revoke: Action | null }>;
   const columns: Column<Row>[] = [
-    { id: "recipient", header: "Recipient", kind: "lead", render: (row) => <a href={itemHref("invitations", row.invitation.id)}>{recipientOf(row.invitation)}</a> },
-    { id: "status", header: "Status", render: (row) => <Status status={invitationStatus[row.invitation.status]} /> },
-    { id: "created", header: "Created", render: (row) => <Ago at={row.invitation.createdAt} /> },
-    { id: "expires", header: "Expires", kind: "wide", render: (row) => <DateTime at={row.invitation.expiresAt} /> },
-    { id: "actions", header: "Actions", kind: "act", render: (row) => row.revoke && <ActionButton action={row.revoke} size="sm" /> },
+    { id: "recipient", header: t("access.recipient"), kind: "lead", render: (row) => <a href={itemHref("invitations", row.invitation.id)}>{recipientOf(row.invitation)}</a> },
+    { id: "status", header: t("common.status"), render: (row) => <Status status={invitationStatus(row.invitation.status)} /> },
+    { id: "created", header: t("common.created"), render: (row) => <Ago at={row.invitation.createdAt} /> },
+    { id: "expires", header: t("access.expires"), kind: "wide", render: (row) => <DateTime at={row.invitation.expiresAt} /> },
+    { id: "actions", header: t("common.actions"), kind: "act", render: (row) => row.revoke && <ActionButton action={row.revoke} size="sm" /> },
   ];
   return (
-    <Card body="flush" count={list.status === "ready" ? list.value.length : undefined} title="Invitations">
+    <Card body="flush" count={list.status === "ready" ? list.value.length : undefined} title={t("access.invitations")}>
       {list.status === "error"
-        ? <LoadError error={list.error} kind={list.kind} retry={list.retry} size="sm" title="Invitations could not be loaded" verb="read invitations" />
-        : <Table arrivals columns={columns} empty={<Empty icon="mail" size="sm" title="No invitations" />} label="Invitations" loading={list.status === "loading"} rowKey={(row) => row.invitation.id} rows={list.status === "ready" ? list.value : []} />}
+        ? <LoadError error={list.error} kind={list.kind} retry={list.retry} size="sm" title={t("access.invitationsCouldNotLoaded2")} verb={t("common.readInvitations")} />
+        : <Table arrivals columns={columns} empty={<Empty icon="mail" size="sm" title={t("access.noInvitations")} />} label={t("access.invitations")} loading={list.status === "loading"} rowKey={(row) => row.invitation.id} rows={list.status === "ready" ? list.value : []} />}
     </Card>
   );
 }
@@ -258,7 +253,7 @@ function DateTime({ at }: Readonly<{ at: string | null }>) {
 function Permissions({ role, catalogue }: Readonly<{ role: Role | undefined; catalogue: readonly PermissionInfo[] }>) {
   if (!role) return null;
   return (
-    <Card count={role.permissions.length} title={`${role.name} permissions`} titleTip={role.description}>
+    <Card count={role.permissions.length} title={t("access.roleNamePermissions", { roleName: role.name })} titleTip={role.description}>
       <PermissionList catalogue={catalogue} role={role} />
     </Card>
   );
@@ -288,20 +283,20 @@ function RequestPane({ row, roles, catalogue }: Readonly<{ row: CandidateRow; ro
     <>
       <PageHeader
         actions={<>
-          <RoleSelect choice={row.role} label="Role on approval" onChange={row.setRoleId} />
+          <RoleSelect choice={row.role} label={t("access.roleApproval")} onChange={row.setRoleId} />
           <ActionButton action={row.approve} variant="primary" />
           <ActionButton action={row.dismiss} />
         </>}
-        after={<Status status={{ kind: "pending", label: "Waiting" }} variant="pill" />}
+        after={<Status status={{ kind: "pending", label: t("access.waiting") }} variant="pill" />}
         title={candidate.displayName}
-        trail={[ACCESS, { label: "Requests", href: groupHref("requests") }]}
+        trail={[ACCESS, { label: t("access.requests"), href: groupHref("requests") }]}
       />
       <Grid kind="detail">
-        <Card body="kv" title="Request">
+        <Card body="kv" title={t("access.request")}>
           <DetailList columns="fit" details={[
-            { label: "Account", value: { type: "text", text: row.account } },
-            { label: "Provider", value: { type: "text", text: providerName(candidate.platform) } },
-            { label: "Requested", value: { type: "time", at: candidate.requestedAt ?? candidate.firstSeenAt } },
+            { label: t("common.account"), value: { type: "text", text: row.account } },
+            { label: t("access.provider"), value: { type: "text", text: providerName(candidate.platform) } },
+            { label: t("common.requested"), value: { type: "time", at: candidate.requestedAt ?? candidate.firstSeenAt } },
           ]} />
         </Card>
         <Permissions catalogue={catalogue} role={roles.find((role) => role.id === row.role.value)} />
@@ -315,15 +310,15 @@ function PersonPane({ row, roles, catalogue }: Readonly<{ row: MemberRow; roles:
     <>
       <PageHeader
         actions={<>
-          <RoleSelect choice={row.role} label="Role" onChange={row.setRoleId} />
+          <RoleSelect choice={row.role} label={t("access.role")} onChange={row.setRoleId} />
           <ActionButton action={row.linkedAccounts} />
           {row.remove && <ActionButton action={row.remove} />}
         </>}
         title={row.member.name}
-        trail={[ACCESS, { label: "People", href: groupHref("people") }]}
+        trail={[ACCESS, { label: t("access.people"), href: groupHref("people") }]}
       />
       <Grid kind="detail">
-        <Card body="flush" count={row.member.links.length} title="Linked accounts">
+        <Card body="flush" count={row.member.links.length} title={t("access.linkedAccounts")}>
           <LinkedAccountList member={row.member} />
         </Card>
         <Permissions catalogue={catalogue} role={roles.find((role) => role.id === row.role.value)} />
@@ -335,14 +330,14 @@ function PersonPane({ row, roles, catalogue }: Readonly<{ row: MemberRow; roles:
 function LinkedAccountList({ member }: Readonly<{ member: Member }>) {
   return (
     <TrackList
-      empty={<Empty icon="link" size="sm" title="No linked accounts" />}
-      label={`${member.name}: linked accounts`}
+      empty={<Empty icon="link" size="sm" title={t("access.noLinkedAccounts")} />}
+      label={t("access.memberNameLinkedAccounts", { memberName: member.name })}
       rowKey={(link) => link.id}
       rows={member.links}
       tracks={[
-        { id: "provider", header: "Provider", width: "auto", kind: "plain", render: (link) => <span className="c-access-provider"><Icon name={providerIcon(link.kind)} size={18} /><span>{providerName(link.kind)}</span></span> },
-        { id: "account", header: "Account", width: "minmax(0, 1fr)", kind: "stack", render: (link) => <TrackTitle title={<span className="c-mono" title={link.value}>{link.value}</span>} /> },
-        { id: "state", header: "State", width: "auto", kind: "optional", render: (link) => <Status status={link.verified ? { kind: "ok", label: "Verified" } : { kind: "warning", label: "Unverified" }} /> },
+        { id: "provider", header: t("access.provider"), width: "auto", kind: "plain", render: (link) => <span className="c-access-provider"><Icon name={providerIcon(link.kind)} size={18} /><span>{providerName(link.kind)}</span></span> },
+        { id: "account", header: t("common.account"), width: "minmax(0, 1fr)", kind: "stack", render: (link) => <TrackTitle title={<span className="c-mono" title={link.value}>{link.value}</span>} /> },
+        { id: "state", header: t("common.state"), width: "auto", kind: "optional", render: (link) => <Status status={link.verified ? { kind: "ok", label: t("common.verified") } : { kind: "warning", label: t("access.unverified") }} /> },
       ]}
     />
   );
@@ -350,7 +345,7 @@ function LinkedAccountList({ member }: Readonly<{ member: Member }>) {
 
 function LinkedAccountsPanel({ member, close }: Readonly<{ member: Member; close: Action }>) {
   return (
-    <SidePanel cancel={close} title={`${member.name} · Linked accounts`}>
+    <SidePanel cancel={close} title={t("access.memberNameLinkedAccounts2", { memberName: member.name })}>
       <LinkedAccountList member={member} />
     </SidePanel>
   );
@@ -358,9 +353,9 @@ function LinkedAccountsPanel({ member, close }: Readonly<{ member: Member; close
 
 const deliveries: Readonly<Record<AccessInvitation["delivery"], StatusDescriptor | null>> = {
   not_requested: null,
-  pending: { kind: "pending", label: "Email pending" },
-  sent: { kind: "ok", label: "Email sent" },
-  failed: { kind: "error", label: "Email failed" },
+  pending: { kind: "pending", label: t("access.emailPending") },
+  sent: { kind: "ok", label: t("access.emailSent") },
+  failed: { kind: "error", label: t("access.emailFailed") },
 };
 
 function InvitationPane({ row }: Readonly<{ row: Readonly<{ invitation: AccessInvitation; revoke: Action | null }> }>) {
@@ -370,16 +365,16 @@ function InvitationPane({ row }: Readonly<{ row: Readonly<{ invitation: AccessIn
     <>
       <PageHeader
         actions={row.revoke && <ActionButton action={row.revoke} />}
-        after={<Status status={invitationStatus[invitation.status]} variant="pill" />}
+        after={<Status status={invitationStatus(invitation.status)} variant="pill" />}
         title={recipientOf(invitation)}
-        trail={[ACCESS, { label: "Invitations", href: groupHref("invitations") }]}
+        trail={[ACCESS, { label: t("access.invitations"), href: groupHref("invitations") }]}
       />
-      <Card body="kv" title="Invitation">
+      <Card body="kv" title={t("access.invitation")}>
         <DetailList columns="fit" details={[
-          { label: "Delivery", value: delivery ? { type: "status", status: delivery } : { type: "text", text: "One-time link" } },
-          { label: "Created", value: { type: "time", at: invitation.createdAt } },
-          { label: "Expires", value: { type: "time", at: invitation.expiresAt } },
-          { label: "Used", value: invitation.usedAt ? { type: "time", at: invitation.usedAt } : { type: "absent", text: "—" } },
+          { label: t("access.delivery"), value: delivery ? { type: "status", status: delivery } : { type: "text", text: t("access.oneTimeLink") } },
+          { label: t("common.created"), value: { type: "time", at: invitation.createdAt } },
+          { label: t("access.expires"), value: { type: "time", at: invitation.expiresAt } },
+          { label: t("access.used"), value: invitation.usedAt ? { type: "time", at: invitation.usedAt } : { type: "absent", text: "—" } },
         ]} />
       </Card>
     </>
@@ -393,8 +388,8 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
   const roles = state.status === "ready" ? state.value : [];
   const permissions = permissionRows(catalogue, roles);
   const columns: Column<PermissionInfo>[] = [
-    { id: "permission", header: "Permission", kind: "lead", render: (permission) => <PermissionName permission={permission} /> },
-    { id: "group", header: "Group", kind: "wide", render: (permission) => <span className="c-faint">{permission.group}</span> },
+    { id: "permission", header: t("access.permission"), kind: "lead", render: (permission) => <PermissionName permission={permission} /> },
+    { id: "group", header: t("access.group"), kind: "wide", render: (permission) => <span className="c-faint">{permission.group}</span> },
     ...roles.map((role): Column<PermissionInfo> => {
       const read = model.read(role);
       return {
@@ -402,25 +397,25 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
         header: role.name,
         className: "c-access-cell",
         // The button says what it opens; the count is labelled for a screen reader, as its column header reads only the role.
-        headerCell: <span className="c-access-role-head"><ActionButton action={{ ...read, label: role.name, icon: undefined }} name={`${role.name} permissions`} size="sm" variant="ghost" /><span aria-label={`${role.holders} ${role.holders === 1 ? "person" : "people"}`} className="c-faint" role="img">{role.holders}</span></span>,
+        headerCell: <span className="c-access-role-head"><ActionButton action={{ ...read, label: role.name, icon: undefined }} name={t("access.roleNamePermissions", { roleName: role.name })} size="sm" variant="ghost" /><span aria-label={t("access.personCount", { count: role.holders })} className="c-faint" role="img">{role.holders}</span></span>,
         render: (permission) => role.permissions.includes(permission.id)
-          ? <Indicator status={{ kind: "ok", label: "Granted" }} />
-          : <span aria-label="Not granted" className="c-faint" role="img">—</span>,
+          ? <Indicator status={{ kind: "ok", label: t("access.granted") }} />
+          : <span aria-label={t("access.notGranted")} className="c-faint" role="img">—</span>,
       };
     }),
   ];
   return (
     <>
-      <PageHeader actions={<ActionButton action={model.create} variant="primary" />} count={state.status === "ready" ? roles.length : undefined} title="Roles" trail={[ACCESS]} />
+      <PageHeader actions={<ActionButton action={model.create} variant="primary" />} count={state.status === "ready" ? roles.length : undefined} title={t("access.roles")} trail={[ACCESS]} />
       <Grid kind="stack">
-        <Card body="flush" label="Roles and permissions">
+        <Card body="flush" label={t("access.rolesPermissions")}>
           {state.status === "error"
-            ? <LoadError error={state.error} kind={state.kind} retry={state.retry} title="Roles could not be loaded" verb="read roles" />
-            : <Table columns={columns} empty={<Empty icon="admin_panel_settings" size="sm" title="No roles" />} label="Permissions by role" loading={state.status === "loading"} rowKey={(permission) => permission.id} rows={permissions} variant="matrix" />}
+            ? <LoadError error={state.error} kind={state.kind} retry={state.retry} title={t("access.rolesCouldNotLoaded2")} verb={t("access.readRoles")} />
+            : <Table columns={columns} empty={<Empty icon="admin_panel_settings" size="sm" title={t("access.noRoles")} />} label={t("access.permissionsByRole")} loading={state.status === "loading"} rowKey={(permission) => permission.id} rows={permissions} variant="matrix" />}
         </Card>
-        <Card title="Default role">
-          <Field label="Given on approval">
-            <Select aria-label="Default role" disabled={model.defaultRole.choice.disabled} onChange={(event) => model.defaultRole.set(event.target.value)} options={[...model.defaultRole.choice.options]} value={model.defaultRole.choice.value} />
+        <Card title={t("access.defaultRole")}>
+          <Field label={t("access.givenApproval")}>
+            <Select aria-label={t("access.defaultRole")} disabled={model.defaultRole.choice.disabled} onChange={(event) => model.defaultRole.set(event.target.value)} options={[...model.defaultRole.choice.options]} value={model.defaultRole.choice.value} />
           </Field>
         </Card>
         <OwnerCard users={users} />
@@ -428,9 +423,9 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
       <ConfirmationDialog model={model.deletion} />
       {model.editor && <RoleEditorPanel model={model.editor} />}
       {model.reading && (
-        <SidePanel actions={<><ActionButton action={model.remove(model.reading)} variant="danger" /><ActionButton action={model.edit(model.reading)} variant="primary" /></>} cancel={model.closeReading} title={`${model.reading.name} permissions`}>
+        <SidePanel actions={<><ActionButton action={model.remove(model.reading)} variant="danger" /><ActionButton action={model.edit(model.reading)} variant="primary" /></>} cancel={model.closeReading} title={t("access.roleNamePermissions", { roleName: model.reading.name })}>
           <div className="c-access-role">
-            {model.reading.builtIn && <Chip>Built-in</Chip>}
+            {model.reading.builtIn && <Chip>{t("access.builtIn")}</Chip>}
             <p className="c-line">{model.reading.description}</p>
           </div>
           <PermissionList catalogue={catalogue} role={model.reading} />
@@ -444,7 +439,7 @@ function RoleEditorPanel({ model }: Readonly<{ model: RoleEditorModel }>) {
   const fields = roleFormFields(model);
   return (
     <SidePanel actions={<ActionButton action={model.submit} variant="primary" />} cancel={model.cancel} title={model.title}>
-      <Field label="Name">
+      <Field label={t("common.name")}>
         <TextInput {...fields.name} />
       </Field>
       {model.mode === "create" && (
@@ -452,7 +447,7 @@ function RoleEditorPanel({ model }: Readonly<{ model: RoleEditorModel }>) {
           <TextInput mono {...fields.id} />
         </Field>
       )}
-      <Field label="Description">
+      <Field label={t("access.description")}>
         <TextInput {...fields.description} />
       </Field>
       {permissionGroups(model.permissions).map(({ group, rows }) => (
@@ -474,17 +469,17 @@ function OwnerCard({ users }: Readonly<{ users: UsersModel }>) {
   const bootstrap = users.bootstrap;
   const claimed = bootstrap.state === "claimed";
   return (
-    <Card actions={claimed ? undefined : <Status status={{ kind: "warning", label: "Unclaimed" }} variant="pill" />} body={claimed ? "kv" : "pad"} title="Initial owner">
+    <Card actions={claimed ? undefined : <Status status={{ kind: "warning", label: t("access.unclaimed") }} variant="pill" />} body={claimed ? "kv" : "pad"} title={t("access.initialOwner")}>
       {bootstrap.state === "claimed" ? (
         <DetailList columns="fit" details={[
-          { label: "Owner", value: { type: "text", text: users.members.find((row) => row.member.id === bootstrap.ownerId)?.member.name ?? bootstrap.ownerId } },
+          { label: t("access.owner"), value: { type: "text", text: users.members.find((row) => row.member.id === bootstrap.ownerId)?.member.name ?? bootstrap.ownerId } },
           ...(bootstrap.telegramId === null ? [] : [{ label: "Telegram", value: { type: "text" as const, text: bootstrap.telegramId, mono: true } }]),
-          { label: "Claimed", value: { type: "time", at: bootstrap.claimedAt } },
+          { label: t("access.claimed"), value: { type: "time", at: bootstrap.claimedAt } },
         ]} />
       ) : (
         <div className="c-access-owner">
           {users.bootstrapDescription && <p className="c-line">{users.bootstrapDescription}</p>}
-          {bootstrap.telegramId && <span className="c-access-owner-id"><span className="c-faint">Your Telegram ID</span><span className="c-mono">{bootstrap.telegramId}</span></span>}
+          {bootstrap.telegramId && <span className="c-access-owner-id"><span className="c-faint">{t("access.telegramID")}</span><span className="c-mono">{bootstrap.telegramId}</span></span>}
         </div>
       )}
     </Card>
@@ -495,17 +490,17 @@ function NotificationsPane({ model }: Readonly<{ model: NotificationsModel }>) {
   const rows = notificationRows(model);
   return (
     <>
-      <PageHeader title="My notifications" trail={[ACCESS]} />
-      {model.state === "error" && <Notice notice={{ id: "notifications", tone: "error", title: "Subscriptions could not be loaded", description: model.error, action: model.retry ?? undefined }} />}
-      <Card body="flush" label="My notifications">
+      <PageHeader title={t("access.myNotifications")} trail={[ACCESS]} />
+      {model.state === "error" && <Notice notice={{ id: "notifications", tone: "error", title: t("access.subscriptionsCouldNotLoaded"), description: model.error, action: model.retry ?? undefined }} />}
+      <Card body="flush" label={t("access.myNotifications")}>
         <TrackList
-          label="Notifications"
+          label={t("common.notifications")}
           loading={model.state === "loading"}
           rowKey={(row) => row.id}
           rows={rows}
           tracks={[
-            { id: "notification", header: "Notification", width: "minmax(0, 1fr)", kind: "stack", lines: 1, render: (row) => <TrackTitle title={row.label} /> },
-            { id: "subscribed", header: "Subscribed", width: "auto", kind: "end", render: (row) => <Toggle action={model.toggle(row.id, row.label)} checked={Boolean(model.subscriptions[row.id])} /> },
+            { id: "notification", header: t("access.notification"), width: "minmax(0, 1fr)", kind: "stack", lines: 1, render: (row) => <TrackTitle title={row.label} /> },
+            { id: "subscribed", header: t("access.subscribed"), width: "auto", kind: "end", render: (row) => <Toggle action={model.toggle(row.id, row.label)} checked={Boolean(model.subscriptions[row.id])} /> },
           ]}
         />
         <output aria-live="polite" className="c-sr">{model.saveStatus}</output>

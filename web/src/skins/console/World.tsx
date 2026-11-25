@@ -19,6 +19,7 @@ import { ReleasesTab } from "./tabs/Releases";
 import { Siblings } from "./tabs/Siblings";
 import { WhitelistTab } from "./tabs/Whitelist";
 import { WipesTab } from "./tabs/Wipes";
+import { t } from "../../i18n";
 
 const tabIcons: Readonly<Record<WorldTab, IconName>> = {
   details: "info",
@@ -47,16 +48,16 @@ export function World({ model }: Readonly<{ model: WorldModel }>) {
           <>
             <ActionButton action={model.session} variant={model.session.id === "session.start" ? "primary" : "default"} />
             {model.invite && <ActionButton action={model.invite} />}
-            <Overflow groups={[{ actions: more.filter((item) => !item.danger) }, { actions: more.filter((item) => item.danger) }]} label="More actions" />
+            <Overflow groups={[{ actions: more.filter((item) => !item.danger) }, { actions: more.filter((item) => item.danger) }]} label={t("world.moreActions")} />
           </>
         )}
         after={<Status status={model.sessionStatus} variant="pill" />}
         title={model.world.displayName}
-        trail={[{ label: model.game.displayName, href: model.worldsHref, game: true }, { label: "Worlds", href: model.worldsHref }]}
+        trail={[{ label: model.game.displayName, href: model.worldsHref, game: true }, { label: t("common.worlds"), href: model.worldsHref }]}
       />
       <Notices notices={model.notices} />
       {model.glance && <Hero glance={model.glance} label={`${model.sessionStatus.label} ${model.world.displayName}`} />}
-      <Tabs label="World" onChange={model.setTab} prefix="world" tabs={model.tabs.map((tab) => ({ ...tab, icon: tabIcons[tab.id] }))} value={model.tab} />
+      <Tabs label={t("common.world")} onChange={model.setTab} prefix="world" tabs={model.tabs.map((tab) => ({ ...tab, icon: tabIcons[tab.id] }))} value={model.tab} />
       <TabPanel id={model.tab} prefix="world">
         <Panel model={model} />
       </TabPanel>

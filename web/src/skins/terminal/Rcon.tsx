@@ -2,31 +2,32 @@ import { Timestamp } from "../../components/ui/Timestamp";
 import type { ConsoleModel } from "../../core/models";
 import { failureView } from "../../core/failure";
 import { Skeleton, SkeletonGroup, State, Verb, Verbs } from "./ui";
+import { t } from "../../i18n";
 
 // This world's console (ADR-0063): the one place the two faces agree on a
 // terminal. The world in its head, who typed what and what the game
 // answered, the prompt, the quick commands as keys.
 export function ConsolePanel({ model }: Readonly<{ model: ConsoleModel }>) {
   const { game, world, session, log, unavailable } = model;
-  const failure = log?.status === "error" ? failureView(log.kind, "Console could not be loaded", "use the console", log.error) : null;
+  const failure = log?.status === "error" ? failureView(log.kind, t("rcon.consoleCouldNotLoaded"), t("rcon.useConsole"), log.error) : null;
   return (
     <>
-      <section aria-label="RCON terminal" className="t-rcon">
+      <section aria-label={t("rcon.rCONTerminal")} className="t-rcon">
         <header className="t-rcon-head">
-          <strong>{world ? world.displayName : `${game?.displayName ?? "Game"} session`}</strong>
+          <strong>{world ? world.displayName : t("rcon.valueSession", { value: game?.displayName ?? t("common.game") })}</strong>
           <State kind={session.kind} label={session.label} />
         </header>
         <div aria-live="polite" className="t-rcon-log" role="log">
           {unavailable !== null && <span className="t-rcon-line t-rcon-muted">{unavailable}</span>}
           {log?.status === "loading" && (
-            <SkeletonGroup label="Reading the console history">
+            <SkeletonGroup label={t("rcon.readingConsoleHistory")}>
               <Skeleton width="long" />
               <Skeleton width="medium" />
             </SkeletonGroup>
           )}
           {failure && log?.status === "error" && <span className="t-rcon-line t-rcon-amber">{failure.message ?? failure.title} {failure.retry && <Verb action={log.retry} size="small" />}</span>}
           {log?.status === "ready" && log.value.length === 0 && (
-            <span className="t-rcon-line t-rcon-muted">No commands yet. Each one is recorded with who ran it.</span>
+            <span className="t-rcon-line t-rcon-muted">{t("rcon.noCommandsYetEach")}</span>
           )}
           {log?.status === "ready" && log.value.map((line) => (
             <span className="t-rcon-entry" key={line.id}>
@@ -45,12 +46,12 @@ export function ConsolePanel({ model }: Readonly<{ model: ConsoleModel }>) {
         <form className="t-rcon-input" onSubmit={(event) => { event.preventDefault(); if (!model.run.disabled) model.run.run(); }}>
           <span aria-hidden="true" className="t-rcon-prompt">rcon&gt;</span>
           <input
-            aria-label="RCON command"
+            aria-label={t("rcon.rCONCommand")}
             autoComplete="off"
             disabled={unavailable !== null}
             maxLength={256}
             onChange={(event) => model.setDraft(event.target.value)}
-            placeholder={unavailable === null ? "Type a command" : "Console unavailable"}
+            placeholder={unavailable === null ? t("rcon.typeCommand") : t("rcon.consoleUnavailable")}
             spellCheck={false}
             value={model.draft}
           />

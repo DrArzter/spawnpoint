@@ -2,8 +2,9 @@ import { ApiError } from "../contract";
 import { request } from "./request";
 import { demoEnabled } from "../../demo";
 import { demoLatency } from "../../demo/flag";
+import { t } from "../../i18n";
 
-const INVALID = "The connection request is no longer valid.";
+const INVALID = t("connect.connectionRequestNoLonger");
 
 export type OAuthAuthorizationSummary = Readonly<{
   client: { name: string; redirectOrigin: string };
@@ -24,6 +25,6 @@ export async function decideOAuthAuthorization(authorizationRequest: string, app
     return `${window.location.origin}${window.location.pathname}?demo#/profile`;
   }
   const body = await request<{ redirect_to?: unknown }>("/oauth/authorize", { method: "POST", body: { request: authorizationRequest, approved }, failure: INVALID });
-  if (typeof body.redirect_to !== "string") throw new ApiError("failed", "Spawnpoint did not return to the requesting app.");
+  if (typeof body.redirect_to !== "string") throw new ApiError("failed", t("connect.spawnpointDidNotReturn"));
   return body.redirect_to;
 }

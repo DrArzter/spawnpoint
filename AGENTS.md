@@ -72,6 +72,10 @@ If a component lacks a needed capability, extend its typed API and implement the
 
 ### Information density and copy
 
+- Every word a person reads comes from the message catalogue, `web/src/i18n/en.ts`, by a stable id, with the same id in
+  `ru.ts` ([ADR-0098](docs/adr/0098-the-console-speaks-from-one-message-catalogue.md)). Read it with `t()` or `rich()`;
+  same intent, same id. `web/test/messages.test.ts` fails on a literal text, a missing id and an unused one.
+
 - Keep explanations only when they are unique, actionable, and necessary to make a decision or recover from a state.
 - Put short definitions and secondary status wording in tooltips with accessible text.
 - Do not add paragraphs that restate a label, table columns, obvious behavior, or information available on the detail screen.

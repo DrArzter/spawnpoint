@@ -7,29 +7,30 @@ import { ASSISTANT_CHOICES } from "./data";
 import type { AssistantChatModel, ConversationRow, Loading, ThreadEntry } from "./models";
 import type { Notify } from "./notify";
 import type { StatusDescriptor } from "./status";
+import { t } from "../i18n";
 
 /** How often an open conversation is read while the assistant works. */
 const TURN_POLL_MS = 2000;
 
 const CONVERSATION_STATUS: Readonly<Record<ConversationStatus, StatusDescriptor>> = {
-  working: { kind: "progress", label: "Working" },
-  waiting: { kind: "pending", label: "Waiting for you" },
-  idle: { kind: "ok", label: "Done" },
-  failed: { kind: "error", label: "Stopped" },
+  working: { kind: "progress", label: t("assistant.working") },
+  waiting: { kind: "pending", label: t("assistant.waiting") },
+  idle: { kind: "ok", label: t("common.done") },
+  failed: { kind: "error", label: t("common.stopped") },
 };
 
 const PROPOSAL_STATUS = {
-  pending: { kind: "pending", label: "Waiting for you" },
-  applied: { kind: "ok", label: "Applied" },
-  rejected: { kind: "off", label: "Rejected" },
-  failed: { kind: "error", label: "Failed" },
+  pending: { kind: "pending", label: t("assistant.waiting") },
+  applied: { kind: "ok", label: t("assistant.applied") },
+  rejected: { kind: "off", label: t("assistant.rejected") },
+  failed: { kind: "error", label: t("common.failed") },
 } as const satisfies Readonly<Record<string, StatusDescriptor>>;
 
 function threadEntries(conversation: AssistantConversation, decide: (proposalId: string, decision: "apply" | "reject") => void, deciding: string | null): readonly ThreadEntry[] {
   return conversation.entries.map((entry: ConversationEntry, index): ThreadEntry => {
     const id = `${conversation.id}:${index}`;
     if (entry.kind === "owner" || entry.kind === "assistant") return { kind: entry.kind, id, text: entry.text };
-    if (entry.kind === "read") return { kind: "read", id, title: entry.title, status: entry.ok ? { kind: "ok", label: "Read" } : { kind: "error", label: "The read failed" } };
+    if (entry.kind === "read") return { kind: "read", id, title: entry.title, status: entry.ok ? { kind: "ok", label: t("assistant.read") } : { kind: "error", label: t("assistant.readFailed") } };
     const { proposal } = entry;
     const open = proposal.status === "pending" && conversation.status === "waiting";
     const busy = deciding === proposal.id;
@@ -37,8 +38,8 @@ function threadEntries(conversation: AssistantConversation, decide: (proposalId:
       kind: "proposal", id, title: proposal.title, destructive: proposal.destructive,
       detail: JSON.stringify(proposal.arguments, null, 2),
       status: PROPOSAL_STATUS[proposal.status], result: proposal.result,
-      apply: open ? action(`assistant.apply.${proposal.id}`, "Apply", () => decide(proposal.id, "apply"), { icon: "check", busy, disabled: deciding !== null, hint: "Run this change as you" }) : null,
-      reject: open ? action(`assistant.reject.${proposal.id}`, "Reject", () => decide(proposal.id, "reject"), { icon: "close", disabled: deciding !== null }) : null,
+      apply: open ? action(`assistant.apply.${proposal.id}`, t("assistant.apply"), () => decide(proposal.id, "apply"), { icon: "check", busy, disabled: deciding !== null, hint: t("assistant.runChangeAs") }) : null,
+      reject: open ? action(`assistant.reject.${proposal.id}`, t("assistant.reject"), () => decide(proposal.id, "reject"), { icon: "close", disabled: deciding !== null }) : null,
     };
   });
 }
@@ -73,7 +74,7 @@ export function useAssistantChat(offered: boolean, notify: Notify): AssistantCha
     api.listConversations()
       .then((value) => { if (live) setList({ status: "ready", value }); })
       .catch((cause: unknown) => {
-        if (live) setList({ status: "error", error: cause instanceof Error ? cause.message : "The conversations could not be read.", kind: failureKind(cause), retry: action("assistant.list.retry", "Try again", () => setListRevision((value) => value + 1)) });
+        if (live) setList({ status: "error", error: cause instanceof Error ? cause.message : t("assistant.conversationsCouldNotRead"), kind: failureKind(cause), retry: action("assistant.list.retry", t("common.tryAgain"), () => setListRevision((value) => value + 1)) });
       });
     return () => { live = false; };
   }, [offered, shown, listRevision]);
@@ -85,7 +86,7 @@ export function useAssistantChat(offered: boolean, notify: Notify): AssistantCha
     api.loadConversation(conversationId)
       .then((value) => { if (reading.current === mine) setConversation({ status: "ready", value }); })
       .catch((cause: unknown) => {
-        if (reading.current === mine) setConversation({ status: "error", error: cause instanceof Error ? cause.message : "The conversation could not be read.", kind: failureKind(cause), retry: action("assistant.retry", "Try again", () => load(conversationId)) });
+        if (reading.current === mine) setConversation({ status: "error", error: cause instanceof Error ? cause.message : t("assistant.conversationCouldNotRead"), kind: failureKind(cause), retry: action("assistant.retry", t("common.tryAgain"), () => load(conversationId)) });
       });
   }, []);
 
@@ -118,7 +119,7 @@ export function useAssistantChat(offered: boolean, notify: Notify): AssistantCha
     setDeciding(proposalId);
     api.decideProposal(current, proposalId, decision)
       .then(shownConversation)
-      .catch((error: unknown) => fail(error, "The proposal could not be decided."))
+      .catch((error: unknown) => fail(error, t("assistant.proposalCouldNotDecided")))
       .finally(() => setDeciding(null));
   };
 
@@ -127,16 +128,16 @@ export function useAssistantChat(offered: boolean, notify: Notify): AssistantCha
   const ready = conversation?.status === "ready" ? conversation.value : null;
   const busy = ready !== null && (ready.status === "working" || ready.status === "waiting");
   const text = draft.trim();
-  const send: Action = action("assistant.send", "Send", () => {
+  const send: Action = action("assistant.send", t("assistant.send"), () => {
     if (text === "" || busy || sending) return;
     setSending(true);
     (current === null ? api.startConversation(model, text) : api.sendMessage(current, model, text))
       .then((value) => { setDraft(""); shownConversation(value); })
-      .catch((error: unknown) => fail(error, "The message could not be sent."))
+      .catch((error: unknown) => fail(error, t("assistant.messageCouldNotSent")))
       .finally(() => setSending(false));
   }, {
     icon: "send", busy: sending, disabled: text === "" || busy || sending,
-    hint: busy ? "The assistant is working, or waits for your decision" : undefined,
+    hint: busy ? t("assistant.assistantWorkingWaitsDecision") : undefined,
   });
 
   const rows: Loading<readonly ConversationRow[]> = list.status !== "ready" ? list : {
@@ -149,19 +150,19 @@ export function useAssistantChat(offered: boolean, notify: Notify): AssistantCha
 
   const thread: AssistantChatModel["thread"] = current === null || conversation === null ? null : {
     title: ready?.title ?? listedTitle(list, current),
-    status: ready === null ? { kind: "progress", label: "Reading" } : CONVERSATION_STATUS[ready.status],
+    status: ready === null ? { kind: "progress", label: t("assistant.reading") } : CONVERSATION_STATUS[ready.status],
     entries: conversation.status === "ready" ? { status: "ready", value: threadEntries(conversation.value, decide, deciding) } : conversation,
     note: ready?.note ?? null,
     working: ready?.status === "working",
   };
 
   return {
-    open: action("assistant.show", "Assistant", () => setShown(true), { icon: "bolt" }),
+    open: action("assistant.show", t("common.assistant"), () => setShown(true), { icon: "bolt" }),
     shown,
-    close: action("assistant.close", "Close", () => setShown(false)),
+    close: action("assistant.close", t("common.close"), () => setShown(false)),
     conversations: rows,
     thread,
-    startNew: action("assistant.new", "New conversation", () => { reading.current += 1; setCurrent(null); setConversation(null); }, { icon: "add" }),
+    startNew: action("assistant.new", t("assistant.newConversation"), () => { reading.current += 1; setCurrent(null); setConversation(null); }, { icon: "add" }),
     choices: ASSISTANT_CHOICES,
     model,
     setModel,

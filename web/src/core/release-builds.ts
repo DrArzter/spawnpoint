@@ -1,20 +1,21 @@
 import type { Preset } from "../model";
+import { t } from "../i18n";
 
 export function releaseBuildCopy(preset: Preset): { label: string; title: string; description: string; hint: string } {
   if (preset.build?.state === "starting") return {
-    label: "Resume build", title: `Resume release ${preset.build.release}?`,
-    description: "Billed build. Worlds are not changed.",
-    hint: "Resume the same pending build request.",
+    label: t("releases.resumeBuild"), title: t("releases.resumeReleaseRelease", { release: preset.build.release }),
+    description: t("releases.billedBuildWorldsNot"),
+    hint: t("releases.resumeSamePendingBuild"),
   };
   if (preset.build?.state === "failed") return {
-    label: "Retry build", title: `Retry release ${preset.build.release}?`,
-    description: "Billed build. Worlds are not changed.",
-    hint: `Retry release ${preset.build.release} from the same source.`,
+    label: t("releases.retryBuild"), title: t("releases.retryReleaseRelease", { release: preset.build.release }),
+    description: t("releases.billedBuildWorldsNot"),
+    hint: t("releases.retryReleaseReleaseFrom", { release: preset.build.release }),
   };
   return {
-    label: preset.releases.length > 0 ? "Build new release" : "Build release", title: `Build ${preset.displayName}?`,
-    description: "Billed build. Worlds are not changed.",
-    hint: "Build from the pinned preset snapshot; worlds are not changed.",
+    label: preset.releases.length > 0 ? t("releases.buildNewRelease") : t("releases.buildRelease"), title: t("releases.buildPresetDisplayName", { presetDisplayName: preset.displayName }),
+    description: t("releases.billedBuildWorldsNot"),
+    hint: t("releases.buildFromPinnedPreset"),
   };
 }
 

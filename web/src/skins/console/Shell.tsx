@@ -14,6 +14,7 @@ import { canTransition, runTransition } from "./ui/transition";
 import { Palette } from "./ui/Palette";
 import { ToastProvider } from "./ui/Toast";
 import { TooltipLayer } from "./ui/Tooltip";
+import { t } from "../../i18n";
 
 /*
  * The console frame. The bars never move; the page area is the one element a
@@ -130,11 +131,11 @@ function typing(target: EventTarget | null): boolean {
 }
 
 const SHORTCUTS: readonly (readonly [string, string])[] = [
-  ["Ctrl K or /", "Search and run"],
-  ["G then H, W, R, A, P", "Home, Worlds, Releases, Access, Profile"],
-  ["1 to 9", "Choose a game"],
-  ["?", "Keyboard shortcuts"],
-  ["Esc", "Close"],
+  [t("shell.ctrlK"), t("shell.searchRun")],
+  [t("shell.gThenHW"), t("shell.homeWorldsReleasesAccess")],
+  [t("shell.n19"), t("shell.chooseGame")],
+  ["?", t("shell.keyboardShortcuts")],
+  ["Esc", t("common.close")],
 ];
 
 const SHORTCUT_PAGES: Readonly<Record<string, string>> = { w: "worlds", r: "releases", a: "access" };
@@ -217,7 +218,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
         {palette && <Palette model={model} onClose={() => setPalette(false)} />}
         {model.assistant?.shown && <AssistantPanel model={model.assistant} />}
         {keys && (
-          <Dialog cancel={action("shortcuts.close", "Close", () => setKeys(false))} title="Keyboard shortcuts">
+          <Dialog cancel={action("shortcuts.close", t("common.close"), () => setKeys(false))} title={t("shell.keyboardShortcuts")}>
             <dl className="c-keys">
               {SHORTCUTS.map(([combo, what]) => <div className="c-keys-row" key={combo}><dt>{what}</dt><dd><kbd>{combo}</kbd></dd></div>)}
             </dl>

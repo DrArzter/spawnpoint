@@ -18,6 +18,7 @@ import { Status } from "./ui/Status";
 import { Tick } from "./ui/Tick";
 import { TrackList, TrackTitle } from "./ui/TrackList";
 import { providerIcon } from "./providers";
+import { t } from "../../i18n";
 
 /** A refresh drawn as an icon needs one even when the model gave it none. */
 export function withIcon(action: Action, icon: Action["icon"]): Action {
@@ -36,18 +37,18 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
   const header = (
     <PageHeader
       actions={<>
-        <LinkButton href={list} icon="table_rows" label="All worlds" />
+        <LinkButton href={list} icon="table_rows" label={t("app.allWorlds")} />
         {model.createWorld && !empty && <ActionButton action={model.createWorld} variant="primary" />}
       </>}
       lead={game && <GameGlyph game={game} size="lg" />}
-      title={game?.displayName ?? "Home"}
+      title={game?.displayName ?? t("shell.home")}
     />
   );
   if (model.unavailable) {
     return (
       <div className="c-page">
         {header}
-        <Card label="Games">
+        <Card label={t("common.games")}>
           <GamesEmpty refresh={model.refresh} unavailable={model.unavailable} />
         </Card>
       </div>
@@ -57,7 +58,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
     return (
       <div className="c-page">
         {header}
-        <Card label="Worlds"><LoadError error={model.error} kind={model.errorKind} retry={model.refresh} title="Worlds could not be loaded" verb="view worlds" /></Card>
+        <Card label={t("common.worlds")}><LoadError error={model.error} kind={model.errorKind} retry={model.refresh} title={t("common.worldsCouldNotLoaded")} verb={t("common.viewWorlds")} /></Card>
       </div>
     );
   }
@@ -66,7 +67,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
       <div className="c-page">
         {header}
         <Notices notices={model.notices} />
-        <Card label="Worlds"><Empty action={model.createWorld} icon="public" title="No worlds" /></Card>
+        <Card label={t("common.worlds")}><Empty action={model.createWorld} icon="public" title={t("common.noWorlds")} /></Card>
       </div>
     );
   }
@@ -88,72 +89,72 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
       <Grid kind="home">
         <GridCell span="2">
           <Card
-            actions={<LinkButton href={list} label="Worlds" size="sm" variant="ghost" />}
+            actions={<LinkButton href={list} label={t("common.worlds")} size="sm" variant="ghost" />}
             body="flush"
             count={online.length}
-            meta={known.length > 0 && <><Tick value={players} /> {players === 1 ? "player" : "players"}</>}
-            title="Online now"
+            meta={known.length > 0 && <><Tick value={players} /> {t("common.playersWord", { count: players })}</>}
+            title={t("app.onlineNow")}
           >
             <TrackList
                 arrivals
-                empty={<Empty icon="bedtime" size="sm" title="Nothing online" />}
-                label="Online now"
+                empty={<Empty icon="bedtime" size="sm" title={t("app.nothingOnline")} />}
+                label={t("app.onlineNow")}
                 loading={loading}
                 rowKey={(row) => row.world.id}
                 rows={online}
                 tracks={[
-                  { id: "world", header: "World", width: "minmax(180px, 1fr)", compactWidth: "minmax(0, 1fr)", kind: "stack", render: (row) => (
+                  { id: "world", header: t("common.world"), width: "minmax(180px, 1fr)", compactWidth: "minmax(0, 1fr)", kind: "stack", render: (row) => (
                     // Under 1024px the Address track drops; the address and its copy take a third line of their own (spec §6.1).
                     <span className="c-home-world">
                       <TrackTitle href={row.href} line={<><HostingChip row={row} /><span className="c-mono">{row.releaseSummary}</span></>} title={row.world.displayName} />
                       {row.address && <span className="c-home-world-address"><Address address={row.address} copy /></span>}
                     </span>
                   ) },
-                  { id: "uptime", header: "Uptime", width: "110px", kind: "optional", render: (row) => <Uptime since={row.launchedAt} /> },
-                  { id: "address", header: "Address", width: "minmax(260px, 1.6fr)", kind: "optional", render: (row) => row.address ? <Address address={row.address} copy /> : <span className="c-faint">{row.addressAbsent}</span> },
-                  { id: "players", header: "Players", width: "80px", compactWidth: "auto", kind: "num", render: (row) => <Players count={row.players} /> },
+                  { id: "uptime", header: t("common.uptime"), width: "110px", kind: "optional", render: (row) => <Uptime since={row.launchedAt} /> },
+                  { id: "address", header: t("common.address"), width: "minmax(260px, 1.6fr)", kind: "optional", render: (row) => row.address ? <Address address={row.address} copy /> : <span className="c-faint">{row.addressAbsent}</span> },
+                  { id: "players", header: t("common.players"), width: "80px", compactWidth: "auto", kind: "num", render: (row) => <Players count={row.players} /> },
                 ]}
             />
           </Card>
         </GridCell>
-        <Card body="flush" count={startable.length} title="Start a world">
+        <Card body="flush" count={startable.length} title={t("app.startWorld")}>
           <TrackList
-              empty={<Empty icon="check" size="sm" title="Every world is running" />}
-              label="Start a world"
+              empty={<Empty icon="check" size="sm" title={t("app.everyWorldRunning")} />}
+              label={t("app.startWorld")}
               loading={loading}
               rowKey={({ row }) => row.world.id}
               rows={startable}
               tracks={[
-                { id: "world", header: "World", width: "minmax(0, 1fr)", kind: "stack", render: ({ row }) => <TrackTitle href={row.href} line={<HostingChip row={row} />} title={row.world.displayName} /> },
-                { id: "state", header: "State", width: "auto", render: ({ row }) => <Status status={row.status} /> },
-                { id: "act", header: "Action", width: "auto", kind: "end", quietHeader: true, render: ({ verb }) => <ActionButton action={verb} size="sm" /> },
+                { id: "world", header: t("common.world"), width: "minmax(0, 1fr)", kind: "stack", render: ({ row }) => <TrackTitle href={row.href} line={<HostingChip row={row} />} title={row.world.displayName} /> },
+                { id: "state", header: t("common.state"), width: "auto", render: ({ row }) => <Status status={row.status} /> },
+                { id: "act", header: t("common.action"), width: "auto", kind: "end", quietHeader: true, render: ({ verb }) => <ActionButton action={verb} size="sm" /> },
               ]}
             />
         </Card>
-        <Card body="flush" count={operations.length} title="Operations">
+        <Card body="flush" count={operations.length} title={t("common.operations")}>
           <TrackList
             arrivals
-            empty={<Empty icon="done_all" size="sm" title="No operations running" />}
-            label="Operations"
+            empty={<Empty icon="done_all" size="sm" title={t("app.noOperationsRunning")} />}
+            label={t("common.operations")}
             rowKey={(row) => row.operation.id}
             rows={operations}
             tracks={[
-              { id: "operation", header: "Operation", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle href={row.href} line={<span className="c-mono">{row.operation.id}</span>} title={`${row.label} · ${row.worldName}`} /> },
-              { id: "running", header: "Running for", width: "auto", kind: "num", render: (row) => <RunningTime expectation={row.operation} since={row.operation.startedAt} /> },
+              { id: "operation", header: t("common.operation"), width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle href={row.href} line={<span className="c-mono">{row.operation.id}</span>} title={`${row.label} · ${row.worldName}`} /> },
+              { id: "running", header: t("common.running2"), width: "auto", kind: "num", render: (row) => <RunningTime expectation={row.operation} since={row.operation.startedAt} /> },
             ]}
           />
         </Card>
         {builds.length > 0 && (
           <GridCell span="2-wide">
-            <Card actions={<LinkButton href={releases} label="Releases" size="sm" variant="ghost" />} body="flush" title="Release builds">
+            <Card actions={<LinkButton href={releases} label={t("common.releases")} size="sm" variant="ghost" />} body="flush" title={t("app.releaseBuilds")}>
               <TrackList
-                label="Release builds"
+                label={t("app.releaseBuilds")}
                 rowKey={(row) => row.preset.id}
                 rows={builds}
                 tracks={[
-                  { id: "preset", header: "Preset", width: "minmax(0, 1.2fr)", compactWidth: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle compactLine={row.preset.latestRelease ?? undefined} title={row.preset.displayName} /> },
-                  { id: "latest", header: "Latest release", width: "minmax(0, 1fr)", kind: "optional", render: (row) => row.preset.latestRelease ? <span className="c-mono">{row.preset.latestRelease}</span> : <span className="c-faint">—</span> },
-                  { id: "build", header: "Build", width: "auto", kind: "end", render: (row) => <BuildState row={row} /> },
+                  { id: "preset", header: t("common.preset"), width: "minmax(0, 1.2fr)", compactWidth: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle compactLine={row.preset.latestRelease ?? undefined} title={row.preset.displayName} /> },
+                  { id: "latest", header: t("common.latestRelease"), width: "minmax(0, 1fr)", kind: "optional", render: (row) => row.preset.latestRelease ? <span className="c-mono">{row.preset.latestRelease}</span> : <span className="c-faint">—</span> },
+                  { id: "build", header: t("common.build"), width: "auto", kind: "end", render: (row) => <BuildState row={row} /> },
                 ]}
               />
             </Card>
@@ -161,7 +162,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
         )}
         {model.requests && <Requests model={model} requests={model.requests} />}
         <GridCell span="full">
-          <Card count={model.rows.length} title="Worlds by state">
+          <Card count={model.rows.length} title={t("app.worldsByState")}>
             <ByState list={list} onState={onState} rows={model.rows} />
           </Card>
         </GridCell>
@@ -175,20 +176,20 @@ function Requests({ model, requests }: Readonly<{ model: WorldsModel; requests: 
   const verbs = (row: RequestSummary) => model.requestActions?.(row.id) ?? null;
   return (
     <GridCell span="2-wide">
-      <Card actions={<LinkButton href={access} label="Access" size="sm" variant="ghost" />} body="flush" count={requests.status === "ready" ? requests.value.length : undefined} title="Access requests">
-        {requests.status === "error" && <LoadError error={requests.error} kind={requests.kind} retry={requests.retry} size="sm" title="Requests could not be loaded" verb="read requests" />}
+      <Card actions={<LinkButton href={access} label={t("common.access")} size="sm" variant="ghost" />} body="flush" count={requests.status === "ready" ? requests.value.length : undefined} title={t("common.accessRequests")}>
+        {requests.status === "error" && <LoadError error={requests.error} kind={requests.kind} retry={requests.retry} size="sm" title={t("common.requestsCouldNotLoaded")} verb={t("common.readRequests")} />}
         {requests.status !== "error" && (
           <TrackList
             arrivals
-            empty={<Empty icon="how_to_reg" size="sm" title="No requests" />}
-            label="Access requests"
+            empty={<Empty icon="how_to_reg" size="sm" title={t("app.noRequests")} />}
+            label={t("common.accessRequests")}
             loading={requests.status === "loading"}
             rowKey={(row) => row.id}
             rows={requests.status === "ready" ? requests.value : []}
             tracks={[
-              { id: "person", header: "Person", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <Person detail={row.account} detailIcon={providerIcon(row.platform)} name={row.displayName} photoUrl={row.photoUrl} tone="request" /> },
-              { id: "since", header: "Requested", width: "auto", kind: "optional", render: (row) => <Ago at={row.since} /> },
-              { id: "decide", header: "Decision", width: "auto", kind: "end", quietHeader: true, render: (row) => {
+              { id: "person", header: t("common.person"), width: "minmax(0, 1fr)", kind: "stack", render: (row) => <Person detail={row.account} detailIcon={providerIcon(row.platform)} name={row.displayName} photoUrl={row.photoUrl} tone="request" /> },
+              { id: "since", header: t("common.requested"), width: "auto", kind: "optional", render: (row) => <Ago at={row.since} /> },
+              { id: "decide", header: t("app.decision"), width: "auto", kind: "end", quietHeader: true, render: (row) => {
                 const pair = verbs(row);
                 return pair && <span className="c-home-decide"><ActionButton action={pair.approve} size="sm" /><ActionButton action={pair.dismiss} iconOnly size="sm" /></span>;
               } },

@@ -6,13 +6,14 @@ import { Avatar } from "../components/Avatar";
 import { SignInPanel } from "../components/SignIn";
 import { Button } from "../components/ui/Button";
 import { SpawnpointMark } from "../shell/AppBar";
+import { t } from "../i18n";
 
 function visitorAccount(auth: AuthState): string {
   if (auth.status !== "authenticated" || auth.session.state !== "visitor") return "";
   const candidate = auth.session.candidate;
   if (candidate.telegramId === null) return candidate.email ?? candidate.platformUserId;
   const username = candidate.username ? ` · @${candidate.username}` : "";
-  return `Telegram ID ${candidate.telegramId}${username}`;
+  return t("signin.telegramIDTelegramIdUsername", { telegramId: candidate.telegramId, username });
 }
 
 export function AuthScreen({ auth, onChange }: Readonly<{ auth: AuthState; onChange: (state: AuthState) => void }>) {
@@ -30,7 +31,7 @@ export function AuthScreen({ auth, onChange }: Readonly<{ auth: AuthState; onCha
       await api.requestAccess();
       setRequesting(true);
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : "The access request could not be sent.");
+      setRequestError(error instanceof Error ? error.message : t("common.accessRequestCouldNot"));
     }
   }
 
@@ -39,25 +40,25 @@ export function AuthScreen({ auth, onChange }: Readonly<{ auth: AuthState; onCha
       <section aria-busy={auth.status === "loading"} className="boot-card">
         <div className="boot-brand"><SpawnpointMark size={48} /><strong>Spawnpoint</strong></div>
         {auth.status === "loading" && <>
-          <div className="boot-copy"><h1>Checking your session</h1><p>Confirming who you are with the access API.</p></div>
+          <div className="boot-copy"><h1>{t("common.checkingSession")}</h1><p>{t("common.confirmingWhoAccessAPI")}</p></div>
           <div aria-hidden="true" className="boot-progress" />
         </>}
         {auth.status === "signed-out" && <>
-          <div className="boot-copy"><h1>Sign in</h1><p>Spawnpoint holds no AWS credential in the browser, and keeps a password only as a salted hash.</p></div>
+          <div className="boot-copy"><h1>{t("common.sign")}</h1><p>{t("signin.spawnpointHoldsNoAWS")}</p></div>
           <SignInPanel onChange={onChange} />
         </>}
-        {auth.status === "unconfigured" && <div className="boot-copy"><h1>Sign-in is not configured</h1><p>This deployment is missing its access API URL.</p></div>}
+        {auth.status === "unconfigured" && <div className="boot-copy"><h1>{t("signin.signInNotConfigured")}</h1><p>{t("signin.deploymentMissingAccessAPI")}</p></div>}
         {auth.status === "error" && <>
-          <div className="boot-copy"><h1>Could not sign in</h1><p className="boot-error">{auth.message}</p></div>
-          <Button onClick={() => onChange({ status: "signed-out" })} variant="filled">Try again</Button>
+          <div className="boot-copy"><h1>{t("signin.couldNotSign")}</h1><p className="boot-error">{auth.message}</p></div>
+          <Button onClick={() => onChange({ status: "signed-out" })} variant="filled">{t("common.tryAgain")}</Button>
         </>}
         {visitor && <>
           <Avatar name={visitor.candidate.displayName} photoUrl={visitor.candidate.photoUrl} size="large" />
           <div className="boot-copy">
-            <h1>{requested ? "Access requested" : "Request access"}</h1>
-            <p>{requested ? "An owner will review your request. You can close this page." : "You are signed in, but this account has no Spawnpoint role yet."}</p>
+            <h1>{requested ? t("common.accessRequested") : t("common.requestAccess")}</h1>
+            <p>{requested ? t("signin.ownerWillReviewRequest") : t("signin.signedButAccountHas")}</p>
           </div>
-          {!requested && <Button disabled={requesting} onClick={() => void sendRequest()} variant="filled">Request access</Button>}
+          {!requested && <Button disabled={requesting} onClick={() => void sendRequest()} variant="filled">{t("common.requestAccess")}</Button>}
           {requestError && <p className="boot-error" role="alert">{requestError}</p>}
           <small>{account}</small>
         </>}

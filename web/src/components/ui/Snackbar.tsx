@@ -4,6 +4,7 @@ import { Icon } from "../../icons";
 import { cx } from "../../lib/cx";
 import { Button, IconButton } from "./Button";
 import { useLayer } from "./layer";
+import { t } from "../../i18n";
 
 export type SnackTone = "info" | "success" | "error";
 export type SnackInput = { message: string; tone?: SnackTone; action?: { label: string; onClick: () => void }; persistent?: boolean };
@@ -57,7 +58,7 @@ export function SnackbarProvider({ children, render }: Readonly<{ children: Reac
       <QueueContext.Provider value={shared}>
         {children}
         {render ? render(shared) : (
-          <section aria-label="Notifications" aria-live="polite" className="snackbar-host" data-layer="toast" popover="manual" ref={host}>
+          <section aria-label={t("common.notifications")} aria-live="polite" className="snackbar-host" data-layer="toast" popover="manual" ref={host}>
             {queue.map((snack) => <SnackbarItem key={snack.id} onDismiss={() => dismiss(snack.id)} snack={snack} />)}
           </section>
         )}
@@ -91,7 +92,7 @@ function SnackbarItem({ snack, onDismiss }: Readonly<{ snack: Snack; onDismiss: 
       {snack.tone === "success" && <Icon name="check_circle" size={20} />}
       <p>{snack.message}</p>
       {snack.action && <Button onClick={() => { snack.action?.onClick(); onDismiss(); }} size="small" variant="text">{snack.action.label}</Button>}
-      <IconButton icon="close" label="Dismiss" onClick={onDismiss} size="small" />
+      <IconButton icon="close" label={t("common.dismiss")} onClick={onDismiss} size="small" />
     </Live>
   );
 }

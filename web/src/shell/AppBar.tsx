@@ -1,5 +1,6 @@
 import { Tooltip } from "../components/ui/Tooltip";
 import { Icon } from "../icons";
+import { t } from "../i18n";
 
 export function SpawnpointMark({ size = 32 }: Readonly<{ size?: number }>) {
   // The mark: one block seen from above, the spawn point set on its top face.
@@ -20,10 +21,10 @@ export function SpawnpointMark({ size = 32 }: Readonly<{ size?: number }>) {
 // so no screen has to ask which mode the panel is running in.
 export function DemoBadge() {
   return (
-    <Tooltip text="Demo data. It lives in this tab, and nothing reaches AWS.">
+    <Tooltip text={t("shell.demoDataLivesTab")}>
       <span className="demo-badge">
         <Icon name="warning" size={14} />
-        <span>Demo data</span>
+        <span>{t("shell.demoData")}</span>
       </span>
     </Tooltip>
   );

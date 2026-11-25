@@ -5,6 +5,7 @@ import { Timestamp } from "../../components/ui/Timestamp";
 import type { MetricsModel } from "../../core/models";
 import { formatBytes } from "../../lib/format";
 import { Choice, Choices, Empty, LoadError, Panel, Skeleton, SkeletonGroup } from "./ui";
+import { rich, t } from "../../i18n";
 
 // Metrics the way the status page draws its response line: one series is one
 // well with the area under its line filled in the accent, no axes and no
@@ -24,16 +25,16 @@ const formatMetric = (unit: string) => (value: number) => (unit === "percent" ? 
 export function MetricsPanel({ model }: Readonly<{ model: MetricsModel }>) {
   const metrics = model.metrics;
   if (metrics.status === "ready" && metrics.value === null) {
-    return <Panel><Empty description="Metrics show the hosts this world's sessions ran on. Start the world to see them." title="No session in this window" /></Panel>;
+    return <Panel><Empty description={t("metrics.metricsShowHostsWorlds")} title={t("metrics.noSessionWindow")} /></Panel>;
   }
   return (
     <Panel
-      head={<Choices label="Window">
+      head={<Choices label={t("metrics.window")}>
         {model.ranges.map((option) => <Choice key={option.id} onClick={() => model.setRange(option.id)} pressed={model.range === option.id}>{option.label}</Choice>)}
       </Choices>}
-      name="Hosts this world ran on"
+      name={t("metrics.hostsWorldRan")}
     >
-      {metrics.status === "error" && <LoadError state={metrics} title="Metrics could not be loaded" verb="read metrics" />}
+      {metrics.status === "error" && <LoadError state={metrics} title={t("metrics.metricsCouldNotLoaded")} verb={t("metrics.readMetrics")} />}
       {metrics.status === "loading" && waiting}
       {metrics.status === "ready" && metrics.value !== null && lineCharts(metrics.value)}
     </Panel>
@@ -44,13 +45,13 @@ export function MetricsPanel({ model }: Readonly<{ model: MetricsModel }>) {
 // arrive. One group announces the wait; the four plots do not repeat it.
 const waitingSeries = [
   { id: "cpu", label: "CPU" },
-  { id: "memory", label: "Memory" },
-  { id: "in", label: "Network in" },
-  { id: "out", label: "Network out" },
+  { id: "memory", label: t("metrics.memory") },
+  { id: "in", label: t("metrics.network") },
+  { id: "out", label: t("metrics.networkOut") },
 ] as const;
 
 const waiting: ReactNode = (
-  <SkeletonGroup label="Reading CloudWatch metrics">
+  <SkeletonGroup label={t("metrics.readingCloudWatchMetrics")}>
     {waitingSeries.map((series) => (
       <div className="t-chart" key={series.id}>
         <Skeleton className="t-chart-well" variant="plot" />
@@ -81,13 +82,13 @@ function lineCharts(metrics: HostMetrics): ReactNode {
         const runs = tracePaths(series.points, peak);
         return (
           <section className="t-chart" key={series.id}>
-            <svg aria-label={`${series.label} over the window`} className="t-chart-well" preserveAspectRatio="none" role="img" viewBox={`0 0 ${WIDTH} ${HEIGHT}`}>
+            <svg aria-label={t("metrics.seriesLabelOverWindow", { seriesLabel: series.label })} className="t-chart-well" preserveAspectRatio="none" role="img" viewBox={`0 0 ${WIDTH} ${HEIGHT}`}>
               {runs.map((run) => <polygon className="t-chart-area" key={`area-${run.from}`} points={run.area} />)}
               {runs.map((run) => <polyline className="t-chart-line" key={`line-${run.from}`} points={run.line} />)}
             </svg>
             <p className="t-chart-caption">
               <strong>{series.label}</strong>
-              <span>{peak === null ? "no data in this window" : <>peak <strong>{format(peak)}</strong></>}</span>
+              <span>{peak === null ? t("metrics.noDataWindow") : rich("metrics.peakValue", { value: <strong>{format(peak)}</strong> })}</span>
             </p>
           </section>
         );

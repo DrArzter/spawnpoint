@@ -15,6 +15,7 @@ import { candidateKey, type AccessDirectory } from "./access-directory";
 import { defaultRoleChoice, offeredPermissions, ROLE_ID_PATTERN, roleChoice, roleDeleteRefusal, roleEditRefusal, roleIdFor } from "./roles";
 import { FRESH_MODS_VIEW, MOD_SEARCH_DELAY_MS, modListQuery, modSourceEntries, type ModsView } from "./release-mods";
 import { type PlayerNameRule, whitelistNameError } from "./whitelist";
+import { t } from "../i18n";
 
 /*
  * The data each page loads for itself and what may be done with it. Every
@@ -34,7 +35,7 @@ function useLoad<T>(load: (() => Promise<T>) | null, deps: readonly unknown[]): 
     setState({ status: "loading" });
     load()
       .then((value) => { if (current) setState({ status: "ready", value }); })
-      .catch((cause: unknown) => { if (current) setState({ status: "error", error: cause instanceof Error ? cause.message : "The request failed.", kind: failureKind(cause) }); });
+      .catch((cause: unknown) => { if (current) setState({ status: "error", error: cause instanceof Error ? cause.message : t("common.requestFailed"), kind: failureKind(cause) }); });
     return () => { current = false; };
   // The caller names what the load depends on; the loader itself is recreated every render.
   }, [...deps, revision]);
@@ -44,7 +45,7 @@ function useLoad<T>(load: (() => Promise<T>) | null, deps: readonly unknown[]): 
 }
 
 function asLoading<T>(state: LoadState<T>, retry: () => void, retryId: string): Loading<T> {
-  if (state.status === "error") return { status: "error", error: state.error, kind: state.kind, retry: action(retryId, "Try again", retry) };
+  if (state.status === "error") return { status: "error", error: state.error, kind: state.kind, retry: action(retryId, t("common.tryAgain"), retry) };
   return state;
 }
 
@@ -68,14 +69,14 @@ export function useBackups(gameId: string, world: World, opts: Readonly<{ canRea
     wipes: world.wipes,
     inventory,
     wipeNumber: (generationId) => world.wipes.find((wipe) => wipe.id === generationId)?.number,
-    restore: (entry) => action("backup.restore", "Restore", () => opts.onRestore(entry), {
+    restore: (entry) => action("backup.restore", t("common.restore"), () => opts.onRestore(entry), {
       icon: "restore",
       disabled: !opts.canRestore || entry.generationId === null || opts.busy,
       hint: restoreHint(entry, opts.canRestore),
     }),
-    download: onDownload === null ? null : (entry) => action("backup.download", "Download archive", () => onDownload(entry), {
+    download: onDownload === null ? null : (entry) => action("backup.download", t("backups.downloadArchive"), () => onDownload(entry), {
       icon: "download",
-      hint: "A link that works for five minutes; the download is recorded against you",
+      hint: t("backups.linkWorksFiveMinutes"),
     }),
   };
 }
@@ -94,7 +95,7 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
   const names = state.status === "ready" ? state.value.names : [];
   const name = draft.trim();
   const draftError = name === "" ? null : whitelistNameError(name, names, playerName);
-  const when = (saved: SavedWhitelist) => saved.applied === "reloading" ? "The running server reloads its list now." : `${world.displayName} reads it at its next start.`;
+  const when = (saved: SavedWhitelist) => saved.applied === "reloading" ? t("whitelist.runningServerReloadsList") : t("common.worldDisplayNameReadsNextStart", { worldDisplayName: world.displayName });
   const save = async (next: readonly string[], said: (saved: SavedWhitelist) => string): Promise<boolean> => {
     setSaving(true);
     try {
@@ -103,15 +104,15 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
       notify({ tone: "success", message: said(saved) });
       return true;
     } catch (error) {
-      notify({ tone: "error", message: error instanceof Error ? error.message : "The whitelist could not be saved." });
+      notify({ tone: "error", message: error instanceof Error ? error.message : t("common.whitelistCouldNotSaved") });
       return false;
     } finally {
       setSaving(false);
     }
   };
-  const add = action("whitelist.add", "Add player", () => {
+  const add = action("whitelist.add", t("whitelist.addPlayer"), () => {
     if (name === "" || draftError !== null) return;
-    void save([...names, name], (saved) => `${name} is on the whitelist. ${when(saved)}`).then((saved) => { if (saved) setDraft(""); });
+    void save([...names, name], (saved) => t("whitelist.nameWhitelistWhen", { name, when: when(saved) })).then((saved) => { if (saved) setDraft(""); });
   }, { icon: "add", disabled: state.status !== "ready" || name === "" || draftError !== null || saving, busy: saving });
   const list: WhitelistModel["list"] = state.status !== "ready" ? asLoading(state, retry, "whitelist.retry") : {
     status: "ready",
@@ -121,8 +122,8 @@ export function useWhitelist(gameId: string, world: World, open: boolean, notify
       updatedBy: state.value.updatedBy,
       rows: state.value.names.map((player) => ({
         name: player,
-        remove: action(`whitelist.remove.${player}`, "Remove", () => void save(names.filter((item) => item !== player), (saved) => `${player} is off the whitelist. ${when(saved)}`), {
-          icon: "close", danger: true, disabled: saving, hint: `Remove ${player} from the whitelist`,
+        remove: action(`whitelist.remove.${player}`, t("whitelist.remove"), () => void save(names.filter((item) => item !== player), (saved) => t("whitelist.playerOffWhitelistWhen", { player, when: when(saved) })), {
+          icon: "close", danger: true, disabled: saving, hint: t("whitelist.removePlayerFromWhitelist", { player }),
         }),
       })),
     },
@@ -142,10 +143,10 @@ function configRows(files: readonly ConfigFile[], select: (path: string) => void
     releaseChanged: file.releaseChanged,
     updatedAt: file.updatedAt,
     updatedBy: file.updatedBy,
-    open: action(`config.open.${file.path}`, "Edit", () => select(file.path), {
+    open: action(`config.open.${file.path}`, t("common.edit"), () => select(file.path), {
       icon: "edit",
       disabled: !file.editable,
-      hint: file.editable ? `Edit ${file.path}` : `${formatBytes(file.bytes)}: not text, or too large to edit here`,
+      hint: file.editable ? t("common.editPath", { path: file.path }) : t("whitelist.bytesNotTextToo", { bytes: formatBytes(file.bytes) }),
     }),
   }));
 }
@@ -154,7 +155,7 @@ function configRows(files: readonly ConfigFile[], select: (path: string) => void
 function editorContent(content: LoadState<ConfigFileContent>, reload: () => void): ConfigEditorModel["content"] {
   if (content.status === "ready") return { status: "ready", value: null };
   if (content.status === "loading") return content;
-  return { status: "error", error: content.error, kind: content.kind, retry: action("config.retry", "Try again", reload) };
+  return { status: "error", error: content.error, kind: content.kind, retry: action("config.retry", t("common.tryAgain"), reload) };
 }
 
 /**
@@ -186,7 +187,7 @@ export function useConfigFiles(gameId: string, world: World, open: boolean, noti
     if (error instanceof ApiError && error.code === "config_file_changed") setStale(true);
     notify({ tone: "error", message: error instanceof Error ? error.message : message });
   };
-  const when = `${world.displayName} reads it at its next start.`;
+  const when = t("common.worldDisplayNameReadsNextStart", { worldDisplayName: world.displayName });
   const close = () => { setPath(null); setDraft(null); setStale(false); };
   const row = state.status === "ready" && path !== null ? state.value.files.find((file) => file.path === path) : undefined;
 
@@ -203,34 +204,34 @@ export function useConfigFiles(gameId: string, world: World, open: boolean, noti
     text,
     setText: setDraft,
     dirty,
-    save: action("config.save", "Save", () => {
+    save: action("config.save", t("config.save"), () => {
       if (content.status !== "ready" || !dirty || draft === null) return;
       setWorking(true);
       void api.saveConfigFile(gameId, world.id, path, draft, content.value.sha256)
         .then(async (saved) => {
           updateContent((current) => ({ ...current, text: draft, sha256: saved.sha256 }));
           setDraft(null);
-          notify({ tone: "success", message: `${path} is saved. ${when}` });
+          notify({ tone: "success", message: t("config.pathSavedWhen", { path, when }) });
           await refresh();
         })
-        .catch((error: unknown) => fail(error, "The file could not be saved."))
+        .catch((error: unknown) => fail(error, t("common.fileCouldNotSaved")))
         .finally(() => setWorking(false));
-    }, { icon: "check", disabled: content.status !== "ready" || !dirty || stale || working, busy: working, hint: dirty ? undefined : "Nothing to save" }),
-    reset: row?.source === "world" ? action("config.reset", "Reset to release", () => {
+    }, { icon: "check", disabled: content.status !== "ready" || !dirty || stale || working, busy: working, hint: dirty ? undefined : t("config.nothingSave") }),
+    reset: row?.source === "world" ? action("config.reset", t("config.resetRelease"), () => {
       setWorking(true);
       void api.resetConfigFile(gameId, world.id, path, row.worldSha256)
         .then(async () => {
           setDraft(null);
           setStale(false);
-          notify({ tone: "success", message: `${path} is the release's file again. ${when}` });
+          notify({ tone: "success", message: t("config.pathReleasesFileAgain", { path, when }) });
           reloadContent();
           await refresh();
         })
-        .catch((error: unknown) => fail(error, "The file could not be reset."))
+        .catch((error: unknown) => fail(error, t("common.fileCouldNotReset")))
         .finally(() => setWorking(false));
-    }, { icon: "restore", disabled: working, hint: "Drop this world's version and use the release's file" }) : null,
-    reload: stale ? action("config.reload", "Reload", () => { setDraft(null); setStale(false); reloadContent(); void refresh(); }, { icon: "refresh" }) : null,
-    close: action("config.close", "Close", close, { icon: "close" }),
+    }, { icon: "restore", disabled: working, hint: t("config.dropWorldsVersionUse") }) : null,
+    reload: stale ? action("config.reload", t("config.reload"), () => { setDraft(null); setStale(false); reloadContent(); void refresh(); }, { icon: "refresh" }) : null,
+    close: action("config.close", t("common.close"), close, { icon: "close" }),
   };
   const list: ConfigFilesModel["list"] = state.status !== "ready" ? asLoading(state, retry, "config.list.retry") : { status: "ready", value: { release: state.value.release, rows } };
   return { world, list, editor };
@@ -268,14 +269,14 @@ function usePolled<T>(key: string, intervalMs: number, limit: number, settled: (
       try {
         let value = await first();
         for (let tries = 0; !settled(value); tries += 1) {
-          if (tries >= limit) throw new Error("No answer came in time. Try again.");
+          if (tries >= limit) throw new Error(t("common.noAnswerCameTime"));
           await wait(intervalMs);
           if (run.current !== mine) return;
           value = await next(value);
         }
         if (run.current === mine) setState({ status: "ready", value });
       } catch (cause) {
-        if (run.current === mine) setState({ status: "error", error: cause instanceof Error ? cause.message : "The request failed.", kind: failureKind(cause) });
+        if (run.current === mine) setState({ status: "error", error: cause instanceof Error ? cause.message : t("common.requestFailed"), kind: failureKind(cause) });
       }
     })();
   // `settled` and `next` are recreated every render; the run counter guards what they act on.
@@ -292,13 +293,13 @@ export function logLineTone(text: string): HostLogRow["tone"] {
 
 /** Why a read that the host answered has no lines. */
 const LOG_FAILURE: Readonly<Record<Exclude<WorldLogRead["status"], "pending" | "succeeded">, string>> = {
-  unavailable: "The game did not answer. Is it running?",
-  failed: "The host could not read the log.",
-  timed_out: "The host did not answer in time.",
+  unavailable: t("log.gameDidNotAnswer"),
+  failed: t("log.hostCouldNotRead"),
+  timed_out: t("log.hostDidNotAnswer"),
 };
 
 function readFailure(status: WorldLogRead["status"]): string {
-  if (status === "pending") return "No answer came in time. Try again.";
+  if (status === "pending") return t("common.noAnswerCameTime");
   return status === "succeeded" ? LOG_FAILURE.failed : LOG_FAILURE[status];
 }
 
@@ -314,8 +315,8 @@ function logState(polled: Polled<WorldLogRead>, retry: Action): WorldLogModel["l
 }
 
 export const ASSISTANT_CHOICES: readonly AssistantChoice[] = [
-  { value: "haiku", label: "Haiku", hint: "Fast and cheap: a short reading of the log" },
-  { value: "sonnet", label: "Sonnet", hint: "Slower and dearer: a closer reading, with steps to take" },
+  { value: "haiku", label: "Haiku", hint: t("assistant.fastCheapShortReading") },
+  { value: "sonnet", label: "Sonnet", hint: t("assistant.slowerDearerCloserReading") },
 ];
 
 function answerState(polled: Polled<AssistantAnswer>, retry: Action): AssistantPanelModel["answer"] {
@@ -324,7 +325,7 @@ function answerState(polled: Polled<AssistantAnswer>, retry: Action): AssistantP
   if (polled.status === "error") return { ...polled, retry };
   const answer = polled.value;
   if (answer.status === "succeeded" && answer.text !== null) return { status: "ready", value: { text: answer.text, at: answer.at } };
-  return { status: "error", error: "The model could not answer. Try again, or try the other model.", kind: "failed", retry };
+  return { status: "error", error: t("assistant.modelCouldNotAnswer"), kind: "failed", retry };
 }
 
 /**
@@ -343,11 +344,11 @@ export function useWorldLog(gameId: string, world: World, running: boolean, assi
 
   const reading = read.status === "loading";
   const readLog = () => startRead(() => api.requestWorldLog(gameId, world.id));
-  const readAction = action("log.read", "Read log", readLog, {
+  const readAction = action("log.read", t("log.readLog"), readLog, {
     icon: "refresh",
     disabled: !running || reading,
     busy: reading,
-    hint: running ? undefined : "The world is not running",
+    hint: running ? undefined : t("log.worldNotRunning"),
   });
 
   const finished = read.status === "ready" && read.value.status === "succeeded" ? read.value : null;
@@ -356,7 +357,7 @@ export function useWorldLog(gameId: string, world: World, running: boolean, assi
     if (finished === null) return;
     const text = question.trim();
     startAnswer(() => api.askAssistant(gameId, world.id, { logReadId: finished.id, model, question: text === "" ? null : text }).catch((cause: unknown) => {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The question could not be sent." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : t("common.questionCouldNotSent") });
       throw cause;
     }));
   };
@@ -366,22 +367,22 @@ export function useWorldLog(gameId: string, world: World, running: boolean, assi
     setModel,
     question,
     setQuestion,
-    ask: action("assistant.ask", "Explain", ask, {
+    ask: action("assistant.ask", t("log.explain"), ask, {
       icon: "help",
       disabled: finished === null || asking,
       busy: asking,
-      hint: finished === null ? "Read the log first" : undefined,
+      hint: finished === null ? t("log.readLogFirst") : undefined,
     }),
-    answer: answerState(answer, action("assistant.retry", "Try again", ask)),
+    answer: answerState(answer, action("assistant.retry", t("common.tryAgain"), ask)),
   } : null;
 
-  return { world, read: readAction, log: logState(read, action("log.retry", "Try again", readLog)), assistant };
+  return { world, read: readAction, log: logState(read, action("log.retry", t("common.tryAgain"), readLog)), assistant };
 }
 
 // --- release files (ADR-0065) -------------------------------------------------
 
 function modsPending(state: Exclude<LoadState<ReleaseModPage>, { status: "ready" }>, retry: () => void): Loading<ModsPage> {
-  return state.status === "error" ? { status: "error", error: state.error, kind: state.kind, retry: action("mods.retry", "Try again", retry) } : state;
+  return state.status === "error" ? { status: "error", error: state.error, kind: state.kind, retry: action("mods.retry", t("common.tryAgain"), retry) } : state;
 }
 
 type ModsState = Readonly<{ key: string; view: ModsView }>;
@@ -424,7 +425,7 @@ export function useReleaseMods(gameId: string, release: Readonly<{ presetId: str
       rows: state.value.mods.map((mod) => ({
         ...mod,
         source: mod.source ?? null,
-        download: action(`mod.download.${mod.sha256}`, "Download", () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
+        download: action(`mod.download.${mod.sha256}`, t("common.download"), () => onDownload(release.presetId, release.version, mod), { icon: "download" }),
       })),
     },
   };
@@ -461,16 +462,16 @@ export function useReleaseChanges(gameId: string, release: Readonly<{ presetId: 
 }
 
 function restoreHint(entry: BackupEntry, canRestore: boolean): string {
-  if (entry.generationId === null) return "This legacy backup is not tied to a wipe.";
-  return canRestore ? "Restore into a new wipe" : "Your role cannot restore backups.";
+  if (entry.generationId === null) return t("releases.legacyBackupNotTied");
+  return canRestore ? t("releases.restoreIntoNewWipe") : t("releases.roleCannotRestoreBackups");
 }
 
 // --- metrics -----------------------------------------------------------------
 
 export const METRIC_RANGES: readonly { id: MetricRange; label: string }[] = [
-  { id: "6h", label: "6 hours" },
-  { id: "24h", label: "24 hours" },
-  { id: "7d", label: "7 days" },
+  { id: "6h", label: t("metrics.n6Hours") },
+  { id: "24h", label: t("metrics.n24Hours") },
+  { id: "7d", label: t("metrics.n7Days") },
 ];
 
 /** The host one world runs on, measured; read only while the tab is open, and again when its session starts or ends. */
@@ -511,7 +512,7 @@ export function useConsoleGateway(gameId: string | undefined, worldId: string | 
     setEntries({ status: "loading" });
     api.loadConsole(gameId, worldId)
       .then((value) => { if (current) setEntries({ status: "ready", value }); })
-      .catch((cause: unknown) => { if (current) setEntries({ status: "error", error: cause instanceof Error ? cause.message : "The console history could not be loaded.", kind: failureKind(cause) }); });
+      .catch((cause: unknown) => { if (current) setEntries({ status: "error", error: cause instanceof Error ? cause.message : t("rcon.consoleHistoryCouldNot"), kind: failureKind(cause) }); });
     return () => { current = false; };
   }, [gameId, worldId, revision]);
 
@@ -535,7 +536,7 @@ export function useConsoleGateway(gameId: string | undefined, worldId: string | 
       setEntries((state) => state.status === "ready" ? { status: "ready", value: [entry, ...state.value.filter((item) => item.id !== entry.id)] } : state);
       return true;
     } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The command could not be sent." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : t("rcon.commandCouldNotSent") });
       return false;
     } finally {
       setSending(false);
@@ -549,14 +550,14 @@ export function useConsoleGateway(gameId: string | undefined, worldId: string | 
 
 // How a waiting account introduces itself: its Telegram handle, or its email.
 function candidateAccount(candidate: AccessCandidate): string {
-  if (candidate.platform === "password") return candidate.email ?? "Email account";
-  return candidate.username ? `@${candidate.username}` : "Telegram account";
+  if (candidate.platform === "password") return candidate.email ?? t("access.emailAccount");
+  return candidate.username ? `@${candidate.username}` : t("access.telegramAccount");
 }
 
 export function bootstrapDescription(bootstrap: OwnerBootstrap): string | undefined {
   if (bootstrap.state === "claimed") return undefined;
   const configuredAccount = bootstrap.telegramId ? ` (${bootstrap.telegramId})` : "";
-  return `Sign in with the configured Telegram account${configuredAccount} to create the first Owner.`;
+  return t("access.signConfiguredTelegramAccount", { configuredAccount });
 }
 
 /**
@@ -579,8 +580,8 @@ export function accessRequests(directory: AccessDirectory): Readonly<{
       const candidate = open.find((item) => candidateKey(item) === id);
       if (!candidate) return null;
       return {
-        approve: action("access.approve", "Approve", () => void directory.approve(candidate), { icon: "check", disabled: working !== null, busy: working === id, hint: "Approve with the default role" }),
-        dismiss: action("access.dismiss", "Dismiss", () => void directory.dismiss(candidate), { icon: "close", disabled: working !== null }),
+        approve: action("access.approve", t("access.approve"), () => void directory.approve(candidate), { icon: "check", disabled: working !== null, busy: working === id, hint: t("access.approveDefaultRole") }),
+        dismiss: action("access.dismiss", t("access.dismiss"), () => void directory.dismiss(candidate), { icon: "close", disabled: working !== null }),
       };
     },
   };
@@ -589,19 +590,19 @@ export function accessRequests(directory: AccessDirectory): Readonly<{
 /** Delete is reachable where the API says the caller may delete this identity. */
 export function memberRemoval(member: Member, open: (member: Member) => void): Action | null {
   if (!member.canDelete) return null;
-  return action("access.delete", "Delete user", () => open(member), { danger: true, icon: "delete_forever" });
+  return action("access.delete", t("access.deleteUser"), () => open(member), { danger: true, icon: "delete_forever" });
 }
 
 export function deletionConfirmation(member: Member, opts: Readonly<{ typed: string; setTyped: (value: string) => void; busy: boolean; error: string | null; confirm: () => void; cancel: () => void }>): ConfirmationModel {
   const expected = member.name.trim();
   return {
-    title: `Delete ${expected}?`,
-    description: "Removes their sign-in methods, sessions and agent connections. This cannot be undone.",
+    title: t("access.deleteExpected", { expected }),
+    description: t("access.removesTheirSignInMethods"),
     destructive: true,
-    confirm: action("access.delete.confirm", "Delete user", opts.confirm, { danger: true, disabled: opts.busy || opts.typed.trim() !== expected, busy: opts.busy }),
-    cancel: action("access.delete.cancel", "Cancel", opts.cancel, { disabled: opts.busy }),
+    confirm: action("access.delete.confirm", t("access.deleteUser"), opts.confirm, { danger: true, disabled: opts.busy || opts.typed.trim() !== expected, busy: opts.busy }),
+    cancel: action("access.delete.cancel", t("common.cancel"), opts.cancel, { disabled: opts.busy }),
     releaseChoice: null,
-    typedConfirmation: { label: "User name", expected, value: opts.typed, set: opts.setTyped },
+    typedConfirmation: { label: t("access.userName"), expected, value: opts.typed, set: opts.setTyped },
     error: opts.error,
   };
 }
@@ -615,11 +616,11 @@ export async function deleteMember(member: Member, deps: Readonly<{ remove: (ide
   try {
     await deps.remove(member.id);
   } catch (cause) {
-    return cause instanceof Error ? cause.message : "This user could not be deleted.";
+    return cause instanceof Error ? cause.message : t("access.userCouldNotDeleted");
   }
   deps.onMembersChange(deps.members.filter((item) => item.id !== member.id));
   if (deps.managing === member.id) deps.closeManaged();
-  deps.notify({ tone: "success", message: `${member.name.trim()} was deleted.` });
+  deps.notify({ tone: "success", message: t("access.trimWasDeleted", { trim: member.name.trim() }) });
   return null;
 }
 
@@ -664,11 +665,11 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
           id: key,
           candidate,
           account: candidateAccount(candidate),
-          since: `${candidate.status === "REQUESTED" ? "Requested access" : "Signed in"} ${formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}`,
+          since: `${candidate.status === "REQUESTED" ? t("access.requestedAccess") : t("access.signed")} ${formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}`,
           role: roleChoice(roles, chosen ?? "", working === key),
           setRoleId: (roleId: string) => setCandidateRoles((current) => ({ ...current, [key]: roleId })),
-          approve: action("access.approve", "Approve", () => { if (chosen !== null) void directory.approve(candidate, chosen); }, { disabled: !rolesReady, busy: working === key, hint: rolesReady ? "Approve with the chosen role" : "Roles are still loading" }),
-          dismiss: action("access.dismiss", "Dismiss", () => void directory.dismiss(candidate), { disabled: working === key }),
+          approve: action("access.approve", t("access.approve"), () => { if (chosen !== null) void directory.approve(candidate, chosen); }, { disabled: !rolesReady, busy: working === key, hint: rolesReady ? t("access.approveChosenRole") : t("access.rolesStillLoading") }),
+          dismiss: action("access.dismiss", t("access.dismiss"), () => void directory.dismiss(candidate), { disabled: working === key }),
         };
       }),
     };
@@ -682,13 +683,13 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
       role: roleChoice(roles, member.roleId, working === member.id),
       setRoleId: (roleId: string) => void directory.changeRole(member, roleId),
       changing: working === member.id,
-      linkedAccounts: action("access.linked", "Linked accounts", () => setManaging(member.id), { icon: "link" }),
+      linkedAccounts: action("access.linked", t("access.linkedAccounts"), () => setManaging(member.id), { icon: "link" }),
       remove: memberRemoval(member, openDeletion),
     })),
     roles,
     invitations,
     managed: members.find((member) => member.id === managing) ?? null,
-    closeManaged: action("sheet.close", "Close panel", () => setManaging(null)),
+    closeManaged: action("sheet.close", t("common.closePanel"), () => setManaging(null)),
     deletion: target === null ? null : deletionConfirmation(target, { typed, setTyped, busy: removing, error: refusal, confirm: () => void confirmDeletion(target), cancel: () => setDeleting(null) }),
   };
 }
@@ -714,10 +715,10 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
       const result = await api.createAccessInvitation(recipient);
       setIssued({ url: result.url, id: result.id, email: recipient ?? "" });
       setEmail("");
-      notify({ tone: result.delivery === "failed" ? "error" : "success", message: result.delivery === "failed" ? "Invitation created, but the email could not be sent. Copy the link below." : "Invitation created." });
+      notify({ tone: result.delivery === "failed" ? "error" : "success", message: result.delivery === "failed" ? t("access.invitationCreatedButEmail") : t("access.invitationCreated") });
       retry();
     } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The invitation could not be created." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : t("access.invitationCouldNotCreated2") });
     } finally {
       setCreating(false);
     }
@@ -726,9 +727,9 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
   async function copy(url: string) {
     try {
       await navigator.clipboard.writeText(url);
-      notify({ tone: "success", message: "Invitation link copied." });
+      notify({ tone: "success", message: t("access.invitationLinkCopied") });
     } catch {
-      notify({ tone: "error", message: "Clipboard access failed. Select and copy the link manually." });
+      notify({ tone: "error", message: t("access.clipboardAccessFailedSelect") });
     }
   }
 
@@ -738,9 +739,9 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
       await api.revokeAccessInvitation(invitation.id);
       if (issued?.id === invitation.id) setIssued(null);
       retry();
-      notify({ message: "Invitation revoked." });
+      notify({ message: t("access.invitationRevoked") });
     } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The invitation could not be revoked." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : t("access.invitationCouldNotRevoked2") });
     } finally {
       setRevoking(null);
     }
@@ -750,11 +751,11 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
     emailMode,
     email,
     setEmail,
-    create: action("invitation.create", "Create invitation", () => void create(), { disabled: emailMode === null, busy: creating }),
-    issued: issued ? { url: issued.url, email: issued.email, copy: action("invitation.copy", "Copy link", () => void copy(issued.url)) } : null,
+    create: action("invitation.create", t("access.createInvitation"), () => void create(), { disabled: emailMode === null, busy: creating }),
+    issued: issued ? { url: issued.url, email: issued.email, copy: action("invitation.copy", t("access.copyLink"), () => void copy(issued.url)) } : null,
     list: state.status !== "ready"
       ? asLoading(state, retry, "invitation.retry")
-      : { status: "ready", value: state.value.map((invitation) => ({ invitation, revoke: invitation.status === "PENDING" ? action("invitation.revoke", "Revoke", () => void revoke(invitation), { busy: revoking === invitation.id }) : null })) },
+      : { status: "ready", value: state.value.map((invitation) => ({ invitation, revoke: invitation.status === "PENDING" ? action("invitation.revoke", t("access.revoke"), () => void revoke(invitation), { busy: revoking === invitation.id }) : null })) },
   };
 }
 
@@ -763,7 +764,7 @@ function useInvitations(enabled: boolean, notify: Notify): InvitationsModel | nu
 /** Edit is offered where the API says `editable`; a refused one says why. */
 export function roleEditAction(role: Role, run: () => void): Action {
   const reason = roleEditRefusal(role);
-  return action("access.role.edit", "Edit", run, { icon: "edit", disabled: reason !== null, hint: reason ?? undefined });
+  return action("access.role.edit", t("common.edit"), run, { icon: "edit", disabled: reason !== null, hint: reason ?? undefined });
 }
 
 /** Delete is offered where the API says `deletable`; a refused one says why. */
@@ -789,7 +790,7 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
   const [refusal, setRefusal] = useState<string | null>(null);
   const roles = state.status === "ready" ? state.value : [];
   const canManage = granted.has("access.manage");
-  const why = canManage ? undefined : "Your role cannot manage access.";
+  const why = canManage ? undefined : t("access.roleCannotManageAccess");
 
   // Holders and versions change under a write, so the directory reads the roles again, quietly.
   const refresh = opts.directory.refreshRoles;
@@ -799,7 +800,7 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
     if (cause instanceof ApiError && cause.code === "role_changed") {
       setForm(null);
       setDeleting(null);
-      notify({ tone: "error", message: "Someone changed this role. The list is reloaded." });
+      notify({ tone: "error", message: t("access.someoneChangedRoleList") });
       await refresh();
       return null;
     }
@@ -819,10 +820,10 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
     try {
       const saved = current.mode === "create" ? await api.createAccessRole(draft.id, body) : await api.updateAccessRole(current.roleId, body, current.version);
       setForm(null);
-      notify({ message: current.mode === "create" ? `${saved.name} created.` : `${saved.name} saved.` });
+      notify({ message: current.mode === "create" ? t("access.savedNameCreated", { savedName: saved.name }) : t("access.savedNameSaved", { savedName: saved.name }) });
       await refresh();
     } catch (cause) {
-      setRefusal(await refused(cause, current.mode === "create" ? "The role could not be created." : "The role could not be saved."));
+      setRefusal(await refused(cause, current.mode === "create" ? t("access.roleCouldNotCreated") : t("access.roleCouldNotSaved")));
     } finally {
       setBusy(false);
     }
@@ -834,10 +835,10 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
     try {
       await api.deleteAccessRole(role.id, version);
       setDeleting(null);
-      notify({ message: `${role.name} deleted.` });
+      notify({ message: t("access.roleNameDeleted", { roleName: role.name }) });
       await refresh();
     } catch (cause) {
-      setRefusal(await refused(cause, "The role could not be deleted."));
+      setRefusal(await refused(cause, t("access.roleCouldNotDeleted")));
     } finally {
       setBusy(false);
     }
@@ -847,24 +848,24 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
     setBusy(true);
     try {
       await api.updateDefaultRole(roleId);
-      notify({ message: `New people now get ${roles.find((role) => role.id === roleId)?.name ?? roleId}.` });
+      notify({ message: t("access.newPeopleNowGet", { value: roles.find((role) => role.id === roleId)?.name ?? roleId }) });
       await refresh();
     } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The default role could not be changed." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : t("access.defaultRoleCouldNot") });
     } finally {
       setBusy(false);
     }
   }
 
   const editing = form?.mode === "edit" ? roles.find((role) => role.id === form.roleId) : undefined;
-  const idError = form?.mode === "create" && draft.id !== "" && !ROLE_ID_PATTERN.test(draft.id) ? "Use a lower-case letter first, then letters, digits or hyphens (up to 32)." : null;
+  const idError = form?.mode === "create" && draft.id !== "" && !ROLE_ID_PATTERN.test(draft.id) ? t("access.useLowerCaseLetterFirst") : null;
   const valid = draft.name.trim() !== "" && (form?.mode !== "create" || ROLE_ID_PATTERN.test(draft.id));
   const changed = form?.mode !== "edit" || !editing || draft.name.trim() !== editing.name || draft.description.trim() !== editing.description || !sameSet(draft.permissions, editing.permissions);
   const removing = deleting === null ? undefined : roles.find((role) => role.id === deleting.roleId);
 
   const editor: RoleEditorModel | null = form === null || (form.mode === "edit" && !editing) ? null : {
     mode: form.mode,
-    title: form.mode === "create" ? "New role" : `Edit ${editing!.name}`,
+    title: form.mode === "create" ? t("access.newRole") : t("common.editPath", { path: editing!.name }),
     id: draft.id,
     setId: (value) => setDraft((current) => ({ ...current, id: value, idTouched: true })),
     idError,
@@ -882,20 +883,20 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
           if (checked) next.delete(permission.id);
           else next.add(permission.id);
           return { ...current, permissions: next };
-        }), { disabled: locked || busy, hint: locked ? "You do not hold this permission." : undefined }),
+        }), { disabled: locked || busy, hint: locked ? t("access.doNotHoldPermission") : undefined }),
       };
     }),
     error: refusal,
-    submit: action("access.role.save", form.mode === "create" ? "Create role" : "Save role", () => void submit(form), { disabled: busy || !valid || idError !== null || !changed, busy }),
-    cancel: action("access.role.cancel", "Cancel", () => setForm(null), { disabled: busy }),
+    submit: action("access.role.save", form.mode === "create" ? t("access.createRole") : t("access.saveRole"), () => void submit(form), { disabled: busy || !valid || idError !== null || !changed, busy }),
+    cancel: action("access.role.cancel", t("common.cancel"), () => setForm(null), { disabled: busy }),
   };
 
   const deletion: ConfirmationModel | null = deleting === null || !removing ? null : {
-    title: `Delete ${removing.name}?`,
-    description: "Removes this role. This cannot be undone.",
+    title: t("access.deleteExpected", { expected: removing.name }),
+    description: t("access.removesRoleCannotUndone"),
     destructive: true,
-    confirm: action("access.role.delete.confirm", "Delete role", () => void confirmDeletion(removing, deleting.version), { danger: true, disabled: busy, busy }),
-    cancel: action("access.role.delete.cancel", "Cancel", () => setDeleting(null), { disabled: busy }),
+    confirm: action("access.role.delete.confirm", t("access.deleteRole"), () => void confirmDeletion(removing, deleting.version), { danger: true, disabled: busy, busy }),
+    cancel: action("access.role.delete.cancel", t("common.cancel"), () => setDeleting(null), { disabled: busy }),
     releaseChoice: null,
     typedConfirmation: null,
     error: refusal,
@@ -904,9 +905,9 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
   return {
     roles: state,
     reading: roles.find((item) => item.id === reading) ?? null,
-    read: (role) => action("access.role.read", `${role.permissions.length} ${role.permissions.length === 1 ? "permission" : "permissions"}`, () => setReading(role.id), { icon: "chevron_right" }),
-    closeReading: action("sheet.close", "Close panel", () => setReading(null)),
-    create: action("access.role.create", "New role", () => open({ mode: "create" }, { id: "", name: "", description: "", permissions: [] }), { icon: "add", disabled: !canManage, hint: why }),
+    read: (role) => action("access.role.read", t("access.permissionCount", { count: role.permissions.length }), () => setReading(role.id), { icon: "chevron_right" }),
+    closeReading: action("sheet.close", t("common.closePanel"), () => setReading(null)),
+    create: action("access.role.create", t("access.newRole"), () => open({ mode: "create" }, { id: "", name: "", description: "", permissions: [] }), { icon: "add", disabled: !canManage, hint: why }),
     edit: (role) => roleEditAction(role, () => { setReading(null); open({ mode: "edit", roleId: role.id, version: role.version }, role); }),
     remove: (role) => roleRemoveAction(role, directory.defaultRoleId, () => { setReading(null); setRefusal(null); setDeleting({ roleId: role.id, version: role.version }); }),
     editor,
@@ -918,8 +919,8 @@ export function useRoles(opts: Readonly<{ directory: AccessDirectory; granted: R
 // --- access: notifications ------------------------------------------------------
 
 function saveStatusLabel(state: "loading" | "ready" | "saving" | "error"): string {
-  if (state === "saving") return "Saving…";
-  return state === "ready" ? "Saved to your identity" : "";
+  if (state === "saving") return t("access.saving");
+  return state === "ready" ? t("access.savedIdentity") : "";
 }
 
 export function useNotifications(games: readonly Game[], notify: Notify): NotificationsModel {
@@ -935,7 +936,7 @@ export function useNotifications(games: readonly Game[], notify: Notify): Notifi
       setSubscriptions(await api.loadSubscriptions());
       setState("ready");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Your notification subscriptions could not be loaded.");
+      setError(cause instanceof Error ? cause.message : t("common.notificationSubscriptionsCouldNot"));
       setState("error");
     }
   }, []);
@@ -954,7 +955,7 @@ export function useNotifications(games: readonly Game[], notify: Notify): Notifi
     } catch (cause) {
       setSubscriptions(previous);
       setState("ready");
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "Your notification subscriptions could not be saved." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : t("common.notificationSubscriptionsCouldNotSaved") });
     }
   }
 
@@ -962,7 +963,7 @@ export function useNotifications(games: readonly Game[], notify: Notify): Notifi
   return {
     state,
     error,
-    retry: state === "error" ? action("notifications.retry", "Try again", () => void reload()) : null,
+    retry: state === "error" ? action("notifications.retry", t("common.tryAgain"), () => void reload()) : null,
     saveStatus: saveStatusLabel(state),
     games,
     subscriptions,
@@ -974,8 +975,8 @@ export function useNotifications(games: readonly Game[], notify: Notify): Notifi
 
 function invitationStatusLabel(status: InvitationSummary["status"]): string {
   const labels: Record<InvitationSummary["status"], string> = {
-    READY: "Queued", DELIVERING: "Delivering", DELIVERED: "Delivered", PARTIAL: "Partial",
-    FAILED: "Failed", NO_RECIPIENTS: "No recipients", PUBLISH_FAILED: "Queue failed",
+    READY: t("access.queued"), DELIVERING: t("access.delivering"), DELIVERED: t("access.delivered"), PARTIAL: t("access.partial"),
+    FAILED: t("common.failed"), NO_RECIPIENTS: t("access.noRecipients"), PUBLISH_FAILED: t("access.queueFailed"),
   };
   return labels[status];
 }
@@ -989,26 +990,26 @@ function invitationStatusKind(status: InvitationSummary["status"]): StatusKind {
 }
 
 function deliveryDetail(item: InvitationSummary): string {
-  if (item.status === "READY" || item.status === "DELIVERING") return "Waiting for the notifier";
-  if (item.status === "NO_RECIPIENTS") return "Nobody was subscribed";
-  if (item.status === "FAILED" && item.targetCount === 0) return "Delivery process failed";
-  if (item.targetCount === null || item.successCount === null) return "No delivery result";
-  return `${item.successCount}/${item.targetCount} delivered`;
+  if (item.status === "READY" || item.status === "DELIVERING") return t("access.waitingNotifier");
+  if (item.status === "NO_RECIPIENTS") return t("access.nobodyWasSubscribed");
+  if (item.status === "FAILED" && item.targetCount === 0) return t("access.deliveryProcessFailed");
+  if (item.targetCount === null || item.successCount === null) return t("access.noDeliveryResult");
+  return t("access.successCountTargetCountDelivered", { successCount: item.successCount, targetCount: item.targetCount });
 }
 
 function deliveryLabel(recipient: InvitationRecipient): string {
-  if (recipient.delivery === "ready") return "Accepts direct invitations";
-  if (recipient.delivery === "notifications_off") return "Direct invitations turned off";
-  return "Must open the bot privately first";
+  if (recipient.delivery === "ready") return t("access.acceptsDirectInvitations");
+  if (recipient.delivery === "notifications_off") return t("access.directInvitationsTurnedOff");
+  return t("access.mustOpenBotPrivately");
 }
 
 function players(count: number): string {
-  return `${count} ${count === 1 ? "player" : "players"}`;
+  return t("common.playerCount", { count });
 }
 
 function sendHint(audience: "broadcast" | "direct", selected: number): string {
-  if (audience === "broadcast") return "One Telegram message to group chats and subscribers.";
-  return selected === 0 ? "Choose at least one player." : `${players(selected)} selected.`;
+  if (audience === "broadcast") return t("access.oneTelegramMessageGroup");
+  return selected === 0 ? t("access.chooseLeastOnePlayer") : t("access.playersSelected", { players: players(selected) });
 }
 
 export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose: () => void; notify: Notify }>): InvitationModel {
@@ -1039,11 +1040,11 @@ export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose
     setSending(true);
     try {
       await api.sendInvitation(game.id, world.id, audience, [...selected]);
-      opts.notify({ tone: "success", message: audience === "broadcast" ? "Invitation accepted for delivery to everyone." : `Invitation accepted for ${players(selected.size)}.` });
+      opts.notify({ tone: "success", message: audience === "broadcast" ? t("invitations.invitationAcceptedDeliveryEveryone") : t("invitations.invitationAcceptedPlayers", { players: players(selected.size) }) });
       setSelected(new Set());
       refreshHistory();
     } catch (error) {
-      opts.notify({ tone: "error", message: error instanceof Error ? error.message : "The invitation could not be sent." });
+      opts.notify({ tone: "error", message: error instanceof Error ? error.message : t("common.invitationCouldNotSent") });
     } finally {
       setSending(false);
     }
@@ -1061,13 +1062,13 @@ export function useInvitation(game: Game, world: World, opts: Readonly<{ onClose
       : { status: "ready", value: recipients.filter((recipient) => needle === "" || recipient.displayName.toLocaleLowerCase().includes(needle)).map((recipient) => ({ id: recipient.id, displayName: recipient.displayName, ready: recipient.delivery === "ready", delivery: deliveryLabel(recipient), selected: selected.has(recipient.id), toggle: () => toggle(recipient) })) },
     reachable: recipients.filter((recipient) => recipient.delivery === "ready").length,
     selectedCount: selected.size,
-    clearSelection: action("invitation.clear", "Clear selection", () => setSelected(new Set()), { disabled: selected.size === 0 }),
+    clearSelection: action("invitation.clear", t("common.clearSelection"), () => setSelected(new Set()), { disabled: selected.size === 0 }),
     history: historyState.status !== "ready"
       ? asLoading(historyState, refreshHistory, "invitation.history.retry")
-      : { status: "ready", value: historyState.value.slice(0, 5).map((item) => ({ id: item.id, status: { kind: invitationStatusKind(item.status), label: invitationStatusLabel(item.status) }, audience: item.audience === "broadcast" ? "Everyone" : `${item.recipientCount ?? 0} selected`, detail: deliveryDetail(item), createdAt: item.createdAt })) },
-    refreshHistory: action("invitation.history.refresh", "Refresh", refreshHistory, { icon: "refresh", disabled: historyState.status === "loading" }),
-    send: action("invitation.send", "Send invitation", () => void submit(), { icon: "send", busy: sending, disabled: sending || (audience === "direct" && selected.size === 0), hint: sendHint(audience, selected.size) }),
-    close: action("sheet.close", "Close panel", opts.onClose),
+      : { status: "ready", value: historyState.value.slice(0, 5).map((item) => ({ id: item.id, status: { kind: invitationStatusKind(item.status), label: invitationStatusLabel(item.status) }, audience: item.audience === "broadcast" ? t("common.everyone") : t("invitations.valueSelected", { value: item.recipientCount ?? 0 }), detail: deliveryDetail(item), createdAt: item.createdAt })) },
+    refreshHistory: action("invitation.history.refresh", t("common.refresh"), refreshHistory, { icon: "refresh", disabled: historyState.status === "loading" }),
+    send: action("invitation.send", t("invitations.sendInvitation"), () => void submit(), { icon: "send", busy: sending, disabled: sending || (audience === "direct" && selected.size === 0), hint: sendHint(audience, selected.size) }),
+    close: action("sheet.close", t("common.closePanel"), opts.onClose),
   };
 }
 
@@ -1090,7 +1091,7 @@ export function useLoginAccounts(displayName: string, notify: Notify): LoginAcco
 
   async function connect(link: (idToken: string) => Promise<void>, label: string, idToken: string) {
     await link(idToken);
-    notify({ tone: "success", message: `${label} is now a sign-in method for this identity.` });
+    notify({ tone: "success", message: t("profile.labelNowSignInMethod", { label }) });
     retry();
   }
 
@@ -1105,20 +1106,20 @@ export function useLoginAccounts(displayName: string, notify: Notify): LoginAcco
 
   async function submit() {
     setError("");
-    if (password !== confirmation) { setError("The passwords do not match."); return; }
+    if (password !== confirmation) { setError(t("common.passwordsDoNotMatch")); return; }
     setBusy(true);
     try {
       if (form === "add") {
         await api.linkPassword(email, password, displayName);
-        notify({ tone: "success", message: `A verification link was sent to ${email}.` });
+        notify({ tone: "success", message: t("profile.verificationLinkWasSent", { email }) });
       } else {
         await api.changePassword(email, currentPassword, password);
-        notify({ tone: "success", message: "Password changed. Existing password sessions were signed out." });
+        notify({ tone: "success", message: t("profile.passwordChangedExistingPassword") });
       }
       setForm(null);
       retry();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The sign-in method could not be updated.");
+      setError(cause instanceof Error ? cause.message : t("profile.signInMethodCouldNot"));
     } finally {
       setBusy(false);
     }
@@ -1128,9 +1129,9 @@ export function useLoginAccounts(displayName: string, notify: Notify): LoginAcco
     setBusy(true);
     try {
       if (kind === "verify") await api.resendEmailVerification(address); else await api.requestPasswordReset(address);
-      notify({ tone: "success", message: kind === "verify" ? `A new verification link was sent to ${address}.` : `If the account is eligible, a reset link is on its way to ${address}.` });
+      notify({ tone: "success", message: kind === "verify" ? t("profile.newVerificationLinkWas", { address }) : t("profile.ifAccountEligibleReset", { address }) });
     } catch (cause) {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : "The email could not be sent." });
+      notify({ tone: "error", message: cause instanceof Error ? cause.message : t("profile.emailCouldNotSent") });
     } finally {
       setBusy(false);
     }
@@ -1143,24 +1144,24 @@ export function useLoginAccounts(displayName: string, notify: Notify): LoginAcco
     linkable,
     connectTelegram: ready !== null && !has("telegram") && linkable.includes("telegram") && /^[1-9]\d+$/.test(signIn.telegramClientId) ? (idToken) => connect(api.linkTelegram, "Telegram", idToken) : null,
     connectGoogle: ready !== null && !has("google") && linkable.includes("google") && GOOGLE_CLIENT_ID.test(signIn.googleClientId) ? (idToken) => connect(api.linkGoogle, "Google", idToken) : null,
-    addPassword: ready !== null && passwordAccount === undefined && ready.passwordManagementAvailable ? action("accounts.password.add", "Add email and password", () => openForm("add"), { icon: "add" }) : null,
+    addPassword: ready !== null && passwordAccount === undefined && ready.passwordManagementAvailable ? action("accounts.password.add", t("profile.addEmailPassword"), () => openForm("add"), { icon: "add" }) : null,
     form: form === null ? null : {
       kind: form,
       email, setEmail, currentPassword, setCurrentPassword, password, setPassword, confirmation, setConfirmation,
       error,
       busy,
-      submit: action("accounts.password.submit", form === "add" ? "Send verification" : "Change password", () => void submit(), { busy }),
-      cancel: action("accounts.password.cancel", "Cancel", () => setForm(null), { disabled: busy }),
+      submit: action("accounts.password.submit", form === "add" ? t("profile.sendVerification") : t("common.changePassword"), () => void submit(), { busy }),
+      cancel: action("accounts.password.cancel", t("common.cancel"), () => setForm(null), { disabled: busy }),
     },
     rowActions: (account) => {
       if (account.provider !== "password" || !account.email) return [];
       const address = account.email;
       return account.verified
         ? [
-          action("accounts.password.change", "Change password", () => openForm("change", account), { disabled: busy }),
-          action("accounts.password.reset", "Send reset link", () => void recover("reset", address), { disabled: busy }),
+          action("accounts.password.change", t("common.changePassword"), () => openForm("change", account), { disabled: busy }),
+          action("accounts.password.reset", t("common.sendResetLink"), () => void recover("reset", address), { disabled: busy }),
         ]
-        : [action("accounts.password.verify", "Resend verification", () => void recover("verify", address), { disabled: busy })];
+        : [action("accounts.password.verify", t("profile.resendVerification"), () => void recover("verify", address), { disabled: busy })];
     },
   };
 }

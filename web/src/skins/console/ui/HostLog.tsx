@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { HostLogRow } from "../../../core/models";
 import { logTime } from "../../../core/operation-progress";
 import { Skeleton } from "./Skeleton";
+import { t } from "../../../i18n";
 
 // Placeholder lines while a live log has none yet, as wide as typical lines.
 const WAITING = ["14em", "22em", "18em"] as const;
@@ -27,7 +28,7 @@ export function HostLog({ label, rows, live = false, tall = false }: Readonly<{ 
       {rows.map((row) => (
         <div className="c-host-line" data-tone={row.tone === "plain" ? undefined : row.tone} key={row.id}>
           {row.at !== null && <time className="c-host-time" dateTime={row.at}>{logTime(row.at)}</time>}
-          <span className="c-host-text">{row.tone !== "plain" && <span className="c-sr">{row.tone === "error" ? "Error: " : "Warning: "}</span>}{row.text}</span>
+          <span className="c-host-text">{row.tone !== "plain" && <span className="c-sr">{row.tone === "error" ? t("ui.error") : t("ui.warning")}</span>}{row.text}</span>
         </div>
       ))}
     </div>

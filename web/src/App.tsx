@@ -12,6 +12,7 @@ import { LandingScreen } from "./screens/LandingScreen";
 import { ConnectScreen } from "./screens/ConnectScreen";
 import { useBootCard } from "./shell/hooks";
 import { chooseSkin, currentSkinId, isSkinId, SKIN_CHOICES, wearOnDocument, wearSkin } from "./skins";
+import { t } from "./i18n";
 
 // The gate in front of the console: who is here, and which door they came
 // through. The console itself is bones under a skin (core/Console.tsx).
@@ -43,7 +44,7 @@ export function App() {
       }))
       .catch((error: unknown) => publish(() => {
         if (!active) return;
-        setAuth({ status: "error", message: error instanceof Error ? error.message : "Sign-in failed." });
+        setAuth({ status: "error", message: error instanceof Error ? error.message : t("shell.signInFailed") });
       }));
     return () => { active = false; };
   }, []);
@@ -74,7 +75,7 @@ export function App() {
   if (joinToken !== null) return <JoinScreen auth={auth} onAuth={handleAuth} proof={joinToken.proof} token={joinToken.token} />;
   if (connectRequest !== null && auth.status !== "loading") return <ConnectScreen auth={auth} onAuth={handleAuth} request={connectRequest} />;
   if (auth.status === "loading") {
-    return bootVisible ? <skin.Boot model={{ title: "Checking your session", description: "Confirming who you are with the access API." }} /> : null;
+    return bootVisible ? <skin.Boot model={{ title: t("common.checkingSession"), description: t("common.confirmingWhoAccessAPI") }} /> : null;
   }
   if (atLanding) return <LandingScreen auth={auth} onChange={handleAuth} />;
   if (auth.status !== "authenticated") return <LandingScreen auth={auth} onChange={handleAuth} />;

@@ -1,5 +1,6 @@
 import type { InvitationRecipient, InvitationSummary, SpawnpointApi } from "../contract";
 import { request } from "./request";
+import { t } from "../../i18n";
 
 const worldPath = (gameId: string, worldId: string) => `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}`;
 
@@ -8,14 +9,14 @@ const worldPath = (gameId: string, worldId: string) => `/games/${encodeURICompon
 export const playerInvitationsApi = {
   async loadInvitationRecipients(): Promise<InvitationRecipient[]> {
     const body = await request<{ recipients: InvitationRecipient[] }>("/invitations/recipients", {
-      failure: "Players could not be loaded.", refusals: { forbidden: "Your role cannot invite players." },
+      failure: t("world.playersCouldNotLoaded"), refusals: { forbidden: t("world.roleCannotInvitePlayers") },
     });
     return body.recipients;
   },
 
   async loadInvitationHistory(gameId: string, worldId: string): Promise<InvitationSummary[]> {
     const body = await request<{ invitations: InvitationSummary[] }>(`${worldPath(gameId, worldId)}/invitations`, {
-      failure: "Invitation history could not be loaded.", refusals: { forbidden: "Your role cannot view invitation history." },
+      failure: t("world.invitationHistoryCouldNot"), refusals: { forbidden: t("world.roleCannotViewInvitation") },
     });
     return body.invitations;
   },
@@ -23,8 +24,8 @@ export const playerInvitationsApi = {
   async sendInvitation(gameId: string, worldId: string, audience: "broadcast" | "direct", recipientIdentityIds: readonly string[]): Promise<void> {
     await request<unknown>(`${worldPath(gameId, worldId)}/invitations`, {
       method: "POST", body: { audience, recipientIdentityIds },
-      failure: "The invitation could not be sent.",
-      refusals: { forbidden: "Your role cannot invite players." },
+      failure: t("common.invitationCouldNotSent"),
+      refusals: { forbidden: t("world.roleCannotInvitePlayers") },
     });
   },
 } satisfies Partial<SpawnpointApi>;

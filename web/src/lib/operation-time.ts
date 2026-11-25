@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 /** A duration as m:ss; minutes carry on past 59. */
 export function clock(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));
@@ -27,9 +28,9 @@ export function eta(since: string | undefined, expectation: Expectation, now: nu
   const elapsed = elapsedSeconds(since, now);
   if (expected === undefined || elapsed === null) return null;
   const samples = expectation.expectedSamples;
-  const from = samples ? `, from the last ${samples} runs` : "";
-  const tip = `Usually ${clock(expected)}${from}`;
+  const from = samples ? t("operation.fromLastSamplesRuns", { samples }) : "";
+  const tip = t("operation.usuallyClockFrom", { clock: clock(expected), from });
   return elapsed < expected
-    ? { kind: "left", text: `ETA ~${clock(expected - elapsed)}`, tip }
-    : { kind: "over", text: "Taking longer", tip };
+    ? { kind: "left", text: t("operation.eTAClock", { clock: clock(expected - elapsed) }), tip }
+    : { kind: "over", text: t("operation.takingLonger"), tip };
 }

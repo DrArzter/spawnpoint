@@ -11,13 +11,14 @@ import { Grid } from "../ui/Grid";
 import { Skeleton, SkeletonGroup } from "../ui/Skeleton";
 import { useSkeletonRows } from "../ui/rows";
 import { ARRIVED, useArrivals } from "../ui/Tick";
+import { t } from "../../../i18n";
 
 export function WhitelistTab({ model }: Readonly<{ model: WhitelistModel }>) {
   const list = model.list;
   const ready = list.status === "ready" ? list.value : null;
   const fresh = useArrivals(ready?.rows.map((row) => row.name) ?? []);
-  const placeholders = useSkeletonRows("Whitelist", ready?.rows.length ?? 0, list.status === "loading");
-  const changed = ready?.updatedAt ? [`Changed ${shortDateTime(ready.updatedAt) ?? ""}`, ready.updatedBy ? `by ${ready.updatedBy}` : null].filter(Boolean).join(" ") : undefined;
+  const placeholders = useSkeletonRows(t("common.whitelist"), ready?.rows.length ?? 0, list.status === "loading");
+  const changed = ready?.updatedAt ? [t("whitelist.changedValue", { value: shortDateTime(ready.updatedAt) ?? "" }), ready.updatedBy ? t("common.byUpdatedBy", { updatedBy: ready.updatedBy }) : null].filter(Boolean).join(" ") : undefined;
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!model.add.disabled && !model.add.busy) model.add.run();
@@ -26,20 +27,20 @@ export function WhitelistTab({ model }: Readonly<{ model: WhitelistModel }>) {
     <form className="c-wl-form" onSubmit={submit}>
       <TextInput
         aria-invalid={model.draftError ? true : undefined}
-        aria-label="Player name"
+        aria-label={t("whitelist.playerName")}
         autoComplete="off"
         data-tip={model.draftError ?? undefined}
         mono
         onChange={(event) => model.setDraft(event.target.value)}
-        placeholder="Player name"
+        placeholder={t("whitelist.playerName")}
         value={model.draft}
       />
       <ActionButton action={model.add} size="sm" />
     </form>
   );
   return (
-    <Card actions={form} body="flush" count={ready?.rows.length} title="Whitelist" titleTip={changed}>
-      {list.status === "error" && <LoadError error={list.error} kind={list.kind} retry={list.retry} title="Whitelist could not be loaded" verb="read the whitelist" />}
+    <Card actions={form} body="flush" count={ready?.rows.length} title={t("common.whitelist")} titleTip={changed}>
+      {list.status === "error" && <LoadError error={list.error} kind={list.kind} retry={list.retry} title={t("whitelist.whitelistCouldNotLoaded")} verb={t("whitelist.readWhitelist")} />}
       {list.status === "loading" && (
         <SkeletonGroup>
           <Grid className="c-wl-names" kind="name">
@@ -49,13 +50,13 @@ export function WhitelistTab({ model }: Readonly<{ model: WhitelistModel }>) {
           </Grid>
         </SkeletonGroup>
       )}
-      {ready && ready.rows.length === 0 && <Empty icon="verified_user" title={ready.managed ? "Nobody can join" : "No names"} />}
+      {ready?.rows.length === 0 && <Empty icon="verified_user" title={ready.managed ? t("whitelist.nobodyCanJoin") : t("whitelist.noNames")} />}
       {ready && ready.rows.length > 0 && (
-        <Grid className="c-wl-names" kind="name" label="Players">
+        <Grid className="c-wl-names" kind="name" label={t("common.players")}>
           {ready.rows.map((row) => (
             <div className={cx("c-wl-name", fresh.has(row.name) && ARRIVED)} key={row.name}>
               <span className="c-mono" title={row.name}>{row.name}</span>
-              <ActionButton action={{ ...row.remove, label: `Remove ${row.name}` }} iconOnly size="sm" />
+              <ActionButton action={{ ...row.remove, label: t("whitelist.removeName", { name: row.name }) }} iconOnly size="sm" />
             </div>
           ))}
         </Grid>

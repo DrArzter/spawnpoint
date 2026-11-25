@@ -6,10 +6,11 @@ import { SignInPanel } from "../components/SignIn";
 import { ActionRow, Button } from "../components/ui/Button";
 import { Icon } from "../icons";
 import { SpawnpointMark } from "../shell/AppBar";
+import { t } from "../i18n";
 
 const scopeLabels: Readonly<Record<string, string>> = {
-  "spawnpoint.read": "Read worlds, status, metrics, backups and your profile",
-  "spawnpoint.operate": "Start and stop worlds you already have permission to operate",
+  "spawnpoint.read": t("connect.readWorldsStatusMetrics"),
+  "spawnpoint.operate": t("connect.startStopWorldsAlready"),
 };
 
 type ConnectScreenProps = Readonly<{
@@ -29,7 +30,7 @@ export function ConnectScreen({ auth, request, onAuth }: ConnectScreenProps) {
     let current = true;
     inspectOAuthAuthorization(request)
       .then((value) => { if (current) setSummary(value); })
-      .catch((reason: unknown) => { if (current) setError(reason instanceof Error ? reason.message : "The connection request is no longer valid."); });
+      .catch((reason: unknown) => { if (current) setError(reason instanceof Error ? reason.message : t("connect.connectionRequestNoLonger")); });
     return () => { current = false; };
   }, [active, request]);
 
@@ -39,7 +40,7 @@ export function ConnectScreen({ auth, request, onAuth }: ConnectScreenProps) {
     try {
       window.location.assign(await decideOAuthAuthorization(request, approved));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not finish the connection.");
+      setError(reason instanceof Error ? reason.message : t("connect.couldNotFinishConnection"));
       setSubmitting(false);
     }
   }
@@ -53,21 +54,21 @@ export function ConnectScreen({ auth, request, onAuth }: ConnectScreenProps) {
           <span className="connect-client-mark">{summary?.client.name.slice(0, 1).toUpperCase() ?? "C"}</span>
         </div>
         <div className="boot-copy">
-          <h1>{summary ? `Connect ${summary.client.name}` : "Connect to Spawnpoint"}</h1>
+          <h1>{summary ? t("connect.connectClientName", { clientName: summary.client.name }) : t("connect.connectSpawnpoint")}</h1>
           {summary && <code className="connect-origin">{summary.client.redirectOrigin}</code>}
-          {!active && <p>Sign in to approve this connection.</p>}
+          {!active && <p>{t("connect.signApproveConnection")}</p>}
         </div>
         {!active && auth.status === "signed-out" && <SignInPanel onChange={onAuth} />}
         {!active && auth.status === "error" && <p className="boot-error" role="alert">{auth.message}</p>}
-        {!active && auth.status === "unconfigured" && <p className="boot-error" role="alert">Sign-in is not configured.</p>}
-        {auth.status === "authenticated" && auth.session.state === "visitor" && <p className="boot-error" role="alert">Spawnpoint access is required.</p>}
+        {!active && auth.status === "unconfigured" && <p className="boot-error" role="alert">{t("connect.signInNotConfigured")}</p>}
+        {auth.status === "authenticated" && auth.session.state === "visitor" && <p className="boot-error" role="alert">{t("connect.spawnpointAccessRequired")}</p>}
         {active && summary && <>
           <ul className="connect-scopes">
             {summary.scopes.map((scope) => <li key={scope}><Icon name="check" size={18} /><span>{scopeLabels[scope] ?? scope}</span></li>)}
           </ul>
           <ActionRow>
-            <Button disabled={submitting} onClick={() => void decide(false)} variant="text">Cancel</Button>
-            <Button loading={submitting} onClick={() => void decide(true)} variant="filled">Allow</Button>
+            <Button disabled={submitting} onClick={() => void decide(false)} variant="text">{t("common.cancel")}</Button>
+            <Button loading={submitting} onClick={() => void decide(true)} variant="filled">{t("connect.allow")}</Button>
           </ActionRow>
         </>}
         {active && summary === null && error === "" && <div aria-hidden="true" className="boot-progress" />}

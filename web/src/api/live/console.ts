@@ -1,5 +1,6 @@
 import type { ConsoleEntry, SpawnpointApi } from "../contract";
 import { request } from "./request";
+import { t } from "../../i18n";
 
 const path = (gameId: string, worldId: string) => `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}/console`;
 
@@ -8,8 +9,8 @@ const path = (gameId: string, worldId: string) => `/games/${encodeURIComponent(g
 export const consoleApi = {
   async loadConsole(gameId: string, worldId: string): Promise<readonly ConsoleEntry[]> {
     const body = await request<{ entries: ConsoleEntry[] }>(path(gameId, worldId), {
-      failure: "The console history could not be loaded.",
-      refusals: { forbidden: "Your role cannot use the console." },
+      failure: t("rcon.consoleHistoryCouldNot"),
+      refusals: { forbidden: t("rcon.roleCannotUseConsole") },
     });
     return body.entries;
   },
@@ -17,8 +18,8 @@ export const consoleApi = {
   async runConsoleCommand(gameId: string, worldId: string, command: string): Promise<ConsoleEntry> {
     const body = await request<{ entry?: ConsoleEntry }>(path(gameId, worldId), {
       method: "POST", body: { command },
-      failure: "The command could not be sent.",
-      refusals: { forbidden: "Your role cannot use the console." },
+      failure: t("rcon.commandCouldNotSent"),
+      refusals: { forbidden: t("rcon.roleCannotUseConsole") },
       valid: (result) => result.entry !== undefined,
     });
     return body.entry as ConsoleEntry;

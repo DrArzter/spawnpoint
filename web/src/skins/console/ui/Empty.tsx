@@ -5,6 +5,7 @@ import type { WorldsModel } from "../../../core/models";
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { ActionButton } from "./ActionButton";
+import { t } from "../../../i18n";
 
 /**
  * An empty or failed region: one icon, one title, at most one Action, centred
@@ -41,6 +42,6 @@ export function LoadError({ title, verb, error, kind, retry, size = "md" }: Read
 
 /** Why no game is listed: none declared, or the read failed (a role without the permission gets a lock and no Retry). */
 export function GamesEmpty({ unavailable, refresh }: Readonly<{ unavailable: NonNullable<WorldsModel["unavailable"]>; refresh: Action }>) {
-  if (!unavailable.failed) return <Empty icon="public" message={unavailable.description} title="No games yet" />;
+  if (!unavailable.failed) return <Empty icon="public" message={unavailable.description} title={t("common.noGamesYet")} />;
   return <Empty action={unavailable.retry ? refresh : null} icon={unavailable.retry ? "error" : "lock"} message={unavailable.description} title={unavailable.title} tone="error" />;
 }

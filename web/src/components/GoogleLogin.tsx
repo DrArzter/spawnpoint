@@ -30,6 +30,7 @@ declare global {
 }
 
 import { GOOGLE_CLIENT_ID } from "../lib/signin";
+import { t } from "../i18n";
 
 export { GOOGLE_CLIENT_ID };
 
@@ -54,10 +55,10 @@ function loadGoogleIdentity(): Promise<GoogleIdentity> {
     script.src = SCRIPT_URL;
     script.onload = () => {
       const identity = window.google?.accounts?.id;
-      if (identity === undefined) reject(new Error("Google sign-in loaded without its identity library."));
+      if (identity === undefined) reject(new Error(t("signin.googleSignInLoadedWithout")));
       else resolve(identity);
     };
-    script.onerror = () => reject(new Error("Google sign-in could not load."));
+    script.onerror = () => reject(new Error(t("signin.googleSignInCouldNot")));
     document.head.append(script);
   }).catch((error: unknown) => {
     loading = null;
@@ -95,18 +96,18 @@ export function GoogleLoginButton({ onChange, onToken, className }: Readonly<{
   useEffect(() => {
     mounted.current = true;
     if (!GOOGLE_CLIENT_ID.test(googleClientId)) {
-      setLoginError("Google sign-in is missing its client ID.");
+      setLoginError(t("signin.googleSignInMissingClient"));
       return;
     }
     const complete = (response: GoogleCredential) => {
       if (typeof response.credential !== "string") {
-        if (mounted.current) setLoginError("Google did not return an identity token.");
+        if (mounted.current) setLoginError(t("signin.googleDidNotReturn"));
         return;
       }
       if (onTokenRef.current !== undefined) {
         setBusy(true);
         void onTokenRef.current(response.credential)
-          .catch((cause: unknown) => { if (mounted.current) setLoginError(cause instanceof Error ? cause.message : "Google could not link this account."); })
+          .catch((cause: unknown) => { if (mounted.current) setLoginError(cause instanceof Error ? cause.message : t("signin.googleCouldNotLink")); })
           .finally(() => { if (mounted.current) setBusy(false); });
       } else if (onChangeRef.current !== undefined) {
         onChangeRef.current({ status: "loading" });
@@ -121,7 +122,7 @@ export function GoogleLoginButton({ onChange, onToken, className }: Readonly<{
         setReady(true);
       })
       .catch((cause: unknown) => {
-        if (mounted.current) setLoginError(cause instanceof Error ? cause.message : "Google sign-in could not load.");
+        if (mounted.current) setLoginError(cause instanceof Error ? cause.message : t("signin.googleSignInCouldNot"));
       });
     return () => { mounted.current = false; };
   }, [attempt]);
@@ -161,7 +162,7 @@ export function GoogleLoginButton({ onChange, onToken, className }: Readonly<{
       {!loginError && <div aria-busy={busy || undefined} className="google-login-slot" hidden={!ready} ref={slot} />}
       {loginError && <div className="boot-copy" role="alert">
         <p className="boot-error">{loginError}</p>
-        <Button onClick={() => { setLoginError(""); setReady(false); setAttempt((value) => value + 1); }}>Try again</Button>
+        <Button onClick={() => { setLoginError(""); setReady(false); setAttempt((value) => value + 1); }}>{t("common.tryAgain")}</Button>
       </div>}
     </div>
   );

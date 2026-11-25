@@ -1,4 +1,5 @@
 import type { ModSortKey, ModSource, ModSourceFilter, ReleaseModPage, ReleaseModQuery } from "../api/contract";
+import { t } from "../i18n";
 
 /** The sources a mod can come from, in the order a list offers them. */
 export const MOD_SOURCES: readonly Readonly<{ id: ModSource; label: string }>[] = [
@@ -8,7 +9,7 @@ export const MOD_SOURCES: readonly Readonly<{ id: ModSource; label: string }>[] 
 ];
 
 /** What a list says of a mod whose release did not record where it came from. */
-export const UNKNOWN_SOURCE = "Unknown";
+export const UNKNOWN_SOURCE = t("common.unknown");
 
 export function modSourceLabel(source: ModSource | null): string {
   return MOD_SOURCES.find((item) => item.id === source)?.label ?? UNKNOWN_SOURCE;

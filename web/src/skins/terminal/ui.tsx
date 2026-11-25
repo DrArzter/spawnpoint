@@ -13,6 +13,7 @@ import type { Action } from "../../core/actions";
 import { Icon, type IconName } from "../../icons";
 import { cx } from "../../lib/cx";
 import { useRevealSelectedTab } from "../../lib/revealTab";
+import { t } from "../../i18n";
 
 /*
  * The terminal's own vocabulary. Every control here is drawn from scratch in
@@ -183,7 +184,7 @@ export function Copy({ value, label, size = "medium" }: Readonly<{ value: string
     <IconKey
       className="t-copy"
       icon={done ? "check" : "content_copy"}
-      label={done ? "Copied" : label}
+      label={done ? t("ui.copied") : label}
       onClick={() => { navigator.clipboard?.writeText(value).then(() => setDone(true)).catch(() => undefined); }}
       size={size}
     />
@@ -327,8 +328,8 @@ export function Empty({ title, description, verbs, className }: Readonly<{ title
 }
 
 /** A list a search emptied, not the directory: what was asked, and the way back to everything. */
-export function NoMatches({ filter, noun, clearLabel = "Clear search" }: Readonly<{ filter: Pick<Filter<unknown>, "query" | "clear">; noun: string; clearLabel?: string }>) {
-  return <Empty description={filter.query === "" ? undefined : `Nothing matches "${filter.query}".`} title={`No matching ${noun}`} verbs={<Key label={clearLabel} onClick={filter.clear} size="small" />} />;
+export function NoMatches({ filter, noun, clearLabel = t("ui.clearSearch") }: Readonly<{ filter: Pick<Filter<unknown>, "query" | "clear">; noun: string; clearLabel?: string }>) {
+  return <Empty description={filter.query === "" ? undefined : t("ui.nothingMatchesQuery", { query: filter.query })} title={t("ui.noMatchingNoun", { noun })} verbs={<Key label={clearLabel} onClick={filter.clear} size="small" />} />;
 }
 
 /**
@@ -345,19 +346,19 @@ export function FilterRow<Row>({ filter, label, placeholder, disabled = false, p
         <TextInput autoComplete="off" disabled={disabled} onChange={(event) => filter.setQuery(event.target.value)} placeholder={placeholder} ref={filter.field} type="search" value={filter.query} />
       </Field>
       {children}
-      {filter.active && <span aria-live="polite" className="t-filter-count" role="status">{matches ?? filter.rows.length} of {filter.total}</span>}
+      {filter.active && <span aria-live="polite" className="t-filter-count" role="status">{t("ui.countOfTotal", { count: matches ?? filter.rows.length, total: filter.total })}</span>}
     </div>
   );
 }
 
 /** The place in a list of pages between a key for the previous and one for the next; drawn only when there is more than one page. */
-export function Pager({ page, pages, onPage, label = "Pages" }: Readonly<{ page: number; pages: number; onPage: (page: number) => void; label?: string }>) {
+export function Pager({ page, pages, onPage, label = t("ui.pages") }: Readonly<{ page: number; pages: number; onPage: (page: number) => void; label?: string }>) {
   if (pages <= 1) return null;
   return (
     <nav aria-label={label} className="t-pager">
-      <IconKey disabled={page <= 1} icon="chevron_left" label="Previous page" onClick={() => onPage(page - 1)} size="small" />
-      <span aria-current="page" className="t-pager-place">Page {page} of {pages}</span>
-      <IconKey disabled={page >= pages} icon="chevron_right" label="Next page" onClick={() => onPage(page + 1)} size="small" />
+      <IconKey disabled={page <= 1} icon="chevron_left" label={t("ui.previousPage")} onClick={() => onPage(page - 1)} size="small" />
+      <span aria-current="page" className="t-pager-place">{t("ui.pageOfPages", { page, pages })}</span>
+      <IconKey disabled={page >= pages} icon="chevron_right" label={t("ui.nextPage")} onClick={() => onPage(page + 1)} size="small" />
     </nav>
   );
 }
@@ -453,7 +454,7 @@ function lowerFirst(text: string): string {
 }
 
 function loadingCopy(label: string): string {
-  return `Loading ${lowerFirst(label)}`;
+  return t("ui.loadingLowerFirst", { lowerFirst: lowerFirst(label) });
 }
 
 export function Table<Row>({ columns, rows, rowKey, label, loading = false, loadingLabel, loadingRows = 3, empty, headless = false, decision = false, className }: Readonly<{
@@ -506,7 +507,7 @@ export function Details({ items, label, className }: Readonly<{ items: readonly 
           <div className="t-detail" key={item.label}>
             <dt>{item.label}{item.explain && <Help text={item.explain} />}</dt>
             <dd>
-              <span className="t-detail-value">{item.value}{item.copy && <Copy label={`Copy ${item.label.toLowerCase()}`} value={item.copy} />}</span>
+              <span className="t-detail-value">{item.value}{item.copy && <Copy label={t("ui.copyWhat", { what: item.label.toLowerCase() })} value={item.copy} />}</span>
               {item.hint && <small>{item.hint}</small>}
             </dd>
           </div>
@@ -534,7 +535,7 @@ export function Log({ label, rows, live = false, tall = false, className }: Read
       {rows.map((row) => (
         <div className={cx("t-log-line", row.tone !== "plain" && `t-log-${row.tone}`)} key={row.id}>
           {row.at !== null && <time className="t-log-time" dateTime={row.at}>{logTime(row.at)}</time>}
-          <span className="t-log-text">{row.tone !== "plain" && <span className="visually-hidden">{row.tone === "error" ? "Error: " : "Warning: "}</span>}{row.text}</span>
+          <span className="t-log-text">{row.tone !== "plain" && <span className="visually-hidden">{row.tone === "error" ? t("ui.error") : t("ui.warning")}</span>}{row.text}</span>
         </div>
       ))}
     </div>
@@ -717,7 +718,7 @@ export function Modal({ open, onClose, title, children, verbs, className, dismis
 
 /** A form or a reading in the middle of the screen: the same box as a
     question, with a close key and a scrolling body. */
-export function Drawer({ open, onClose, title, description, children, footer, closeActionId, cancel, cancelLabel = "Cancel", wide = false, className }: Readonly<{
+export function Drawer({ open, onClose, title, description, children, footer, closeActionId, cancel, cancelLabel = t("common.cancel"), wide = false, className }: Readonly<{
   open: boolean;
   onClose: () => void;
   title: ReactNode;
@@ -739,7 +740,7 @@ export function Drawer({ open, onClose, title, description, children, footer, cl
         <div className="t-panel t-drawer-panel">
           <div className="t-dialog-head">
             <h2 className="t-dialog-title" id={titleId}>{title}</h2>
-            <IconKey data-action={closeActionId} icon="close" label="Close panel" onClick={onClose} />
+            <IconKey data-action={closeActionId} icon="close" label={t("common.closePanel")} onClick={onClose} />
           </div>
           <div className="t-drawer-body t-dialog-body" tabIndex={-1}>
             {description && <p className="t-drawer-desc">{description}</p>}

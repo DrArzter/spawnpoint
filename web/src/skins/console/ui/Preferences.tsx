@@ -4,6 +4,7 @@ import { Icon } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { IconButton } from "./IconButton";
 import { PAGE_SIZES, type PageSize } from "./Pager";
+import { t } from "../../../i18n";
 
 export type Density = "comfortable" | "compact";
 
@@ -61,16 +62,16 @@ export function TablePreferences({ pageSize }: Readonly<{ pageSize?: Readonly<{ 
   );
   return (
     <span className="c-prefs">
-      <IconButton aria-controls={id} aria-expanded={open} aria-haspopup="menu" icon="settings" label="Preferences" onClick={() => setOpen((value) => !value)} ref={anchor} />
-      <div aria-label="Preferences" className={cx("c-menu", "c-prefs-menu")} hidden={!open} id={id} onKeyDown={(event) => { if (event.key === "Escape") { setOpen(false); anchor.current?.focus(); } }} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
-        <div aria-label="Density" className="c-menu-group" role="group" /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
-          <div aria-hidden="true" className="c-menu-label">Density</div>
-          {item(density === "comfortable", "Comfortable", () => setDensity("comfortable"))}
-          {item(density === "compact", "Compact", () => setDensity("compact"))}
+      <IconButton aria-controls={id} aria-expanded={open} aria-haspopup="menu" icon="settings" label={t("ui.preferences")} onClick={() => setOpen((value) => !value)} ref={anchor} />
+      <div aria-label={t("ui.preferences")} className={cx("c-menu", "c-prefs-menu")} hidden={!open} id={id} onKeyDown={(event) => { if (event.key === "Escape") { setOpen(false); anchor.current?.focus(); } }} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
+        <div aria-label={t("ui.density")} className="c-menu-group" role="group" /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
+          <div aria-hidden="true" className="c-menu-label">{t("ui.density")}</div>
+          {item(density === "comfortable", t("ui.comfortable"), () => setDensity("comfortable"))}
+          {item(density === "compact", t("ui.compact"), () => setDensity("compact"))}
         </div>
         {pageSize && (
-          <div aria-label="Rows per page" className="c-menu-group c-menu-group-split" role="group" /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
-            <div aria-hidden="true" className="c-menu-label">Rows per page</div>
+          <div aria-label={t("ui.rowsPerPage")} className="c-menu-group c-menu-group-split" role="group" /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
+            <div aria-hidden="true" className="c-menu-label">{t("ui.rowsPerPage")}</div>
             {PAGE_SIZES.map((size) => item(pageSize.value === size, String(size), () => pageSize.set(size)))}
           </div>
         )}

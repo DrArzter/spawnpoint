@@ -4,9 +4,10 @@ import { Card } from "./ui/Card";
 import { DetailList } from "./ui/DetailList";
 import { HostLog } from "./ui/HostLog";
 import { Status } from "./ui/Status";
+import { t } from "../../i18n";
 
 // A cause and its error read across the card, not in one column.
-const SPANS = { Cause: "w2", "Caught cause": "w2" } as const;
+const SPANS = { cause: "w2", "caught-cause": "w2" } as const;
 
 /**
  * The world's running operation, or the one that just failed: its step, how
@@ -18,7 +19,7 @@ export function OperationProgress({ model }: Readonly<{ model: OperationProgress
   return (
     <Card actions={<Status status={model.status} />} body="kv" title={model.title}>
       <DetailList columns="two" details={progressDetails(model, now)} label={`${model.title}: ${model.status.label}`} spans={SPANS} />
-      {(model.log.length > 0 || (model.running && model.logged)) && <HostLog label={`${model.title}: host log`} live={model.running} rows={model.log} />}
+      {(model.log.length > 0 || (model.running && model.logged)) && <HostLog label={t("common.titleHostLog", { title: model.title })} live={model.running} rows={model.log} />}
     </Card>
   );
 }

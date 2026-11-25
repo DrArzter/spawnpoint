@@ -5,6 +5,7 @@ import type { AuthState } from "../api/contract";
 import { SignInPanel } from "../components/SignIn";
 import { Button } from "../components/ui/Button";
 import { SpawnpointMark } from "../shell/AppBar";
+import { t } from "../i18n";
 
 const pendingInvitationKey = "spawnpoint.pending-access-invitation";
 
@@ -34,7 +35,7 @@ export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: Auth
       onAuth(await api.restoreSession());
       window.location.hash = "#/worlds";
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The invitation could not be accepted. Try again.");
+      setError(cause instanceof Error ? cause.message : t("join.invitationCouldNotAccepted"));
     } finally {
       setAccepting(false);
     }
@@ -47,7 +48,7 @@ export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: Auth
       await api.requestAccessInvitationProof(token);
       setProofSent(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The confirmation email could not be sent.");
+      setError(cause instanceof Error ? cause.message : t("common.confirmationEmailCouldNot"));
     } finally {
       setAccepting(false);
     }
@@ -73,25 +74,25 @@ export function JoinScreen({ auth, onAuth, token, proof }: Readonly<{ auth: Auth
     <section aria-busy={validity === "checking" || accepting} className="boot-card">
       <div className="boot-brand"><SpawnpointMark size={48} /><strong>Spawnpoint</strong></div>
       <div className="boot-copy">
-        <h1>Join Spawnpoint</h1>
-        {validity === "checking" && <p>Checking your invitation.</p>}
-        {validity === "invalid" && <p className="boot-error" role="alert">This invitation has expired or has already been used. Ask an Owner for a new link.</p>}
-        {validity === "error" && <p className="boot-error" role="alert">The invitation could not be checked. Try opening the link again.</p>}
-        {validity === "valid" && !member && <p>{invitedEmail ? `This invitation is for ${invitedEmail}. Choose how to sign in; you will need to verify that address.` : "Choose how to sign in to use this one-time invitation."} Your account will start with Viewer access.</p>}
-        {validity === "valid" && member && <p>This account already has access to Spawnpoint.</p>}
-        {emailMismatch && <p className="boot-error" role="alert">This account uses a different email. Sign in with {invitedEmail}, or use Telegram and verify the invited mailbox.</p>}
-        {proofSent && <p>We sent a confirmation link to {invitedEmail}. Open it to finish joining.</p>}
+        <h1>{t("join.joinSpawnpoint")}</h1>
+        {validity === "checking" && <p>{t("join.checkingInvitation")}</p>}
+        {validity === "invalid" && <p className="boot-error" role="alert">{t("join.invitationHasExpiredHas")}</p>}
+        {validity === "error" && <p className="boot-error" role="alert">{t("join.invitationCouldNotChecked")}</p>}
+        {validity === "valid" && !member && <p>{invitedEmail ? t("join.invitationInvitedEmailChooseHow", { invitedEmail }) : t("join.chooseHowSignUse")} {t("join.startsWithViewer")}</p>}
+        {validity === "valid" && member && <p>{t("join.accountAlreadyHasAccess")}</p>}
+        {emailMismatch && <p className="boot-error" role="alert">{t("join.emailMismatch", { email: invitedEmail ?? "" })}</p>}
+        {proofSent && <p>{t("join.confirmationSent", { email: invitedEmail ?? "" })}</p>}
       </div>
       {(validity === "checking" || auth.status === "loading") && <div aria-hidden="true" className="boot-progress" />}
       {validity === "valid" && (auth.status === "signed-out" || auth.status === "error") && <SignInPanel invitationToken={token} onChange={onAuth} />}
-      {validity === "valid" && visitor && !invitedEmail && <Button loading={accepting} onClick={() => void accept()} variant="filled">Accept invitation</Button>}
-      {validity === "valid" && invitedEmail && passwordVisitor && !emailMismatch && <Button loading={accepting} onClick={() => void accept()} variant="filled">Accept invitation</Button>}
-      {validity === "valid" && invitedEmail && visitor && !passwordVisitor && !proof && <Button loading={accepting} onClick={() => void sendProof()} variant="filled">{proofSent ? "Send another confirmation" : "Confirm invited email"}</Button>}
-      {validity === "valid" && invitedEmail && visitor && !passwordVisitor && proof && <Button loading={accepting} onClick={() => void accept()} variant="filled">Accept invitation</Button>}
-      {validity === "valid" && member && <Button onClick={() => { window.location.hash = "#/worlds"; }} variant="filled">Open dashboard</Button>}
-      {validity === "valid" && (member || emailMismatch) && <Button loading={accepting} onClick={() => void useDifferentAccount()} variant="text">Use a different account</Button>}
+      {validity === "valid" && visitor && !invitedEmail && <Button loading={accepting} onClick={() => void accept()} variant="filled">{t("join.acceptInvitation")}</Button>}
+      {validity === "valid" && invitedEmail && passwordVisitor && !emailMismatch && <Button loading={accepting} onClick={() => void accept()} variant="filled">{t("join.acceptInvitation")}</Button>}
+      {validity === "valid" && invitedEmail && visitor && !passwordVisitor && !proof && <Button loading={accepting} onClick={() => void sendProof()} variant="filled">{proofSent ? t("join.sendAnotherConfirmation") : t("join.confirmInvitedEmail")}</Button>}
+      {validity === "valid" && invitedEmail && visitor && !passwordVisitor && proof && <Button loading={accepting} onClick={() => void accept()} variant="filled">{t("join.acceptInvitation")}</Button>}
+      {validity === "valid" && member && <Button onClick={() => { window.location.hash = "#/worlds"; }} variant="filled">{t("join.openDashboard")}</Button>}
+      {validity === "valid" && (member || emailMismatch) && <Button loading={accepting} onClick={() => void useDifferentAccount()} variant="text">{t("join.useDifferentAccount")}</Button>}
       {error && <p className="boot-error" role="alert">{error}</p>}
-      {validity === "error" && <Button onClick={() => { setValidity("checking"); void api.checkAccessInvitation(token).then((result) => { setValidity(result.valid ? "valid" : "invalid"); setInvitedEmail(result.email); }).catch(() => setValidity("error")); }} variant="outlined">Try again</Button>}
+      {validity === "error" && <Button onClick={() => { setValidity("checking"); void api.checkAccessInvitation(token).then((result) => { setValidity(result.valid ? "valid" : "invalid"); setInvitedEmail(result.email); }).catch(() => setValidity("error")); }} variant="outlined">{t("common.tryAgain")}</Button>}
     </section>
   </main>;
 }

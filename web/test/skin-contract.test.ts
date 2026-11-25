@@ -169,6 +169,7 @@ const profile: ProfileModel = {
   avatar: { change: spy("profile.avatar.change", "Change picture"), remove: spy("profile.avatar.remove", "Remove picture") },
   appearance: shell.appearance,
   look: { current: "console", options: [{ id: "console", name: "Cloud console", choose: spy("look.console", "Cloud console", { disabled: true }) }, { id: "terminal", name: "Terminal", choose: spy("look.terminal", "Terminal") }] },
+  language: { current: "en", options: [{ id: "en", name: "English", choose: spy("language.en", "English", { disabled: true }) }, { id: "ru", name: "Русский", choose: spy("language.ru", "Русский") }] },
   signOut: spy("profile.signout", "Sign out"),
   openInBrowser: spy("profile.browser", "Open in browser"),
   loginAccounts: {

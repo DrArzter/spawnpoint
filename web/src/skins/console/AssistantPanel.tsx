@@ -11,11 +11,12 @@ import { SidePanel } from "./ui/SidePanel";
 import { Skeleton, SkeletonGroup } from "./ui/Skeleton";
 import { Status } from "./ui/Status";
 import { TrackList, TrackTitle, type Track } from "./ui/TrackList";
+import { t } from "../../i18n";
 
 const tracks: readonly Track<ConversationRow>[] = [
-  { id: "conversation", header: "Conversation", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle action={row.select} current={row.current} line={<Ago at={row.updatedAt} />} title={row.title} /> },
+  { id: "conversation", header: t("assistant.conversation"), width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle action={row.select} current={row.current} line={<Ago at={row.updatedAt} />} title={row.title} /> },
   // The list is narrow: the state is a mark, its label the tooltip.
-  { id: "state", header: "State", width: "auto", kind: "end", quietHeader: true, render: (row) => <Indicator status={row.status} /> },
+  { id: "state", header: t("common.state"), width: "auto", kind: "end", quietHeader: true, render: (row) => <Indicator status={row.status} /> },
 ];
 
 /**
@@ -36,22 +37,22 @@ export function AssistantPanel({ model }: Readonly<{ model: AssistantChatModel }
   };
   const list = model.conversations;
   return (
-    <SidePanel cancel={model.close} footer={false} title="Assistant" wide>
+    <SidePanel cancel={model.close} footer={false} title={t("common.assistant")} wide>
       <div className="c-assistant">
         <div className="c-assistant-layout">
-          <section aria-label="Conversations" className="c-assistant-list">
+          <section aria-label={t("assistant.conversations")} className="c-assistant-list">
             <ActionButton action={model.startNew} size="sm" />
-            {list.status === "error" && <LoadError error={list.error} kind={list.kind} retry={list.retry} size="sm" title="Conversations could not be loaded" verb="use the assistant" />}
+            {list.status === "error" && <LoadError error={list.error} kind={list.kind} retry={list.retry} size="sm" title={t("assistant.conversationsCouldNotLoaded")} verb={t("assistant.useAssistant")} />}
             {list.status !== "error" && (list.status === "loading" || list.value.length > 0) && (
-              <TrackList header={false} label="Conversations" loading={list.status === "loading"} rowKey={(row) => row.id} rows={list.status === "ready" ? list.value : []} tracks={tracks} />
+              <TrackList header={false} label={t("assistant.conversations")} loading={list.status === "loading"} rowKey={(row) => row.id} rows={list.status === "ready" ? list.value : []} tracks={tracks} />
             )}
           </section>
-          <section aria-label={model.thread?.title ?? "New conversation"} className="c-assistant-thread">
+          <section aria-label={model.thread?.title ?? t("assistant.newConversation")} className="c-assistant-thread">
             {model.thread === null ? <div className="c-assistant-entries" /> : <Thread thread={model.thread} />}
             <form className="c-assistant-compose" onSubmit={send}>
-              <TextArea aria-label="Message" maxLength={4000} onChange={(event) => model.setDraft(event.target.value)} onKeyDown={sendOnEnter} placeholder="Message" prose rows={3} value={model.draft} />
+              <TextArea aria-label={t("assistant.message")} maxLength={4000} onChange={(event) => model.setDraft(event.target.value)} onKeyDown={sendOnEnter} placeholder={t("assistant.message")} prose rows={3} value={model.draft} />
               <div className="c-assistant-compose-bar">
-                <Segmented label="Model" onChange={model.setModel} options={model.choices.map((choice) => ({ value: choice.value, label: choice.label, hint: choice.hint }))} value={model.model} />
+                <Segmented label={t("common.model")} onChange={model.setModel} options={model.choices.map((choice) => ({ value: choice.value, label: choice.label, hint: choice.hint }))} value={model.model} />
                 <ActionButton action={model.send} variant="primary" />
               </div>
             </form>
@@ -72,8 +73,8 @@ function Thread({ thread }: Readonly<{ thread: NonNullable<AssistantChatModel["t
   }, [count, thread.working]);
   return (
     <div aria-live="polite" className="c-assistant-entries" ref={log} role="log">
-      {entries.status === "loading" && <SkeletonGroup label="Reading the conversation"><Skeleton text width="70%" /><Skeleton text width="50%" /></SkeletonGroup>}
-      {entries.status === "error" && <LoadError error={entries.error} kind={entries.kind} retry={entries.retry} size="sm" title="The conversation could not be loaded" verb="use the assistant" />}
+      {entries.status === "loading" && <SkeletonGroup label={t("assistant.readingConversation")}><Skeleton text width="70%" /><Skeleton text width="50%" /></SkeletonGroup>}
+      {entries.status === "error" && <LoadError error={entries.error} kind={entries.kind} retry={entries.retry} size="sm" title={t("assistant.conversationCouldNotLoaded")} verb={t("assistant.useAssistant")} />}
       {entries.status === "ready" && entries.value.map((entry) => <Entry entry={entry} key={entry.id} />)}
       {thread.working && <Status status={thread.status} />}
       {thread.note && <p className="c-assistant-note">{thread.note}</p>}

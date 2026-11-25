@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Icon } from "../../../icons";
+import { t } from "../../../i18n";
 
 export type Crumb = Readonly<{ label: string; href: string; /** The game segment, hidden where the top bar already names the game. */ game?: boolean }>;
 
@@ -24,12 +25,12 @@ export function PageHeader({ trail = [], title, count, lead, after, actions }: R
     <header className="c-page-header" data-from="760" data-layout="one-line spread" data-tip-side="bottom">
       <div className="c-page-title">
         {back && (
-          <a aria-label={`Back to ${back.label}`} className="c-page-back" href={back.href}>
+          <a aria-label={t("ui.backBackLabel", { backLabel: back.label })} className="c-page-back" href={back.href}>
             <Icon name="arrow_back" size={22} />
           </a>
         )}
         {lead}
-        <nav aria-label="Breadcrumb" className="c-crumbs" data-layout="crumbs">
+        <nav aria-label={t("ui.breadcrumb")} className="c-crumbs" data-layout="crumbs">
           {trail.map((crumb) => (
             <span className={crumb.game ? "c-crumb c-crumb-game" : "c-crumb"} key={crumb.href}>
               <a href={crumb.href}>{crumb.label}</a>

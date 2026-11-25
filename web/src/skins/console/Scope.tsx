@@ -5,6 +5,7 @@ import { Icon } from "../../icons";
 import { Dialog } from "./ui/Dialog";
 import { GameGlyph } from "./ui/GameGlyph";
 import { Status, StatusIcon } from "./ui/Status";
+import { t } from "../../i18n";
 
 // Up to this many games stand in the top bar; more and the bar shows the current one and "More".
 const SHOWN = 4;
@@ -20,7 +21,7 @@ export function ScopeSwitcher({ model }: Readonly<{ model: ScopeModel }>) {
   const games = model.games.length > SHOWN ? [current] : model.games;
   return (
     <>
-      <div aria-label="Game" className="c-scope" role="group" /* NOSONAR a labelled set of game buttons; <fieldset> adds a frame and a legend */>
+      <div aria-label={t("common.game")} className="c-scope" role="group" /* NOSONAR a labelled set of game buttons; <fieldset> adds a frame and a legend */>
         {games.map((game) => {
           const status = model.statusOf(game);
           return (
@@ -43,12 +44,12 @@ export function ScopeSwitcher({ model }: Readonly<{ model: ScopeModel }>) {
         })}
         {games.length < model.games.length && (
           <button aria-haspopup="dialog" className="c-scope-game c-scope-more" data-action={model.show.id} onClick={model.show.run} type="button">
-            <span>More</span>
+            <span>{t("world.more")}</span>
             <Icon name="expand_more" size={18} />
           </button>
         )}
       </div>
-      <button aria-haspopup="dialog" aria-label={`Game: ${current.displayName}`} className="c-scope-pick" data-action={model.show.id} data-tip={model.show.hint} onClick={model.show.run} type="button">
+      <button aria-haspopup="dialog" aria-label={t("world.gameCurrentDisplayName", { currentDisplayName: current.displayName })} className="c-scope-pick" data-action={model.show.id} data-tip={model.show.hint} onClick={model.show.run} type="button">
         <GameGlyph game={current} size="sm" />
         <span className="c-scope-name">{current.displayName}</span>
         <Icon name="expand_more" size={18} />
@@ -73,8 +74,8 @@ function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
 export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
   if (!model.open) return null;
   return (
-    <Dialog cancel={model.close} title="Game">
-      <div aria-label="Game" className="c-scope-list" onKeyDown={moveFocus} role="radiogroup" /* NOSONAR roving tabindex: the chosen row carries the tab stop */>
+    <Dialog cancel={model.close} title={t("common.game")}>
+      <div aria-label={t("common.game")} className="c-scope-list" onKeyDown={moveFocus} role="radiogroup" /* NOSONAR roving tabindex: the chosen row carries the tab stop */>
         {model.games.map((game) => {
           const checked = game.id === model.game?.id;
           return (

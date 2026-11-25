@@ -21,6 +21,7 @@ import { newestRunning, progressModel, useOperationProgress } from "./operation-
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
 import { addressFacts, buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, siblingRow, withReleasePacks, worldDetails, worldLaunchedAt, worldMoreActions, worldNotices, worldPlayers, worldSessionControl, worldTabs } from "./worlds";
+import { currentLocale, LOCALE_NAMES, LOCALES, speak, t } from "../i18n";
 
 /*
  * The controllers: each takes the console's bones, builds one page's model
@@ -33,7 +34,7 @@ export type LookChoices = Readonly<{ current: string; options: readonly Readonly
 export function ConsoleRoot({ session, skin, looks, continuesBootCard }: Readonly<{ session: ActiveSession; skin: Skin; looks: LookChoices; continuesBootCard: boolean }>) {
   const notify = useSnackbar();
   const console = useConsole(session, continuesBootCard, notify);
-  if (!console.booted) return console.bootVisible ? <skin.Boot model={{ title: "Preparing the console" }} /> : null;
+  if (!console.booted) return console.bootVisible ? <skin.Boot model={{ title: t("app.preparingConsole") }} /> : null;
   return (
     <skin.Shell model={shellModel(console)}>
       <CurrentPage console={console} looks={looks} skin={skin} />
@@ -59,7 +60,7 @@ function CurrentPage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
 }
 
 function refreshAction(console: ConsoleController): Action {
-  return action("refresh", "Refresh", () => void console.refresh(), { icon: "refresh", busy: console.refreshing });
+  return action("refresh", t("common.refresh"), () => void console.refresh(), { icon: "refresh", busy: console.refreshing });
 }
 
 // The scoped game's worlds as rows, each with the verb its own page offers.
@@ -91,7 +92,7 @@ function shellModel(console: ConsoleController): ShellModel {
       if (!game || !world) return null;
       return {
         session: worldSessionVerb(console, game, world),
-        invite: granted.has("invitation.send") ? action("world.invite", "Invite players", () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
+        invite: granted.has("invitation.send") ? action("world.invite", t("common.invitePlayers"), () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
       };
     },
   };
@@ -107,14 +108,14 @@ function gameOperationRows(game: Game | undefined, snapshot: ConsoleController["
 }
 
 function gamesFailure(listStatus: "loading" | "ready" | "error", kind: ApiFailureKind) {
-  if (listStatus !== "error") return { title: "No games yet", description: "No games yet. Declare them in Git.", retry: false };
-  const view = failureView(kind, "Games could not be loaded", "view games", "Spawnpoint could not read games, worlds and the compute host.");
+  if (listStatus !== "error") return { title: t("common.noGamesYet"), description: t("app.noGamesYetDeclare"), retry: false };
+  const view = failureView(kind, t("app.gamesCouldNotLoaded"), t("app.viewGames"), t("app.spawnpointCouldNotRead"));
   return { title: view.title, description: view.message ?? "", retry: view.retry };
 }
 
 function stateNotice(kind: ApiFailureKind, error: string, retry: () => void): Notice {
-  const view = failureView(kind, "Current state could not be loaded", "view server status", error);
-  return { id: "load", tone: view.kind === "forbidden" ? "warning" : "error", title: view.title, ...(view.message === null ? {} : { description: view.message }), ...(view.retry ? { action: action("refresh", "Try again", retry) } : {}) };
+  const view = failureView(kind, t("app.currentStateCouldNot"), t("app.viewServerStatus"), error);
+  return { id: "load", tone: view.kind === "forbidden" ? "warning" : "error", title: view.title, ...(view.message === null ? {} : { description: view.message }), ...(view.retry ? { action: action("refresh", t("common.tryAgain"), retry) } : {}) };
 }
 
 function WorldsPage({ console, skin }: Controlled) {
@@ -137,9 +138,9 @@ function WorldsPage({ console, skin }: Controlled) {
     notices: listStatus === "error" ? [stateNotice(errorKind, error, () => void console.refresh())] : [],
     overview: buildSessionOverview(game, snapshot, serverState, sharedSession, fleetOverview),
     rows: worldRows(console),
-    emptyDescription: canManage && readyPreset ? null : "Worlds appear here once a preset has a ready release.",
+    emptyDescription: canManage && readyPreset ? null : t("app.worldsAppearHereOnce"),
     refresh: refreshAction(console),
-    createWorld: canManage && readyPreset && game ? action("world.create", "Create world", () => console.requestCreateWorld(game), { icon: "add" }) : null,
+    createWorld: canManage && readyPreset && game ? action("world.create", t("common.createWorld"), () => console.requestCreateWorld(game), { icon: "add" }) : null,
     view,
     views: { overview: viewHref("overview"), list: viewHref("list") },
     operations: gameOperationRows(game, snapshot),
@@ -157,7 +158,7 @@ function sessionVerb(console: ConsoleController, game: Game, world: World, busy:
   const control = worldSessionControl(game, world, { snapshot, sharedSession, granted, pending, busy });
   const verb = control.action;
   const stop = verb === "stop";
-  return action(`session.${verb}`, stop ? "Stop" : "Start", () => console.requestSession(game, world, verb), {
+  return action(`session.${verb}`, stop ? t("common.stop") : t("common.start"), () => console.requestSession(game, world, verb), {
     icon: stop ? "stop" : "play_arrow",
     danger: stop,
     disabled: control.disabled,
@@ -263,13 +264,13 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     setTab: (tab) => navigate({ worldTab: tab }),
     session: worldSessionVerb(console, game, world),
     refresh: refreshAction(console),
-    invite: granted.has("invitation.send") ? action("world.invite", "Invite players", () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
+    invite: granted.has("invitation.send") ? action("world.invite", t("common.invitePlayers"), () => worldCallbacks.onInvite(game, world), { icon: "send" }) : null,
     more: worldMoreActions(game, world, granted, busy, worldCallbacks),
     sessionDetails: sessionDetails(game, world, sharedSession, snapshot, state, fleet),
     worldDetails: worldDetails(game, world, state),
     operations: operations.filter((operation) => operation.id !== progress?.id).map((operation) => ({ operation, label: operationLabel(operation.type) })),
     progress,
-    wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", "Backups", () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }, { icon: "backup" }) })),
+    wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", t("common.backups"), () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }, { icon: "backup" }) })),
     backups,
     releases: {
       rows: withReleasePacks(
@@ -299,19 +300,19 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
 }
 
 const consoleStatuses: Readonly<Record<ConsoleEntry["status"], StatusDescriptor>> = {
-  pending: { kind: "progress", label: "Waiting for the game" },
-  succeeded: { kind: "ok", label: "Answered" },
-  failed: { kind: "error", label: "No answer" },
-  unavailable: { kind: "warning", label: "No console on this host" },
-  timed_out: { kind: "error", label: "Timed out" },
+  pending: { kind: "progress", label: t("app.waitingGame") },
+  succeeded: { kind: "ok", label: t("app.answered") },
+  failed: { kind: "error", label: t("common.noAnswer") },
+  unavailable: { kind: "warning", label: t("app.noConsoleHost") },
+  timed_out: { kind: "error", label: t("common.timedOut") },
 };
 
 // A command an agent sent names the person and the agent, so the log shows
 // which commands nobody typed in the panel.
 export function consoleLine(entry: ConsoleEntry): ConsoleLine {
   // A deleted person's commands keep their id and lose their name.
-  const name = entry.displayName ?? "Deleted user";
-  const who = entry.agent ? `${name} via ${entry.agent}` : name;
+  const name = entry.displayName ?? t("rcon.deletedUser");
+  const who = entry.agent ? t("rcon.nameViaAgent", { name, agent: entry.agent }) : name;
   return { id: entry.id, at: entry.at, who, command: entry.command, status: consoleStatuses[entry.status], output: entry.output, pending: entry.status === "pending" };
 }
 
@@ -319,7 +320,7 @@ export function consoleLine(entry: ConsoleEntry): ConsoleLine {
 function consoleLog(entries: ConsoleGateway["entries"], running: boolean, retry: () => void): ConsoleModel["log"] {
   if (!running) return null;
   if (entries.status === "ready") return { status: "ready", value: [...entries.value].reverse().map(consoleLine) };
-  if (entries.status === "error") return { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", "Try again", retry) };
+  if (entries.status === "error") return { status: "error", error: entries.error, kind: entries.kind, retry: action("console.retry", t("common.tryAgain"), retry) };
   return { status: "loading" };
 }
 
@@ -328,7 +329,7 @@ function consoleLog(entries: ConsoleGateway["entries"], running: boolean, retry:
 function useWorldConsole(game: Game, world: World, open: boolean, running: boolean, notify: ReturnType<typeof useSnackbar>): ConsoleModel {
   const [draft, setDraft] = useState("");
   const gateway = useConsoleGateway(open && running ? game.id : undefined, world.id, notify);
-  const unavailable = running ? null : `${world.displayName} is not running. Start it to use its console.`;
+  const unavailable = running ? null : t("rcon.worldDisplayNameNotRunningStart", { worldDisplayName: world.displayName });
   const send = (command: string, clear: boolean) => {
     void gateway.run(command).then((accepted) => { if (accepted && clear) setDraft(""); });
   };
@@ -341,7 +342,7 @@ function useWorldConsole(game: Game, world: World, open: boolean, running: boole
     log: consoleLog(entries, running, gateway.retry),
     draft,
     setDraft,
-    run: action("console.run", "Run", () => send(draft.trim(), true), {
+    run: action("console.run", t("rcon.run"), () => send(draft.trim(), true), {
       icon: "keyboard_return",
       disabled: unavailable !== null || draft.trim() === "" || gateway.sending,
       busy: gateway.sending,
@@ -349,7 +350,7 @@ function useWorldConsole(game: Game, world: World, open: boolean, running: boole
     }),
     quickCommands: game.consoleSuggestions.map((command) => action("console.quick", command, () => send(command, false), {
       disabled: unavailable !== null || gateway.sending,
-      hint: unavailable ?? `Run ${command}`,
+      hint: unavailable ?? t("rcon.runCommand", { command }),
     })),
     unavailable,
   };
@@ -364,7 +365,7 @@ function releasesModel(console: ConsoleController): ReleasesModel {
     presets: (game?.presets ?? []).map((preset) => ({
       preset,
       ...presetBuildStates(preset),
-      createWorld: game ? action("world.create", "Create world", () => console.requestCreateWorld(game, preset), {
+      createWorld: game ? action("world.create", t("common.createWorld"), () => console.requestCreateWorld(game, preset), {
         icon: "add",
         disabled: !canManage || startableReleases(preset).length === 0 || pendingOf(pending, "create") !== null,
         hint: createWorldHint(canManage, startableReleases(preset).length > 0),
@@ -390,13 +391,13 @@ function buildRunning(preset: Preset): boolean {
 }
 
 function buildHint(preset: Preset): string {
-  if (preset.buildAvailable !== true) return "The preset source snapshot is unavailable for building.";
-  return buildRunning(preset) ? "A build is already running." : releaseBuildCopy(preset).hint;
+  if (preset.buildAvailable !== true) return t("releases.presetSourceSnapshotUnavailable");
+  return buildRunning(preset) ? t("error.build_in_progress") : releaseBuildCopy(preset).hint;
 }
 
 function createWorldHint(canManage: boolean, ready: boolean): string {
-  if (!canManage) return "Your role cannot create worlds.";
-  return ready ? "Create a world from this preset" : "This preset has no ready release yet.";
+  if (!canManage) return t("common.roleCannotCreateWorlds");
+  return ready ? t("releases.createWorldFromPreset") : t("error.preset_release_not_ready");
 }
 
 function AccessPage({ console, skin }: Controlled) {
@@ -425,20 +426,26 @@ function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
   const open = console.openInBrowser;
   const look: LookModel = {
     current: looks.current,
-    options: looks.options.map((option) => ({ ...option, choose: action(`look.${option.id}`, option.name, () => looks.wear(option.id), { disabled: option.id === looks.current, hint: option.id === looks.current ? "The face the console wears now" : `Wear the ${option.name} face` }) })),
+    options: looks.options.map((option) => ({ ...option, choose: action(`look.${option.id}`, option.name, () => looks.wear(option.id), { disabled: option.id === looks.current, hint: option.id === looks.current ? t("profile.faceWornNow") : t("profile.wearNameFace", { name: option.name }) }) })),
+  };
+  const locale = currentLocale();
+  const language: LookModel = {
+    current: locale,
+    options: LOCALES.map((id) => ({ id, name: LOCALE_NAMES[id], choose: action(`language.${id}`, LOCALE_NAMES[id], () => speak(id), { disabled: id === locale, hint: id === locale ? t("profile.languageInUse") : undefined }) })),
   };
   return <skin.Profile model={{
     member,
     role: directory.roles.roles.find((role) => role.id === member.roleId),
     viewer,
     avatar: {
-      change: action("profile.avatar.change", "Change picture", () => chooseFile(AVATAR_ACCEPT, avatar.change), { icon: "person", busy: avatar.busy, disabled: avatar.busy }),
-      remove: viewer.photoUrl ? action("profile.avatar.remove", "Remove picture", avatar.remove, { icon: "delete_forever", disabled: avatar.busy }) : null,
+      change: action("profile.avatar.change", t("profile.changePictureAction"), () => chooseFile(AVATAR_ACCEPT, avatar.change), { icon: "person", busy: avatar.busy, disabled: avatar.busy }),
+      remove: viewer.photoUrl ? action("profile.avatar.remove", t("profile.removePicture"), avatar.remove, { icon: "delete_forever", disabled: avatar.busy }) : null,
     },
     appearance,
     look,
-    signOut: action("profile.signout", "Sign out", console.signOut, { icon: "logout" }),
-    openInBrowser: open ? action("profile.browser", "Open in browser", open, { icon: "open_in_new" }) : null,
+    language,
+    signOut: action("profile.signout", t("common.signOut"), console.signOut, { icon: "logout" }),
+    openInBrowser: open ? action("profile.browser", t("profile.openInBrowser"), open, { icon: "open_in_new" }) : null,
     loginAccounts,
   }} />;
 }

@@ -7,11 +7,12 @@ import { TextField } from "../components/ui/Fields";
 import { PASSWORD_MAXIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from "../lib/signin";
 import type { EmailActionRoute } from "../routing";
 import { SpawnpointMark } from "../shell/AppBar";
+import { t } from "../i18n";
 
 function screenTitle(kind: EmailActionRoute["kind"], status: "working" | "form" | "done" | "error"): string {
-  if (kind === "verify-email") return "Verifying your email";
-  if (status === "done") return "Password changed";
-  return "Choose a new password";
+  if (kind === "verify-email") return t("email.verifyingEmail");
+  if (status === "done") return t("email.passwordChanged");
+  return t("email.chooseNewPassword");
 }
 
 export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailActionRoute; onAuth: (state: AuthState) => void }>) {
@@ -24,7 +25,7 @@ export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailAc
   useEffect(() => {
     if (action.kind !== "verify-email") return;
     if (!action.token) {
-      setMessage("This verification link is incomplete. Request a new link from the sign-in page.");
+      setMessage(t("email.verificationLinkIncompleteRequest"));
       setStatus("error");
       return;
     }
@@ -38,7 +39,7 @@ export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailAc
       })
       .catch((error) => {
         if (!active) return;
-        setMessage(error instanceof Error ? error.message : "This verification link could not be used.");
+        setMessage(error instanceof Error ? error.message : t("email.verificationLinkCouldNot"));
         setStatus("error");
       });
     return () => { active = false; };
@@ -48,11 +49,11 @@ export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailAc
     event.preventDefault();
     setMessage("");
     if (!action.token) {
-      setMessage("This reset link is incomplete. Request a new one from the sign-in page.");
+      setMessage(t("email.resetLinkIncompleteRequest"));
       return;
     }
     if (password !== confirmation) {
-      setMessage("The passwords do not match.");
+      setMessage(t("common.passwordsDoNotMatch"));
       return;
     }
     setStatus("working");
@@ -60,7 +61,7 @@ export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailAc
       await api.resetPassword(action.token, password);
       setStatus("done");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Your password could not be reset.");
+      setMessage(error instanceof Error ? error.message : t("email.passwordCouldNotReset"));
       setStatus("form");
     }
   }
@@ -71,20 +72,20 @@ export function EmailActionScreen({ action, onAuth }: Readonly<{ action: EmailAc
         <div className="boot-brand"><SpawnpointMark size={48} /><strong>Spawnpoint</strong></div>
         <div className="boot-copy">
           <h1>{screenTitle(action.kind, status)}</h1>
-          {action.kind === "verify-email" && status === "working" && <p>Checking this one-time link with the access API.</p>}
-          {status === "done" && <p>Your new password is ready. Existing password sessions have been signed out.</p>}
+          {action.kind === "verify-email" && status === "working" && <p>{t("email.checkingOneTimeLinkAccess")}</p>}
+          {status === "done" && <p>{t("email.newPasswordReadyExisting")}</p>}
           {status === "error" && <p className="boot-error" role="alert">{message}</p>}
         </div>
         {action.kind === "reset-password" && (status === "form" || status === "working") && (
           <form className="signin-form" onSubmit={(event) => void submit(event)}>
-            <TextField autoComplete="new-password" disabled={status === "working"} hint={`At least ${PASSWORD_MINIMUM_LENGTH} characters.`} label="New password" maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
-            <TextField autoComplete="new-password" disabled={status === "working"} label="Confirm new password" maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} />
+            <TextField autoComplete="new-password" disabled={status === "working"} hint={t("common.leastPASSWORDMINIMUMLENGTH", { PASSWORD_MINIMUM_LENGTH })} label={t("common.newPassword")} maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+            <TextField autoComplete="new-password" disabled={status === "working"} label={t("email.confirmNewPassword")} maxLength={PASSWORD_MAXIMUM_LENGTH} minLength={PASSWORD_MINIMUM_LENGTH} onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} />
             {message && <p className="boot-error" role="alert">{message}</p>}
-            <Button loading={status === "working"} type="submit" variant="filled">Change password</Button>
+            <Button loading={status === "working"} type="submit" variant="filled">{t("common.changePassword")}</Button>
           </form>
         )}
         {status === "working" && action.kind === "verify-email" && <div aria-hidden="true" className="boot-progress" />}
-        {(status === "done" || status === "error") && <Button onClick={() => { window.location.hash = "#/welcome"; }} variant="filled">Return to sign in</Button>}
+        {(status === "done" || status === "error") && <Button onClick={() => { window.location.hash = "#/welcome"; }} variant="filled">{t("email.returnSign")}</Button>}
       </section>
     </main>
   );

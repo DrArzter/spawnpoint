@@ -7,6 +7,7 @@ import { action } from "./actions";
 import type { Notify } from "./notify";
 import type { Loading } from "./models";
 import type { RoleDirectory } from "./roles";
+import { t } from "../i18n";
 
 /*
  * The access directory: who has access, who is waiting, and the roles. One
@@ -77,7 +78,7 @@ const directoryApi = (api: SpawnpointApi): DirectoryApi => ({
   changeRole: (identityId, roleId) => api.updateIdentityRole(identityId, roleId),
 });
 
-const failed = (cause: unknown): Remote<never> => ({ status: "error", error: cause instanceof Error ? cause.message : "The request failed.", kind: failureKind(cause) });
+const failed = (cause: unknown): Remote<never> => ({ status: "error", error: cause instanceof Error ? cause.message : t("common.requestFailed"), kind: failureKind(cause) });
 
 export class AccessDirectoryStore {
   private state: DirectoryState = { people: { status: "loading" }, roles: { status: "loading" }, working: null };
@@ -158,27 +159,27 @@ export class AccessDirectoryStore {
     return this.decide(candidateKey(candidate), async () => {
       const identity = await this.api.approve(candidate.platform, candidate.platformUserId, roleId);
       this.withoutCandidate(candidate);
-      this.notify({ tone: "success", message: roleId === undefined ? `${identity.displayName} approved.` : `${identity.displayName} approved as ${this.roleName(identity.roleId)}.` });
+      this.notify({ tone: "success", message: roleId === undefined ? t("access.identityDisplayNameApproved", { identityDisplayName: identity.displayName }) : t("access.identityDisplayNameApprovedAsRoleName", { identityDisplayName: identity.displayName, roleName: this.roleName(identity.roleId) }) });
       // Who may be deleted follows the roles held, so the people are read again after a decision.
       void this.readPeople(true);
-    }, "This account could not be approved.");
+    }, t("access.accountCouldNotApproved"));
   }
 
   dismiss(candidate: AccessCandidate): Promise<void> {
     return this.decide(candidateKey(candidate), async () => {
       await this.api.dismiss(candidate.platform, candidate.platformUserId);
       this.withoutCandidate(candidate);
-      this.notify({ message: `${candidate.displayName} dismissed.` });
-    }, "This account could not be dismissed.");
+      this.notify({ message: t("access.candidateDisplayNameDismissed", { candidateDisplayName: candidate.displayName }) });
+    }, t("access.accountCouldNotDismissed"));
   }
 
   changeRole(member: Member, roleId: string): Promise<void> {
     return this.decide(member.id, async () => {
       await this.api.changeRole(member.id, roleId);
       this.changePeople((people) => ({ ...people, members: people.members.map((item) => (item.id === member.id ? { ...item, roleId } : item)) }));
-      this.notify({ tone: "success", message: `${member.name} is now ${this.roleName(roleId)}.` });
+      this.notify({ tone: "success", message: t("access.memberNameNowRoleName", { memberName: member.name, roleName: this.roleName(roleId) }) });
       void this.readPeople(true);
-    }, "The role could not be changed.");
+    }, t("access.roleCouldNotChanged"));
   }
 }
 
@@ -211,16 +212,16 @@ export function readDirectory(state: DirectoryState, reading: Reading, retry: Re
   const { people, roles: served } = state;
   const { self, ownRole, canManage } = reading;
   let candidates: Loading<readonly AccessCandidate[]> = { status: "loading" };
-  if (!canManage) candidates = { status: "error", error: "Your role cannot read access requests.", kind: "forbidden", retry: action("access.candidates.retry", "Try again", () => undefined) };
-  else if (people.status === "error") candidates = { status: "error", error: people.error, kind: people.kind, retry: action("access.candidates.retry", "Try again", retry.people) };
+  if (!canManage) candidates = { status: "error", error: t("access.roleCannotReadAccess"), kind: "forbidden", retry: action("access.candidates.retry", t("common.tryAgain"), () => undefined) };
+  else if (people.status === "error") candidates = { status: "error", error: people.error, kind: people.kind, retry: action("access.candidates.retry", t("common.tryAgain"), retry.people) };
   else if (people.status === "ready") candidates = { status: "ready", value: people.value.candidates };
 
   let rolesState: Loading<readonly Role[]> = { status: "loading" };
-  if (served.status === "error") rolesState = { status: "error", error: served.error, kind: served.kind, retry: action("access.roles.retry", "Try again", retry.roles) };
+  if (served.status === "error") rolesState = { status: "error", error: served.error, kind: served.kind, retry: action("access.roles.retry", t("common.tryAgain"), retry.roles) };
   else if (served.status === "ready") rolesState = { status: "ready", value: served.value.roles };
 
   // Until the role list is read, the signed-in role alone, so the profile can name it. Nothing in it is offered for choosing.
-  const own = ownRole ? [{ id: ownRole.id, name: ownRole.name, description: "Current signed-in role", permissions: ownRole.permissions, builtIn: false, protected: false, assignable: false, version: 0, holders: 0, editable: false, deletable: false }] : [];
+  const own = ownRole ? [{ id: ownRole.id, name: ownRole.name, description: t("access.currentSignedInRole"), permissions: ownRole.permissions, builtIn: false, protected: false, assignable: false, version: 0, holders: 0, editable: false, deletable: false }] : [];
   return {
     candidates,
     members: people.status === "ready" ? people.value.members : [self],

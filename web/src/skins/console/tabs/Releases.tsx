@@ -18,15 +18,16 @@ import { Pager } from "../ui/Pager";
 import { Status } from "../ui/Status";
 import { nextSort, Table, type Column } from "../ui/Table";
 import { TrackList, TrackTitle } from "../ui/TrackList";
+import { t } from "../../../i18n";
 
-const pointerStates = { unconfigured: "Unconfigured", unavailable: "Unavailable" } as const;
+const pointerStates = { unconfigured: t("releases.unconfigured"), unavailable: t("common.unavailable") } as const;
 
 /** Active, the desired release only while it differs, and the pointer's state only when it is not usable. */
 function releaseFacts(model: WorldModel): Detail[] {
   const { activeRelease, desiredRelease } = model.world.release;
-  const facts: Detail[] = [{ label: "Active", value: activeRelease ? { type: "text", text: activeRelease, mono: true } : { type: "absent", text: "—" } }];
-  if (desiredRelease && desiredRelease !== activeRelease) facts.push({ label: "Desired", value: { type: "text", text: desiredRelease, mono: true } });
-  if (model.releases.state !== "available") facts.push({ label: "Pointer", value: { type: "status", status: { kind: "warning", label: pointerStates[model.releases.state] } } });
+  const facts: Detail[] = [{ label: t("common.active"), value: activeRelease ? { type: "text", text: activeRelease, mono: true } : { type: "absent", text: "—" } }];
+  if (desiredRelease && desiredRelease !== activeRelease) facts.push({ label: t("common.desired"), value: { type: "text", text: desiredRelease, mono: true } });
+  if (model.releases.state !== "available") facts.push({ label: t("releases.pointer"), value: { type: "status", status: { kind: "warning", label: pointerStates[model.releases.state] } } });
   return facts;
 }
 
@@ -35,17 +36,17 @@ export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
   const rows = newestFirst(model.releases.rows);
   return (
     <Grid kind="stack">
-      <Card body="kv" title="Release"><DetailList columns="fit" details={releaseFacts(model)} /></Card>
+      <Card body="kv" title={t("common.release")}><DetailList columns="fit" details={releaseFacts(model)} /></Card>
       {rows.some((row) => row.downloads.length > 0) && (
-        <Card body="flush" title="Downloads">
+        <Card body="flush" title={t("releases.downloads")}>
           <TrackList
-            label="Downloads"
+            label={t("releases.downloads")}
             rowKey={(row) => row.name}
             rows={rows}
             tracks={[
-              { id: "release", header: "Release", width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle title={<span className="c-mono">{row.name}</span>} /> },
-              { id: "source", header: "Source", width: "120px", kind: "optional", render: (row) => row.sourceHref ? <a href={row.sourceHref} rel="noreferrer" target="_blank">Source</a> : <span className="c-faint">—</span> },
-              { id: "download", header: "Download", width: "auto", compactWidth: "auto", kind: "end", quietHeader: true, render: (row) => <>{row.downloads.map((item) => <ActionButton action={item} key={item.id} size="sm" />)}</> },
+              { id: "release", header: t("common.release"), width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle title={<span className="c-mono">{row.name}</span>} /> },
+              { id: "source", header: t("common.source"), width: "120px", kind: "optional", render: (row) => row.sourceHref ? <a href={row.sourceHref} rel="noreferrer" target="_blank">{t("common.source")}</a> : <span className="c-faint">—</span> },
+              { id: "download", header: t("common.download"), width: "auto", compactWidth: "auto", kind: "end", quietHeader: true, render: (row) => <>{row.downloads.map((item) => <ActionButton action={item} key={item.id} size="sm" />)}</> },
             ]}
           />
         </Card>
@@ -57,32 +58,32 @@ export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
 }
 
 const changeStatus: Readonly<Record<ChangeRow["change"], StatusDescriptor>> = {
-  removed: { kind: "warning", label: "Removed" },
-  changed: { kind: "info", label: "Changed" },
-  added: { kind: "ok", label: "Added" },
+  removed: { kind: "warning", label: t("common.removed") },
+  changed: { kind: "info", label: t("common.changed") },
+  added: { kind: "ok", label: t("common.added") },
 };
 
 /** What the release changes (P3); the pair it compares is the chip, the unchanged count its tooltip. */
 function Changes({ changes }: Readonly<{ changes: ReleaseChangesModel }>) {
   const state = changes.changes;
   const value = state.status === "ready" ? state.value : null;
-  const head = value && <Chip icon="history" tip={`${value.unchanged} files unchanged`}>{value.from === null ? `First release ${changes.release}` : `${value.from} → ${changes.release}`}</Chip>;
+  const head = value && <Chip icon="history" tip={t("releases.unchangedFilesUnchanged", { unchanged: value.unchanged })}>{value.from === null ? t("releases.firstReleaseRelease", { release: changes.release }) : `${value.from} → ${changes.release}`}</Chip>;
   return (
-    <Card actions={head ?? undefined} body="flush" count={value?.rows.length} title="Changes">
+    <Card actions={head ?? undefined} body="flush" count={value?.rows.length} title={t("releases.changes")}>
       {state.status === "error"
-        ? <LoadError error={state.error} kind={state.kind} retry={state.retry} size="sm" title="Changes could not be loaded" verb="read changes" />
+        ? <LoadError error={state.error} kind={state.kind} retry={state.retry} size="sm" title={t("releases.changesCouldNotLoaded")} verb={t("common.readChanges")} />
         : state.status === "ready" && state.value === null
-          ? <Empty icon="history" size="sm" title={`Release ${changes.release} has no build plan`} />
+          ? <Empty icon="history" size="sm" title={t("common.releaseReleaseHasNo", { release: changes.release })} />
           : (
             <Table
               columns={[
-                { id: "item", header: "Item", kind: "lead", clip: true, render: (row) => <strong className="c-mono" title={row.name}>{row.name}</strong> },
-                { id: "change", header: "Change", render: (row) => <Status status={changeStatus[row.change]} /> },
-                { id: "part", header: "Part", render: (row) => row.part },
-                { id: "detail", header: "Detail", kind: "wide", render: (row) => row.detail ?? <span className="c-faint">—</span> },
+                { id: "item", header: t("common.item"), kind: "lead", clip: true, render: (row) => <strong className="c-mono" title={row.name}>{row.name}</strong> },
+                { id: "change", header: t("common.change"), render: (row) => <Status status={changeStatus[row.change]} /> },
+                { id: "part", header: t("common.part"), render: (row) => row.part },
+                { id: "detail", header: t("common.detail"), kind: "wide", render: (row) => row.detail ?? <span className="c-faint">—</span> },
               ]}
-              empty={<Empty icon="history" size="sm" title="No changes" />}
-              label="Changes"
+              empty={<Empty icon="history" size="sm" title={t("common.noChanges")} />}
+              label={t("releases.changes")}
               loading={state.status === "loading"}
               rowKey={(row) => row.id}
               rows={value?.rows ?? []}
@@ -96,7 +97,7 @@ const sourceIcons = { curseforge: "deployed_code", modrinth: "layers", github: "
 
 /** One mark per source, its name in the tooltip; a release built before sources were recorded reads as unknown. */
 function SourceMark({ row }: Readonly<{ row: ModRow }>) {
-  return <Indicator icon={row.source === null ? "help" : sourceIcons[row.source]} label={row.source === null ? `${UNKNOWN_SOURCE} source` : modSourceLabel(row.source)} />;
+  return <Indicator icon={row.source === null ? "help" : sourceIcons[row.source]} label={row.source === null ? t("releases.uNKNOWNSOURCESource", { UNKNOWN_SOURCE }) : modSourceLabel(row.source)} />;
 }
 
 const SOURCE_PROPERTY = "source";
@@ -119,40 +120,40 @@ function Mods({ mods }: Readonly<{ mods: ModsModel }>) {
   const files = mods.files;
   const ready = files.status === "ready" ? files.value : null;
   // The source filter exists only when the release recorded sources; an old one keeps the search alone.
-  const properties: readonly FilterProperty[] = mods.sources.length === 0 ? [] : [{ id: SOURCE_PROPERTY, label: "Source", values: mods.sources.map(({ label, count }) => ({ value: label, count })) }];
+  const properties: readonly FilterProperty[] = mods.sources.length === 0 ? [] : [{ id: SOURCE_PROPERTY, label: t("common.source"), values: mods.sources.map(({ label, count }) => ({ value: label, count })) }];
   const sortable = (key: ModSortKey) => ({
     sort: mods.sort.key === key ? mods.sort.direction : null,
     onSort: () => mods.setSort(key, mods.sort.key === key ? nextSort(mods.sort.direction) : "ascending"),
   });
   // Whether players install their own set is a fact about the release, so it lives in the chip's tooltip.
-  const head = <Chip icon="dns" tip={mods.split ? `Release ${mods.release} · Players install their own set` : `Release ${mods.release}`}>Server</Chip>;
+  const head = <Chip icon="dns" tip={mods.split ? t("releases.releaseReleasePlayersInstall", { release: mods.release }) : t("common.releaseActiveRelease", { activeRelease: mods.release })}>{t("common.server")}</Chip>;
   const columns: Column<ModRow>[] = [
-    { id: "mod", header: "Mod", kind: "lead", ...sortable("name"), render: (row) => <strong title={row.file}>{row.file}</strong> },
-    { id: "source", header: "Source", ...sortable("source"), render: (row) => <SourceMark row={row} /> },
-    { id: "size", header: "Size", kind: "num", ...sortable("size"), render: (row) => formatBytes(row.bytes) },
+    { id: "mod", header: t("releases.mod"), kind: "lead", ...sortable("name"), render: (row) => <strong title={row.file}>{row.file}</strong> },
+    { id: "source", header: t("common.source"), ...sortable("source"), render: (row) => <SourceMark row={row} /> },
+    { id: "size", header: t("common.size"), kind: "num", ...sortable("size"), render: (row) => formatBytes(row.bytes) },
     { id: "sha", header: "SHA-256", kind: "wide", render: (row) => <span className="c-sum"><span className="c-mono" title={row.sha256}>{row.sha256.slice(0, 12)}</span><Copy value={row.sha256} what="SHA-256" /></span> },
-    { id: "actions", header: "Actions", kind: "act", render: (row) => <ActionButton action={row.download} size="sm" /> },
+    { id: "actions", header: t("common.actions"), kind: "act", render: (row) => <ActionButton action={row.download} size="sm" /> },
   ];
   return (
-    <Card actions={head} body="flush" count={ready?.all} title="Mods">
+    <Card actions={head} body="flush" count={ready?.all} title={t("releases.mods")}>
       {files.status === "error"
-        ? <LoadError error={files.error} kind={files.kind} retry={files.retry} size="sm" title="Mods could not be loaded" verb="read mods" />
+        ? <LoadError error={files.error} kind={files.kind} retry={files.retry} size="sm" title={t("releases.modsCouldNotLoaded")} verb={t("common.readMods")} />
         : (
           <>
             <FilterBar
               disabled={files.status === "loading" && mods.sources.length === 0 && !mods.narrowed}
-              end={<Pager label="Mod pages" onPage={mods.setPage} page={mods.page} pages={mods.pages} />}
-              label="Search mods"
+              end={<Pager label={t("common.modPages")} onPage={mods.setPage} page={mods.page} pages={mods.pages} />}
+              label={t("common.searchMods")}
               matches={ready?.total}
               onChange={(tokens) => narrow(mods, tokens)}
-              placeholder="Search by file name"
+              placeholder={t("common.searchByFileName")}
               properties={properties}
               tokens={tokensOf(mods)}
             />
             <Table
               columns={columns}
-              empty={mods.narrowed ? <Empty action={action("mods.filter.clear", "Clear filters", mods.clear, { icon: "filter_alt_off" })} icon="filter_alt_off" size="sm" title="No matches" /> : <Empty icon="inventory" size="sm" title="No mods" />}
-              label="Mods"
+              empty={mods.narrowed ? <Empty action={action("mods.filter.clear", t("common.clearFilters"), mods.clear, { icon: "filter_alt_off" })} icon="filter_alt_off" size="sm" title={t("common.noMatches")} /> : <Empty icon="inventory" size="sm" title={t("releases.noMods")} />}
+              label={t("releases.mods")}
               loading={files.status === "loading"}
               rowKey={(row) => row.sha256}
               rows={ready?.rows ?? []}

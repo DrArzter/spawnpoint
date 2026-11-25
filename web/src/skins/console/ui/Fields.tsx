@@ -4,6 +4,7 @@ import type { Action } from "../../../core/actions";
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { actionTip } from "./ActionButton";
+import { t } from "../../../i18n";
 
 /*
  * Form controls. A Field gives its control a label above it and, when the
@@ -187,7 +188,7 @@ export function RadioCards<Value extends string>({ legend, name, options, value,
               />
               <span className="c-radio-label">{option.label}</span>
               {option.icon && <Icon className="c-radio-icon" name={option.icon} size={20} />}
-              {refused && why && <span className="c-sr">, unavailable: {why}</span>}
+              {refused && why && <span className="c-sr">{t("ui.unavailableBecause", { reason: why })}</span>}
             </label>
           );
         })}

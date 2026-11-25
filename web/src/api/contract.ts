@@ -9,6 +9,7 @@ import type { HostLogLine, OperationProgress, OperationStep } from "../../../con
 import type { WorldLogRead } from "../../../contract/world-log";
 import type { AssistantAnswer, AssistantConversation, AssistantModel, ConversationSummary } from "../../../contract/assistant";
 import type { ConfigFile, ConfigFileContent, ConfigFileList, ConfigFileSource, SavedConfigFile } from "../../../contract/config-files";
+import { t } from "../i18n";
 
 // Shapes the API and the panel share live in ../contract (review X2).
 export type { ApiErrorCode };
@@ -82,10 +83,10 @@ export async function apiFailure(response: Response, message: string, parsed?: A
 
 /** Why the API refused to delete a person, in words the dialog can show. */
 export function identityDeletionRefusal(status: number, error: unknown): string {
-  if (status === 409 && error === "self_delete_forbidden") return "You cannot delete yourself.";
-  if (status === 409 && error === "last_owner") return "The last Owner cannot be deleted.";
-  if (status === 403) return "Your role cannot delete this user.";
-  return "This user could not be deleted.";
+  if (status === 409 && error === "self_delete_forbidden") return t("error.self_delete_forbidden");
+  if (status === 409 && error === "last_owner") return t("access.lastOwnerCannotDeleted");
+  if (status === 403) return t("access.roleCannotDeleteUser");
+  return t("access.userCouldNotDeleted");
 }
 
 export type SpawnpointSession = ActiveSession | VisitorSession;

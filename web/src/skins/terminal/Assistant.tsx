@@ -1,5 +1,6 @@
 import type { AssistantChatModel, ThreadEntry } from "../../core/models";
 import { Choice, Choices, Drawer, Empty, Field, Indicator, LoadError, Skeleton, SkeletonGroup, State, TextArea, Verb } from "./ui";
+import { t } from "../../i18n";
 
 // The Owner's assistant (ADR-0096), over any page: the conversations as a row
 // of choices, the open one, and the message box. A proposal runs only when
@@ -14,25 +15,25 @@ export function AssistantDrawer({ model }: Readonly<{ model: AssistantChatModel 
       footer={<Verb action={model.send} tone="primary" tooltipWhenDisabled />}
       onClose={model.close.run}
       open
-      title="Assistant"
+      title={t("common.assistant")}
       wide
     >
       <div className="t-assistant-list">
         <Verb action={model.startNew} size="small" />
-        {list.status === "loading" && <SkeletonGroup label="Reading the conversations"><Skeleton width="medium" /></SkeletonGroup>}
-        {list.status === "error" && <LoadError state={list} title="The conversations could not be loaded" verb="use the assistant" />}
+        {list.status === "loading" && <SkeletonGroup label={t("assistant.readingConversations")}><Skeleton width="medium" /></SkeletonGroup>}
+        {list.status === "error" && <LoadError state={list} title={t("assistant.conversationsCouldNotLoaded2")} verb={t("assistant.useAssistant")} />}
         {list.status === "ready" && list.value.length > 0 && (
-          <Choices label="Conversations">
+          <Choices label={t("assistant.conversations")}>
             {list.value.map((row) => <Choice data-action={row.select.id} key={row.id} onClick={row.select.run} pressed={row.current} title={row.status.label}>{row.title}</Choice>)}
           </Choices>
         )}
       </div>
-      {model.thread === null ? <Empty title="New conversation" /> : <Thread thread={model.thread} />}
-      <Choices label="Model">
+      {model.thread === null ? <Empty title={t("assistant.newConversation")} /> : <Thread thread={model.thread} />}
+      <Choices label={t("common.model")}>
         {model.choices.map((choice) => <Choice key={choice.value} onClick={() => model.setModel(choice.value)} pressed={model.model === choice.value} title={choice.hint}>{choice.label}</Choice>)}
       </Choices>
-      <Field hideLabel label="Message">
-        <TextArea maxLength={4000} onChange={(event) => model.setDraft(event.target.value)} placeholder="Message" prose value={model.draft} />
+      <Field hideLabel label={t("assistant.message")}>
+        <TextArea maxLength={4000} onChange={(event) => model.setDraft(event.target.value)} placeholder={t("assistant.message")} prose value={model.draft} />
       </Field>
     </Drawer>
   );
@@ -42,8 +43,8 @@ function Thread({ thread }: Readonly<{ thread: NonNullable<AssistantChatModel["t
   const entries = thread.entries;
   return (
     <div aria-live="polite" className="t-assistant-entries" role="log">
-      {entries.status === "loading" && <SkeletonGroup label="Reading the conversation"><Skeleton width="long" /><Skeleton width="medium" /></SkeletonGroup>}
-      {entries.status === "error" && <LoadError state={entries} title="The conversation could not be loaded" verb="use the assistant" />}
+      {entries.status === "loading" && <SkeletonGroup label={t("assistant.readingConversation")}><Skeleton width="long" /><Skeleton width="medium" /></SkeletonGroup>}
+      {entries.status === "error" && <LoadError state={entries} title={t("assistant.conversationCouldNotLoaded")} verb={t("assistant.useAssistant")} />}
       {entries.status === "ready" && entries.value.map((entry) => <Entry entry={entry} key={entry.id} />)}
       {thread.working && <State kind={thread.status.kind} label={thread.status.label} />}
       {thread.note && <p>{thread.note}</p>}

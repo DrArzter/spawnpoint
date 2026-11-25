@@ -1,6 +1,7 @@
-const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
-const time = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
-const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+import { intlLocale, t } from "../i18n";
+const dateTime = new Intl.DateTimeFormat(intlLocale(), { dateStyle: "medium", timeStyle: "short" });
+const time = new Intl.DateTimeFormat(intlLocale(), { hour: "2-digit", minute: "2-digit" });
+const date = new Intl.DateTimeFormat(intlLocale(), { dateStyle: "medium" });
 
 /** A time as the API gives it: an ISO string, epoch seconds, or absent. */
 export type Instant = string | number | null | undefined;
@@ -11,22 +12,22 @@ function parse(value: Instant): Date | null {
   return Number.isNaN(parsed.valueOf()) ? null : parsed;
 }
 
-export function formatDateTime(value: Instant, fallback = "Unknown time"): string {
+export function formatDateTime(value: Instant, fallback = t("ui.unknownTime")): string {
   const parsed = parse(value);
   return parsed ? dateTime.format(parsed) : fallback;
 }
 
-export function formatTime(value: Instant, fallback = "Unknown time"): string {
+export function formatTime(value: Instant, fallback = t("ui.unknownTime")): string {
   const parsed = parse(value);
   return parsed ? time.format(parsed) : fallback;
 }
 
-export function formatDate(value: Instant, fallback = "Unknown date"): string {
+export function formatDate(value: Instant, fallback = t("ui.unknownDate")): string {
   const parsed = parse(value);
   return parsed ? date.format(parsed) : fallback;
 }
 
-const dateNoYear = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const dateNoYear = new Intl.DateTimeFormat(intlLocale(), { month: "short", day: "numeric" });
 
 // A timestamp read in a column is two things that must each stay whole: the day
 // and the clock. Split here so the view can decide where a line may break, and
@@ -44,10 +45,10 @@ export function formatStamp(value: Instant): Readonly<{ iso: string; date: strin
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KiB`;
-  return `${bytes} B`;
+  if (bytes >= 1024 ** 3) return t("ui.fixedGiB", { fixed: (bytes / 1024 ** 3).toFixed(2) });
+  if (bytes >= 1024 ** 2) return t("ui.fixedMiB", { fixed: (bytes / 1024 ** 2).toFixed(1) });
+  if (bytes >= 1024) return t("ui.fixedKiB", { fixed: (bytes / 1024).toFixed(0) });
+  return t("ui.bytesB", { bytes });
 }
 
 export function shortDigest(value: string, length = 12): string {
@@ -70,10 +71,6 @@ export function repositoryName(url: string): string {
   return url.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
 }
 
-export function plural(count: number, one: string, many = `${one}s`): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 export function capitalize(value: string): string {
   return value.length === 0 ? value : `${value[0]!.toUpperCase()}${value.slice(1)}`;
 }
@@ -84,7 +81,7 @@ export function formatUptime(since: string | null | undefined, now: number): str
   if (Number.isNaN(start)) return null;
   const seconds = Math.max(0, Math.floor((now - start) / 1000));
   const hours = Math.floor(seconds / 3600);
-  if (hours >= 24) return `${Math.floor(hours / 24)} d ${hours % 24} h`;
+  if (hours >= 24) return t("ui.floorDValueH", { floor: Math.floor(hours / 24), value: hours % 24 });
   const minutes = Math.floor((seconds % 3600) / 60);
   return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }

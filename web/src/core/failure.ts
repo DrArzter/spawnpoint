@@ -1,4 +1,5 @@
 import type { ApiFailureKind } from "../api/contract";
+import { t } from "../i18n";
 
 /**
  * How a failed load reads, whatever skin draws it. A role that lacks the
@@ -9,7 +10,7 @@ import type { ApiFailureKind } from "../api/contract";
 export type FailureView = Readonly<{ kind: ApiFailureKind; title: string; message: string | null; retry: boolean }>;
 
 export function failureView(kind: ApiFailureKind, title: string, verb: string, message: string): FailureView {
-  if (kind === "forbidden") return { kind, title: `Your role cannot ${verb}`, message: null, retry: false };
-  if (kind === "unavailable") return { kind, title: "Unavailable", message, retry: true };
+  if (kind === "forbidden") return { kind, title: t("app.roleCannotVerb", { verb }), message: null, retry: false };
+  if (kind === "unavailable") return { kind, title: t("common.unavailable"), message, retry: true };
   return { kind, title, message, retry: true };
 }

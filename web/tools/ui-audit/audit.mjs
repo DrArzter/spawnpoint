@@ -6,6 +6,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { launch } from "./cdp.mjs";
 import { STATES, WORLD } from "./states.mjs";
+import { en } from "../../src/i18n/en.ts";
+import { ru } from "../../src/i18n/ru.ts";
 
 // usage: audit.mjs [--gate] [--advise] [--accept] [--self-test] [base-url]
 //
@@ -29,6 +31,22 @@ const PROBE_SOURCE = readFileSync(join(here, "probe.js"), "utf8");
 
 // The faces CI gates.
 const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : ["console", "terminal"];
+// The languages CI gates: English, and Russian, whose words run longer (ADR-0098). A Russian job's name ends in `@ru`.
+const LOCALES = process.env.LOCALE ? process.env.LOCALE.split(",") : ["en", "ru"];
+const named = (name, locale) => (locale === "en" ? name : `${name}@${locale}`);
+const localeOf = (name) => /@([a-z]{2})\b/.exec(name)?.[1] ?? "en";
+const bare = (name) => name.replace(/@[a-z]{2}\b/, "");
+const CATALOGUES = { en, ru };
+/** The catalogue a state's selectors read, for one locale. */
+function wordsOf(locale) {
+  const catalogue = CATALOGUES[locale] ?? en;
+  const text = (id) => { const message = catalogue[id] ?? en[id]; return typeof message === "string" ? message : message.other; };
+  const m = (id, params = {}) => text(id).replace(/\{(\w+)\}/g, (hole, name) => String(params[name] ?? hole));
+  m.prefix = (id) => text(id).split("{")[0];
+  return m;
+}
+/** A step with its worded selectors filled for the locale. */
+const wordedStep = (step, locale) => Object.fromEntries(Object.entries(step).map(([key, value]) => [key, typeof value === "function" ? value(wordsOf(locale)) : value]));
 
 const FAILURE_BOX = { console: ".c-empty", terminal: ".t-notice" };
 
@@ -175,9 +193,13 @@ function stateJobs(skin) {
 function plan() {
   const jobs = [];
   const routes = ROUTES.filter(([name]) => !onlyRoutes || onlyRoutes.has(name));
-  for (const skin of SKINS) {
-    for (const [name, route] of routes) jobs.push(...pageJobs(skin, name, route), ...strideJobs(skin, name, route));
-    jobs.push(...stateJobs(skin));
+  for (const locale of LOCALES) {
+    for (const skin of SKINS) {
+      const own = [];
+      for (const [name, route] of routes) own.push(...pageJobs(skin, name, route), ...strideJobs(skin, name, route));
+      own.push(...stateJobs(skin));
+      jobs.push(...own.map((job) => ({ ...job, locale, name: named(job.name, locale) })));
+    }
   }
   // Long jobs first, so the workers finish together.
   return jobs.sort((a, b) => (b.type === "stride") - (a.type === "stride"));
@@ -325,7 +347,7 @@ async function open(tab, job, width) {
   pass += 1;
   const [path, hash = ""] = job.route.split("#");
   const joiner = path.includes("?") ? "&" : "?";
-  await tab.goto(`${base}${path}${joiner}probe=${pass}&skin=${encodeURIComponent(job.skin)}${hash ? "#" + hash : ""}`);
+  await tab.goto(`${base}${path}${joiner}probe=${pass}&skin=${encodeURIComponent(job.skin)}&lang=${job.locale ?? "en"}${hash ? "#" + hash : ""}`);
   // The front door mounts after its own boot: wait for the app before the page settles.
   await tab.evaluate(`(async () => { const until = performance.now() + 5000; while (performance.now() < until && !document.getElementById("root")?.children.length) await new Promise((r) => setTimeout(r, 50)); })()`, true).catch(() => undefined);
   const ready = ROUTES.find(([, route]) => route === job.route.replace("?demo&fixture=stress", "?demo"))?.[2]?.[job.skin];
@@ -395,7 +417,7 @@ async function runState(tab, job) {
   if (job.route) await open(tab, job, job.width);
   const before = await tab.evaluate(`${SURFACES}.length`);
   for (const step of job.state.steps) {
-    const outcome = await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true); // NOSONAR steps run in order on one tab
+    const outcome = await tab.evaluate(`${STEP}(${JSON.stringify(wordedStep(step, job.locale))})`, true); // NOSONAR steps run in order on one tab
     // A control a width does not show cannot be pressed there. The run
     // counts these and fails a state that is absent everywhere or at 1440.
     if (outcome === "absent") return { absent: true };
@@ -527,23 +549,23 @@ async function shoot(tabs, list, prefix) {
   return shots;
 }
 
-async function replaySteps(tab, steps) {
+async function replaySteps(tab, steps, locale) {
   for (const step of steps) {
-    await tab.evaluate(`${STEP}(${JSON.stringify(step)})`, true); // NOSONAR steps run in order on one tab
+    await tab.evaluate(`${STEP}(${JSON.stringify(wordedStep(step, locale))})`, true); // NOSONAR steps run in order on one tab
     await settle(tab); // NOSONAR steps run in order on one tab
   }
 }
 
 async function shootPage(tab, [id, group], prefix, shots) {
   const r = group[0].record;
-  const routeName = r.name.replace(/\+stress$/, "").replace(/ menu$/, "");
+  const routeName = bare(r.name).replace(/ menu$/, "").replace(/\+stress$/, "");
   const route = ROUTES.find(([name]) => name === routeName)?.[1] ?? STATES.find((s) => `state:${s.name}` === routeName)?.route;
   if (!route) return;
-  const job = { skin: r.skin, theme: r.theme, route: r.name.includes("+stress") ? route.replace("?demo", "?demo&fixture=stress") : route };
+  const job = { skin: r.skin, theme: r.theme, locale: localeOf(r.name), route: r.name.includes("+stress") ? route.replace("?demo", "?demo&fixture=stress") : route };
   try {
     await open(tab, job, r.width);
     const state = STATES.find((s) => `state:${s.name}` === routeName);
-    if (state) await replaySteps(tab, state.steps);
+    if (state) await replaySteps(tab, state.steps, job.locale);
     const boxes = group.map((f) => f.item.box).filter(Boolean);
     await tab.evaluate(`(() => {
       const layer = document.createElement("div");
@@ -658,7 +680,7 @@ function addLostStates(records) {
   }
   for (const list of tried.values()) {
     const desktop = list.filter((r) => r.width === 1440);
-    const phoneOnly = STATES.find((state) => `state:${state.name}` === list[0].name)?.phoneOnly?.includes(list[0].skin);
+    const phoneOnly = STATES.find((state) => `state:${state.name}` === bare(list[0].name))?.phoneOnly?.includes(list[0].skin);
     const everywhere = list.every((r) => r.absent);
     const lost = everywhere || (!phoneOnly && desktop.length > 0 && desktop.every((r) => r.absent));
     if (lost) records.push({ ...list[0], width: everywhere ? "*" : 1440, theme: "*", absent: false, found: { error: [{ key: "state", sel: list[0].name, by: "no control opens this state" }] } });

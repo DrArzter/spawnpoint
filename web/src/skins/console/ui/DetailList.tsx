@@ -8,8 +8,9 @@ import { Chip } from "./Chip";
 import { Copy } from "./Copy";
 import { Skeleton } from "./Skeleton";
 import { Status } from "./Status";
+import { intlLocale, t } from "../../../i18n";
 
-const dayTime = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const dayTime = new Intl.DateTimeFormat(intlLocale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 /** `d MMM HH:mm`, or null for an unknown time. */
 export function shortDateTime(at: Instant): string | null {
@@ -22,7 +23,7 @@ export function DetailValueView({ value }: Readonly<{ value: DetailValue }>) {
   switch (value.type) {
     case "text": return <span className={cx(value.wrap ? "c-detail-wrap" : "c-detail-text", value.mono && "c-mono")} title={value.text}>{value.text}</span>;
     case "absent": return <span className="c-faint c-detail-text">{value.text}</span>;
-    case "loading": return <span className="c-detail-text"><Skeleton text width="9em" /><span className="c-sr">Loading</span></span>;
+    case "loading": return <span className="c-detail-text"><Skeleton text width="9em" /><span className="c-sr">{t("common.loading")}</span></span>;
     case "status": return <Status status={value.status} />;
     case "number": return <span>{value.value}</span>;
     case "time": {
@@ -35,7 +36,7 @@ export function DetailValueView({ value }: Readonly<{ value: DetailValue }>) {
       return (
         <span className="c-detail-release">
           <span className="c-mono">{value.active ?? "—"}</span>
-          {value.desired !== null && value.desired !== value.active && <Chip tip={`Desired ${value.desired}`}>→ {value.desired}</Chip>}
+          {value.desired !== null && value.desired !== value.active && <Chip tip={t("common.desiredDesiredRelease", { desiredRelease: value.desired })}>→ {value.desired}</Chip>}
         </span>
       );
     case "address": return <Address address={value.address} />;

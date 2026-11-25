@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppRoute, ensureRoute, pushRoute, readRoute, replaceRoute } from "../routing";
 import { applyAccent, DEFAULT_ACCENT } from "../styles/accent";
 import { applyTheme, getStoredAccent, getThemePreference, persistAccent, persistThemePreference, resolveTheme, subscribeToSystemTheme, Theme, ThemePreference } from "../telegram";
+import { t } from "../i18n";
 
 export function useRoute(): [AppRoute, (patch: Partial<AppRoute>, options?: { replace?: boolean }) => void] {
   const [route, setRoute] = useState(readRoute);
@@ -39,8 +40,8 @@ function afterOneTap(now: ThemePreference, showing: Theme): ThemePreference {
 export type AppearanceSync = (next: { theme: ThemePreference; accent: string }) => Promise<unknown>;
 
 function themeLabel(preference: ThemePreference, theme: Theme): string {
-  if (preference === "system") return `System theme (${theme})`;
-  return preference === "dark" ? "Dark theme" : "Light theme";
+  if (preference === "system") return t("shell.systemThemeTheme", { theme });
+  return preference === "dark" ? t("shell.darkTheme") : t("shell.lightTheme");
 }
 
 /**

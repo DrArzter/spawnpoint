@@ -2,6 +2,8 @@ import type { ControlPlaneSnapshot, SettingValue, WorldGameSettings } from "../.
 import { ApiError, type ApiErrorBody, type AssistantAnswer, type AssistantModel, type WorldLogRead, type ConfigFileContent, type ConfigFileList, type SavedConfigFile, type FileLink, type ReleaseDiff, type ReleaseModPage, type ReleaseModQuery, type ReleasePackName, type SavedWhitelist, type SessionOperation, type SpawnpointApi, type StopPlayersPolicy, type WorldLifecycleAction, type WorldWhitelist } from "../contract";
 import { API_ERROR_TEXT } from "../error-text";
 import { request, requestOrNull } from "./request";
+import { t } from "../../i18n";
+import { operationNoun } from "../../lib/operation-words";
 
 function controlPlaneSubscription(onInvalidated: () => void): () => void {
   let closed = false;
@@ -22,7 +24,7 @@ function controlPlaneSubscription(onInvalidated: () => void): () => void {
   const connect = async () => {
     try {
       const body = await request<{ url?: string; ticket?: string }>("/control-plane/subscriptions", {
-        method: "POST", failure: "Control-plane subscription was rejected.",
+        method: "POST", failure: t("world.controlPlaneSubscriptionWasRejected"),
         valid: (answer) => typeof answer.url === "string" && answer.url.startsWith("wss://") && typeof answer.ticket === "string",
       });
       if (body.url === undefined || body.ticket === undefined) return;
@@ -66,7 +68,7 @@ function worldLifecyclePayload(action: WorldLifecycleAction, worldId: string, ba
 
 const worldPath = (gameId: string, worldId: string) => `/games/${encodeURIComponent(gameId)}/worlds/${encodeURIComponent(worldId)}`;
 const releasePath = (gameId: string, presetId: string, release: string) => `/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/releases/${encodeURIComponent(release)}`;
-const READ_RELEASES = { forbidden: "Your role cannot read releases." };
+const READ_RELEASES = { forbidden: t("world.roleCannotReadReleases") };
 
 // Words that name the setting or the player come from the body's detail.
 function named(template: (value: string) => string, fallback: string, key: "name" | "setting") {
@@ -80,15 +82,15 @@ export const worldsApi = {
   async requestReleaseBuild(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): Promise<{ release: string; attempt: number }> {
     const result = await request<{ release?: unknown; attempt?: unknown }>(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/builds`, {
       method: "POST", body: { profileDigest, retryRelease },
-      failure: "The build could not be requested. Refresh to check whether it was accepted before retrying.",
-      refusals: { build_changed: "The build or its source changed, or is unavailable. Refresh before trying again." },
+      failure: t("world.buildCouldNotRequested"),
+      refusals: { build_changed: t("world.buildSourceChangedUnavailable") },
       valid: (built) => typeof built.release === "string" && /^\d+\.\d+$/.test(built.release) && typeof built.attempt === "number" && Number.isSafeInteger(built.attempt) && built.attempt >= 1,
     });
     return { release: result.release as string, attempt: result.attempt as number };
   },
 
   loadControlPlane(): Promise<ControlPlaneSnapshot> {
-    return request<ControlPlaneSnapshot>("/control-plane", { failure: "The control-plane state could not be loaded.", refusals: { forbidden: "Your role cannot view server status." } });
+    return request<ControlPlaneSnapshot>("/control-plane", { failure: t("common.controlPlaneStateCouldNot"), refusals: { forbidden: t("world.roleCannotViewServer") } });
   },
 
   subscribeControlPlane(onInvalidated: () => void): () => void {
@@ -96,10 +98,11 @@ export const worldsApi = {
   },
 
   async requestSessionOperation(gameId: string, worldId: string, action: SessionOperation, players?: StopPlayersPolicy) {
+    const refused = action === "start" ? t("world.roleCannotStartSessions") : t("world.roleCannotStopSessions");
     const body = await request<{ result?: "requested" | "already_stopped"; operationId?: string }>(`${worldPath(gameId, worldId)}/${action}`, {
       method: "POST", ...(players === "disconnect" ? { body: { players } } : {}),
-      failure: `The ${action} request could not be accepted.`,
-      refusals: { forbidden: players === "disconnect" ? "Your role cannot disconnect players." : `Your role cannot ${action} sessions.` },
+      failure: t("world.actionRequestCouldNot", { action: operationNoun(action) }),
+      refusals: { forbidden: players === "disconnect" ? t("world.roleCannotDisconnectPlayers") : refused },
       valid: (answer) => answer.result !== undefined,
     });
     return { result: body.result as "requested" | "already_stopped", ...(body.operationId ? { operationId: body.operationId } : {}) };
@@ -108,8 +111,8 @@ export const worldsApi = {
   async requestPromotion(gameId: string, worldId: string, release: string) {
     const body = await request<{ result?: "requested" | "switched"; operationId?: string }>(`${worldPath(gameId, worldId)}/promote`, {
       method: "POST", body: { release },
-      failure: "The release update could not be accepted.",
-      refusals: { forbidden: "Only the Owner can update a world's release." },
+      failure: t("world.releaseUpdateCouldNot"),
+      refusals: { forbidden: t("world.onlyOwnerCanUpdate") },
       valid: (answer) => answer.result === "switched" || (answer.result === "requested" && answer.operationId !== undefined),
     });
     if (body.result === "switched") return { result: "switched" as const };
@@ -119,8 +122,8 @@ export const worldsApi = {
   async requestWorldLifecycle(gameId: string, worldId: string, action: WorldLifecycleAction, backupKey?: string, release?: string) {
     const body = await request<{ result?: "requested"; operationId?: string }>(`${worldPath(gameId, worldId)}/${action === "regenerate" ? "wipe" : action}`, {
       method: "POST", body: worldLifecyclePayload(action, worldId, backupKey, release),
-      failure: `The ${action} request could not be accepted.`,
-      refusals: { forbidden: "Your role cannot manage this world." },
+      failure: t("world.actionRequestCouldNot", { action: operationNoun(action) }),
+      refusals: { forbidden: t("world.roleCannotManageWorld") },
       valid: (answer) => answer.result === "requested" && answer.operationId !== undefined,
     });
     return { result: body.result as "requested", operationId: body.operationId as string };
@@ -129,8 +132,8 @@ export const worldsApi = {
   async requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") {
     const body = await request<{ world?: { id: string; displayName: string } }>(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/worlds`, {
       method: "POST", body: { displayName, release, placement, connectivity, ...(auth ? { auth } : {}) },
-      failure: "The world could not be created.",
-      refusals: { forbidden: "Your role cannot create worlds." },
+      failure: t("common.worldCouldNotCreated"),
+      refusals: { forbidden: t("common.roleCannotCreateWorlds") },
       valid: (answer) => answer.world !== undefined,
     });
     return body.world as { id: string; displayName: string };
@@ -139,15 +142,15 @@ export const worldsApi = {
   async requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") {
     await request<unknown>(`${worldPath(gameId, worldId)}/settings`, {
       method: "PUT", body: { placement, connectivity, ...(auth ? { auth } : {}) },
-      failure: "World settings could not be saved.",
-      refusals: { forbidden: "Your role cannot change world settings.", invalid_world_connectivity: "This host and network combination is not available in this deployment." },
+      failure: t("common.worldSettingsCouldNot"),
+      refusals: { forbidden: t("world.roleCannotChangeWorld"), invalid_world_connectivity: t("world.hostNetworkCombinationNot") },
     });
   },
 
   async requestPackDownload(gameId: string, worldId: string) {
     const body = await request<{ release?: string; url?: string }>(`${worldPath(gameId, worldId)}/pack`, {
-      failure: "The pack link could not be created.",
-      refusals: { forbidden: "Your role cannot read this world's connection details.", no_pack_published: "This release was published before packs existed. Ask the owner to publish one." },
+      failure: t("world.packLinkCouldNot"),
+      refusals: { forbidden: t("world.roleCannotReadWorlds"), no_pack_published: t("world.releaseWasPublishedBefore") },
       valid: (answer) => answer.url !== undefined && answer.release !== undefined,
     });
     return { release: body.release as string, url: body.url as string };
@@ -156,12 +159,12 @@ export const worldsApi = {
   async updateGameSettings(gameId: string, worldId: string, values: Readonly<Record<string, SettingValue>>): Promise<WorldGameSettings> {
     const body = await request<Partial<WorldGameSettings>>(`${worldPath(gameId, worldId)}/game-settings`, {
       method: "PUT", body: { values },
-      failure: "Game settings could not be saved.",
+      failure: t("common.gameSettingsCouldNot"),
       refusals: {
-        forbidden: "Your role cannot change this world's game settings.",
-        unknown_world: "This world has no record to keep settings in.",
-        invalid_game_setting: named((setting) => `${setting} has a value the game does not accept.`, API_ERROR_TEXT.invalid_game_setting, "setting"),
-        unknown_game_setting: named((setting) => `${setting} is not one this game offers. Refresh and try again.`, API_ERROR_TEXT.unknown_game_setting, "setting"),
+        forbidden: t("world.roleCannotChangeWorlds"),
+        unknown_world: t("world.worldHasNoRecord"),
+        invalid_game_setting: named((setting) => t("world.settingHasValueGame", { setting }), API_ERROR_TEXT.invalid_game_setting, "setting"),
+        unknown_game_setting: named((setting) => t("world.settingNotOneGame", { setting }), API_ERROR_TEXT.unknown_game_setting, "setting"),
       },
       valid: (answer) => answer.values !== undefined,
     });
@@ -170,8 +173,8 @@ export const worldsApi = {
 
   async loadWhitelist(gameId: string, worldId: string): Promise<WorldWhitelist> {
     const body = await request<Partial<WorldWhitelist>>(`${worldPath(gameId, worldId)}/whitelist`, {
-      failure: "The whitelist could not be read.",
-      refusals: { forbidden: "Your role cannot manage whitelists." },
+      failure: t("world.whitelistCouldNotRead"),
+      refusals: { forbidden: t("world.roleCannotManageWhitelists") },
       valid: (answer) => answer.names !== undefined,
     });
     return { managed: body.managed === true, names: body.names ?? [], updatedAt: body.updatedAt ?? null, updatedBy: body.updatedBy ?? null };
@@ -180,14 +183,14 @@ export const worldsApi = {
   async updateWhitelist(gameId: string, worldId: string, names: readonly string[]): Promise<SavedWhitelist> {
     const body = await request<Partial<SavedWhitelist>>(`${worldPath(gameId, worldId)}/whitelist`, {
       method: "PUT", body: { names },
-      failure: "The whitelist could not be saved.",
+      failure: t("common.whitelistCouldNotSaved"),
       refusals: {
-        forbidden: "Your role cannot manage whitelists.",
+        forbidden: t("world.roleCannotManageWhitelists"),
         invalid_player_name: (detail) => typeof detail.name === "string"
-          ? `${detail.name} is not a name this game accepts${typeof detail.hint === "string" ? `: ${detail.hint}` : ""}.`
+          ? t("world.detailNameNotNameGame", { detailName: detail.name, value: typeof detail.hint === "string" ? `: ${detail.hint}` : "" })
           : API_ERROR_TEXT.invalid_player_name,
-        duplicate_player_name: named((name) => `${name} is already on the list.`, API_ERROR_TEXT.duplicate_player_name, "name"),
-        world_archived: "This world is archived. Restore a backup before changing its whitelist.",
+        duplicate_player_name: named((name) => t("world.nameAlreadyList", { name }), API_ERROR_TEXT.duplicate_player_name, "name"),
+        world_archived: t("world.worldArchivedRestoreBackup"),
       },
       valid: (answer) => answer.names !== undefined,
     });
@@ -197,8 +200,8 @@ export const worldsApi = {
   async loadConfigFiles(gameId: string, worldId: string): Promise<ConfigFileList> {
     try {
       const body = await request<Partial<ConfigFileList>>(`${worldPath(gameId, worldId)}/config-files`, {
-        failure: "The config files could not be read.",
-        refusals: { forbidden: "Your role cannot edit config files." },
+        failure: t("world.configFilesCouldNot"),
+        refusals: { forbidden: t("world.roleCannotEditConfig") },
         valid: (answer) => Array.isArray(answer.files),
       });
       return { release: body.release ?? null, roots: body.roots ?? [], maxBytes: body.maxBytes ?? 0, files: body.files ?? [] };
@@ -211,8 +214,8 @@ export const worldsApi = {
 
   async loadConfigFile(gameId: string, worldId: string, path: string): Promise<ConfigFileContent> {
     return request<ConfigFileContent>(`${worldPath(gameId, worldId)}/config-files/content?${new URLSearchParams({ path })}`, {
-      failure: "The file could not be read.",
-      refusals: { forbidden: "Your role cannot edit config files." },
+      failure: t("world.fileCouldNotRead"),
+      refusals: { forbidden: t("world.roleCannotEditConfig") },
       valid: (answer) => typeof answer.text === "string" && typeof answer.sha256 === "string",
     });
   },
@@ -220,10 +223,10 @@ export const worldsApi = {
   async saveConfigFile(gameId: string, worldId: string, path: string, text: string, expectedSha256: string | null): Promise<SavedConfigFile> {
     return request<SavedConfigFile>(`${worldPath(gameId, worldId)}/config-files`, {
       method: "PUT", body: { path, text, expectedSha256 },
-      failure: "The file could not be saved.",
+      failure: t("common.fileCouldNotSaved"),
       refusals: {
-        forbidden: "Your role cannot edit config files.",
-        world_archived: "This world is archived. Restore a backup before changing its files.",
+        forbidden: t("world.roleCannotEditConfig"),
+        world_archived: t("world.worldArchivedRestoreBackupBefore"),
       },
       valid: (answer) => typeof answer.sha256 === "string",
     });
@@ -234,16 +237,16 @@ export const worldsApi = {
     if (expected !== null) params.set("expected", expected);
     await request<unknown>(`${worldPath(gameId, worldId)}/config-files?${params}`, {
       method: "DELETE",
-      failure: "The file could not be reset.",
-      refusals: { forbidden: "Your role cannot edit config files." },
+      failure: t("common.fileCouldNotReset"),
+      refusals: { forbidden: t("world.roleCannotEditConfig") },
     });
   },
 
   async requestWorldLog(gameId: string, worldId: string): Promise<WorldLogRead> {
     const body = await request<{ read: WorldLogRead }>(`${worldPath(gameId, worldId)}/log`, {
       method: "POST", body: {},
-      failure: "The log could not be requested.",
-      refusals: { forbidden: "Your role cannot read the log.", session_not_ready: "This world is not running. Start it first." },
+      failure: t("world.logCouldNotRequested"),
+      refusals: { forbidden: t("world.roleCannotReadLog"), session_not_ready: t("error.session_not_ready") },
       valid: (answer) => typeof answer.read?.id === "string",
     });
     return body.read;
@@ -251,8 +254,8 @@ export const worldsApi = {
 
   async loadWorldLog(gameId: string, worldId: string, readId: string): Promise<WorldLogRead> {
     const body = await request<{ read: WorldLogRead }>(`${worldPath(gameId, worldId)}/log/${encodeURIComponent(readId)}`, {
-      failure: "The log could not be read.",
-      refusals: { forbidden: "Your role cannot read the log." },
+      failure: t("world.logCouldNotRead"),
+      refusals: { forbidden: t("world.roleCannotReadLog") },
       valid: (answer) => typeof answer.read?.status === "string",
     });
     return body.read;
@@ -261,8 +264,8 @@ export const worldsApi = {
   async askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>): Promise<AssistantAnswer> {
     const body = await request<{ answer: AssistantAnswer }>(`${worldPath(gameId, worldId)}/assistant`, {
       method: "POST", body: question,
-      failure: "The question could not be sent.",
-      refusals: { forbidden: "Only an Owner can ask the assistant." },
+      failure: t("common.questionCouldNotSent"),
+      refusals: { forbidden: t("world.onlyOwnerCanAsk") },
       valid: (answer) => typeof answer.answer?.id === "string",
     });
     return body.answer;
@@ -270,8 +273,8 @@ export const worldsApi = {
 
   async loadAssistantAnswer(gameId: string, worldId: string, answerId: string): Promise<AssistantAnswer> {
     const body = await request<{ answer: AssistantAnswer }>(`${worldPath(gameId, worldId)}/assistant/${encodeURIComponent(answerId)}`, {
-      failure: "The answer could not be read.",
-      refusals: { forbidden: "Only an Owner can ask the assistant." },
+      failure: t("world.answerCouldNotRead"),
+      refusals: { forbidden: t("world.onlyOwnerCanAsk") },
       valid: (answer) => typeof answer.answer?.status === "string",
     });
     return body.answer;
@@ -283,8 +286,8 @@ export const worldsApi = {
     if (query.search !== "") params.set("query", query.search);
     if (query.source !== null) params.set("source", query.source);
     const body = await request<Partial<ReleaseModPage>>(`${releasePath(gameId, presetId, release)}?${params}`, {
-      failure: "The release's mods could not be read.",
-      refusals: { ...READ_RELEASES, unknown_release: `Release ${release} is not in the store.` },
+      failure: t("world.releasesModsCouldNot"),
+      refusals: { ...READ_RELEASES, unknown_release: t("world.releaseReleaseNotStore", { release }) },
       valid: (answer) => answer.mods !== undefined,
     });
     const mods = body.mods ?? [];
@@ -305,8 +308,8 @@ export const worldsApi = {
   loadReleaseDiff(gameId: string, presetId: string, release: string, from: string | null): Promise<ReleaseDiff | null> {
     const query = from === null ? "" : `?from=${encodeURIComponent(from)}`;
     return requestOrNull<ReleaseDiff>(`${releasePath(gameId, presetId, release)}/diff${query}`, {
-      failure: "The release's changes could not be read.",
-      refusals: { ...READ_RELEASES, unknown_release: `Release ${from ?? release} is not in the store.` },
+      failure: t("world.releasesChangesCouldNot"),
+      refusals: { ...READ_RELEASES, unknown_release: t("world.releaseReleaseNotStore", { release: from ?? release }) },
       valid: (answer) => answer.serverMods !== undefined,
     }, (error) => error.status === 404 && error.code === "no_plan");
   },
@@ -316,11 +319,11 @@ export const worldsApi = {
   },
 
   requestReleasePack(gameId: string, presetId: string, release: string, pack: ReleasePackName): Promise<FileLink> {
-    return fileLink(`${releasePath(gameId, presetId, release)}/packs/${pack}`, { ...READ_RELEASES, no_pack_published: `Release ${release} has no ${pack} pack yet.` });
+    return fileLink(`${releasePath(gameId, presetId, release)}/packs/${pack}`, { ...READ_RELEASES, no_pack_published: t("world.releaseReleaseHasNo", { release, pack }) });
   },
 } satisfies Partial<SpawnpointApi>;
 
 async function fileLink(path: string, refusals: Readonly<Record<string, string>>): Promise<FileLink> {
-  const body = await request<{ url?: string; expiresIn?: number }>(path, { failure: "The download link could not be created.", refusals, valid: (answer) => answer.url !== undefined });
+  const body = await request<{ url?: string; expiresIn?: number }>(path, { failure: t("common.downloadLinkCouldNot"), refusals, valid: (answer) => answer.url !== undefined });
   return { url: body.url as string, expiresIn: body.expiresIn ?? 0 };
 }

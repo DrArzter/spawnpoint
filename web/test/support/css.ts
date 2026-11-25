@@ -309,13 +309,21 @@ export function unscoped(rules: readonly Rule[], scope: string): string[] {
 // What changes a box's size or the space around it. A hover state may change
 // colour, shadow, opacity or a transform, never these: a control that grows
 // under the pointer shifts the row it sits in.
-const BOX_SIZE = /^(?:(?:min-|max-)?(?:width|height)|padding(?:-.+)?|margin(?:-.+)?|border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?-width|font-size|line-height|font)$/;
+const BOX_SIZE_PROPERTIES: ReadonlySet<string> = new Set([
+  "width", "height", "min-width", "min-height", "max-width", "max-height", "font", "font-size", "line-height",
+]);
+
+function setsBoxSize(property: string): boolean {
+  if (BOX_SIZE_PROPERTIES.has(property)) return true;
+  if (property.startsWith("padding") || property.startsWith("margin")) return true;
+  return property.startsWith("border") && property.endsWith("-width");
+}
 
 /** Declarations that change a box's size in a rule whose selectors include a hover state. */
 export function hoverSizeChanges(rules: readonly Rule[]): string[] {
   return rules
     .filter((rule) => rule.selectors.some((selector) => selector.includes(":hover")))
-    .flatMap((rule) => [...rule.declarations.keys()].filter((property) => BOX_SIZE.test(property)).map((property) => `${at(rule)} ${rule.selectors.join(", ")} sets ${property}`));
+    .flatMap((rule) => [...rule.declarations.keys()].filter(setsBoxSize).map((property) => `${at(rule)} ${rule.selectors.join(", ")} sets ${property}`));
 }
 
 // --- literals ------------------------------------------------------------------------

@@ -360,4 +360,6 @@ Definition of done per milestone: [docs/roadmap.md](docs/roadmap.md).
 
 ## Licence
 
-Not yet chosen. Listed as a decision still to record in the [ADR index](docs/adr/README.md).
+[AGPL-3.0](LICENSE). Contributions come under the agreement in [CONTRIBUTING.md](CONTRIBUTING.md), so the
+project can also be offered under another licence ([ADR-0099](docs/adr/0099-agpl-licence-with-a-contributor-agreement.md)).
+A game server Spawnpoint starts is a separate program under its own terms.

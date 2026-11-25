@@ -165,6 +165,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0098](0098-the-console-speaks-from-one-message-catalogue.md) | The console speaks from one message catalogue | Accepted — implemented | M6 |
 | [0099](0099-agpl-licence-with-a-contributor-agreement.md) | AGPL-3.0, with a contributor licence agreement | Accepted | M6 |
 | [0100](0100-delete-a-persistent-host-from-the-panel.md) | Delete a persistent host from the panel | Accepted | M6 |
+| [0101](0101-dynamodb-tables-use-the-aws-owned-key.md) | DynamoDB tables use the AWS owned key | Accepted | M6 |
 
 ## Decisions still to record
 

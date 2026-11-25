@@ -305,8 +305,8 @@ run "lifecycle_v2_state_is_inert_protected_on_demand_storage" {
   }
 
   assert {
-    condition     = aws_dynamodb_table.lifecycle_v2.server_side_encryption[0].enabled
-    error_message = "Lifecycle coordination state must be encrypted at rest."
+    condition     = !aws_dynamodb_table.lifecycle_v2.server_side_encryption[0].enabled
+    error_message = "Lifecycle coordination state is encrypted at rest with the AWS owned key, which makes no KMS request (ADR-0101)."
   }
 
   assert {

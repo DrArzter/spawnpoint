@@ -30,8 +30,10 @@ resource "aws_dynamodb_table" "control_plane_view" {
     enabled        = true
   }
 
+  # Encrypted at rest with the AWS owned key (ADR-0101): the AWS managed key cost a KMS request per caller every
+  # five minutes.
   server_side_encryption {
-    enabled = true
+    enabled = false
   }
 
   lifecycle {
@@ -70,8 +72,10 @@ resource "aws_dynamodb_table" "release_refs" {
     enabled = true
   }
 
+  # Encrypted at rest with the AWS owned key (ADR-0101): the AWS managed key cost a KMS request per caller every
+  # five minutes.
   server_side_encryption {
-    enabled = true
+    enabled = false
   }
 
   lifecycle {

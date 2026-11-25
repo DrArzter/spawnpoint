@@ -19,7 +19,7 @@ import {
 
 const principal = {
   provider: "telegram",
-  subject: "1780660807",
+  subject: "100000001",
   displayName: "DrArzter",
   username: "drarzter",
   photoUrl: "https://telegram.example/avatar.jpg",

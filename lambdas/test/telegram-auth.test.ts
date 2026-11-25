@@ -12,7 +12,7 @@ const oidcClientId = "8521897198";
 
 function widgetPayload(overrides: Record<string, string> = {}): Record<string, string> {
   const values = {
-    id: "1780660807",
+    id: "100000001",
     first_name: "DrArzter",
     username: "drarzter",
     auth_date: String(now),
@@ -23,7 +23,7 @@ function widgetPayload(overrides: Record<string, string> = {}): Record<string, s
   return { ...values, hash: createHmac("sha256", secret).update(check).digest("hex") };
 }
 
-function miniAppInitData(includeTelegramSignature = false, id: unknown = 1780660807): string {
+function miniAppInitData(includeTelegramSignature = false, id: unknown = 100000001): string {
   const params = new URLSearchParams({
     auth_date: String(now),
     query_id: "AAEAA-test",
@@ -40,7 +40,7 @@ function miniAppInitData(includeTelegramSignature = false, id: unknown = 1780660
 
 test("verifies a fresh Telegram Login Widget payload", () => {
   assert.deepEqual(verifyLoginWidget(widgetPayload(), botToken, now), {
-    telegramId: "1780660807",
+    telegramId: "100000001",
     displayName: "DrArzter",
     username: "drarzter",
     photoUrl: null,
@@ -62,7 +62,7 @@ test("the Telegram adapter produces a provider-neutral principal", async () => {
 
   assert.deepEqual(await authenticateWith(provider, { login: widgetPayload() }), {
     provider: "telegram",
-    subject: "1780660807",
+    subject: "100000001",
     displayName: "DrArzter",
     username: "drarzter",
     photoUrl: null,
@@ -91,14 +91,14 @@ test("the login port rejects an adapter that crosses provider boundaries", async
 });
 
 test("verifies Telegram Mini App initData with the WebAppData key derivation", () => {
-  assert.equal(verifyMiniAppInitData(miniAppInitData(), botToken, now)?.telegramId, "1780660807");
-  assert.equal(verifyMiniAppInitData(miniAppInitData(true), botToken, now)?.telegramId, "1780660807");
+  assert.equal(verifyMiniAppInitData(miniAppInitData(), botToken, now)?.telegramId, "100000001");
+  assert.equal(verifyMiniAppInitData(miniAppInitData(true), botToken, now)?.telegramId, "100000001");
   assert.equal(verifyMiniAppInitData(`${miniAppInitData()}x`, botToken, now), null);
 });
 
 test("a signed Mini App user.id that is not a numeric Telegram id is refused", () => {
-  assert.equal(verifyMiniAppInitData(miniAppInitData(false, "1780660807"), botToken, now)?.telegramId, "1780660807");
-  for (const id of [{ id: 1780660807 }, [1780660807], "1780660807x", "abcdefgh", true, null, 1780660807.5, 2 ** 53]) {
+  assert.equal(verifyMiniAppInitData(miniAppInitData(false, "100000001"), botToken, now)?.telegramId, "100000001");
+  for (const id of [{ id: 100000001 }, [100000001], "100000001x", "abcdefgh", true, null, 100000001.5, 2 ** 53]) {
     assert.equal(verifyMiniAppInitData(miniAppInitData(false, id), botToken, now), null, JSON.stringify(id));
   }
 });
@@ -112,8 +112,8 @@ test("verifies a Telegram OIDC ID token against JWKS and its claims", async () =
     const claims = Buffer.from(JSON.stringify({
       iss: "https://oauth.telegram.org",
       aud: oidcClientId,
-      sub: "telegram:1780660807",
-      id: 1780660807,
+      sub: "telegram:100000001",
+      id: 100000001,
       name: "DrArzter",
       preferred_username: "drarzter",
       picture: "https://telegram.example/avatar.jpg",
@@ -127,7 +127,7 @@ test("verifies a Telegram OIDC ID token against JWKS and its claims", async () =
   const fetchJwks = async () => ({ ok: true, json: async () => ({ keys: [publicJwk] }) });
 
   assert.deepEqual(await verifyOidcIdToken(token(), oidcClientId, now, fetchJwks), {
-    telegramId: "1780660807",
+    telegramId: "100000001",
     displayName: "DrArzter",
     username: "drarzter",
     photoUrl: "https://telegram.example/avatar.jpg",

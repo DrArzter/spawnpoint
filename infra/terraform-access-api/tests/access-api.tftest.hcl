@@ -180,7 +180,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id      = "1780660807"
+    bootstrap_owner_telegram_id      = "100000001"
     telegram_oidc_client_id          = "8521897198"
     google_oidc_client_id            = "1234567890-abc123def456.apps.googleusercontent.com"
     panel_url                        = "https://spawnpoint.example.dev/"
@@ -667,7 +667,7 @@ run "self_hosted_api_keeps_the_generated_endpoint_optional" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id      = "1780660807"
+    bootstrap_owner_telegram_id      = "100000001"
     panel_url                        = "https://panel.example.dev/"
     session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
   }
@@ -687,7 +687,7 @@ run "telegram_only_deployment_switches_password_login_off" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id      = "1780660807"
+    bootstrap_owner_telegram_id      = "100000001"
     panel_url                        = "https://panel.example.dev/"
     session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
     password_login_enabled           = false
@@ -703,7 +703,7 @@ run "registration_can_open_without_changing_password_login" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id       = "1780660807"
+    bootstrap_owner_telegram_id       = "100000001"
     panel_url                         = "https://panel.example.dev/"
     session_signing_secret_parameter  = "/spawnpoint/auth/session-signing-secret"
     password_registration_enabled     = true
@@ -726,7 +726,7 @@ run "http_api_stage_logs_requests_without_tokens" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id      = "1780660807"
+    bootstrap_owner_telegram_id      = "100000001"
     panel_url                        = "https://panel.example.dev/"
     session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
   }
@@ -828,7 +828,7 @@ run "ses_sends_from_a_dkim_signed_identity_with_no_key" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id      = "1780660807"
+    bootstrap_owner_telegram_id      = "100000001"
     panel_url                        = "https://spawnpoint.example.dev/"
     session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
     api_domain_name                  = "api.spawnpoint.example.dev"
@@ -866,7 +866,7 @@ run "an_ses_sender_outside_the_zone_gets_no_records" {
   command = plan
 
   variables {
-    bootstrap_owner_telegram_id      = "1780660807"
+    bootstrap_owner_telegram_id      = "100000001"
     panel_url                        = "https://spawnpoint.example.dev/"
     session_signing_secret_parameter = "/spawnpoint/auth/session-signing-secret"
     api_domain_name                  = "api.spawnpoint.example.dev"

@@ -87,7 +87,7 @@ export const demoApi: SpawnpointApi = {
       passwordManagementAvailable: true,
       linkableProviders: ["telegram", "google"],
       accounts: [
-        { provider: "telegram", subject: "1780660807", displayName: "DrArzter", username: "drarzter", email: null, photoUrl: null, verified: true },
+        { provider: "telegram", subject: "100000001", displayName: "DrArzter", username: "drarzter", email: null, photoUrl: null, verified: true },
         { provider: "password", subject: "demo-password", displayName: "DrArzter", username: null, email: "drarzter@example.dev", photoUrl: null, verified: true },
       ],
     };

@@ -145,7 +145,7 @@ const access: AccessModel = {
   roleCount: 2,
   catalogue: [aPermission(), aPermission({ id: "perm.two", group: "Group Two", label: "Do two", description: "Does the second thing." })],
   users: {
-    bootstrap: { state: "unclaimed", telegramId: "1780660807" },
+    bootstrap: { state: "unclaimed", telegramId: "100000001" },
     bootstrapDescription: "Sign in with the configured account.",
     candidates: { status: "ready", value: [{ id: "telegram:42", candidate: { platform: "telegram", platformUserId: "42", displayName: "Nikita", username: "nikita", email: null, photoUrl: null, status: "REQUESTED", requestedAt: "2026-09-14T18:10:00Z", lastSeenAt: "2026-09-14T18:10:00Z" }, account: "@nikita", since: "Requested access Sep 14", role: roleChoice(accessRoles, "role-b", false), setRoleId: noop, approve: spy("access.approve", "Approve"), dismiss: spy("access.dismiss", "Dismiss") }] },
     members: [

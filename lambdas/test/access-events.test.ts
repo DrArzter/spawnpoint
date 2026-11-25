@@ -5,13 +5,13 @@ import { parseAccessApprovedEvent, privateTelegramChatId, renderAccessApproved }
 
 test("an access approval targets one private Telegram chat", () => {
   const event = parseAccessApprovedEvent({
-    telegramChatId: "1780660807",
+    telegramChatId: "100000001",
     identityId: "identity-1",
     displayName: "Alex",
     roleName: "Player",
   });
   assert.ok(event);
-  assert.equal(event.telegramChatId, 1780660807);
+  assert.equal(event.telegramChatId, 100000001);
   assert.match(renderAccessApproved(event), /approved with the Player role/);
   assert.match(renderAccessApproved(event), /choose your notification subscriptions/);
 });

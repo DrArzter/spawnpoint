@@ -4,7 +4,6 @@ import { Timestamp } from "../../components/ui/Timestamp";
 import type { World } from "../../model";
 import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
 import { startableLatest, startableReleases } from "../../core/presets";
-import { plural } from "../../lib/format";
 import { Drawer, Empty, Field, LoadError, Modal, NoMatches, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
 import { t } from "../../i18n";
 

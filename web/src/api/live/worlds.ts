@@ -98,10 +98,11 @@ export const worldsApi = {
   },
 
   async requestSessionOperation(gameId: string, worldId: string, action: SessionOperation, players?: StopPlayersPolicy) {
+    const refused = action === "start" ? t("world.roleCannotStartSessions") : t("world.roleCannotStopSessions");
     const body = await request<{ result?: "requested" | "already_stopped"; operationId?: string }>(`${worldPath(gameId, worldId)}/${action}`, {
       method: "POST", ...(players === "disconnect" ? { body: { players } } : {}),
       failure: t("world.actionRequestCouldNot", { action: operationNoun(action) }),
-      refusals: { forbidden: players === "disconnect" ? t("world.roleCannotDisconnectPlayers") : (action === "start" ? t("world.roleCannotStartSessions") : t("world.roleCannotStopSessions")) },
+      refusals: { forbidden: players === "disconnect" ? t("world.roleCannotDisconnectPlayers") : refused },
       valid: (answer) => answer.result !== undefined,
     });
     return { result: body.result as "requested" | "already_stopped", ...(body.operationId ? { operationId: body.operationId } : {}) };

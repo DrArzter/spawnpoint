@@ -357,9 +357,11 @@ export function siblingRow(row: WorldRow): SiblingRow {
 }
 
 export function worldTabs(world: World, offered: Readonly<{ releases: boolean; whitelist: boolean; config: boolean; console: boolean; log: boolean; metrics: boolean }>): { id: WorldTab; label: string; count?: number }[] {
-  const tabs: { id: WorldTab; label: string; count?: number }[] = [{ id: "details", label: t("world.details") }];
-  tabs.push({ id: "wipes", label: t("world.wipes"), count: world.wipes.length });
-  tabs.push({ id: "backups", label: t("common.backups") });
+  const tabs: { id: WorldTab; label: string; count?: number }[] = [
+    { id: "details", label: t("world.details") },
+    { id: "wipes", label: t("world.wipes"), count: world.wipes.length },
+    { id: "backups", label: t("common.backups") },
+  ];
   if (offered.releases) tabs.push({ id: "releases", label: t("common.releases") });
   if (offered.whitelist) tabs.push({ id: "whitelist", label: t("common.whitelist") });
   if (offered.config) tabs.push({ id: "config", label: t("world.config") });

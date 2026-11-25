@@ -50,7 +50,7 @@ export function WhitelistTab({ model }: Readonly<{ model: WhitelistModel }>) {
           </Grid>
         </SkeletonGroup>
       )}
-      {ready && ready.rows.length === 0 && <Empty icon="verified_user" title={ready.managed ? t("whitelist.nobodyCanJoin") : t("whitelist.noNames")} />}
+      {ready?.rows.length === 0 && <Empty icon="verified_user" title={ready.managed ? t("whitelist.nobodyCanJoin") : t("whitelist.noNames")} />}
       {ready && ready.rows.length > 0 && (
         <Grid className="c-wl-names" kind="name" label={t("common.players")}>
           {ready.rows.map((row) => (

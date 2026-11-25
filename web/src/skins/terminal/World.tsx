@@ -225,7 +225,7 @@ function ChangesPanel({ changes, worldName }: Readonly<{ changes: ReleaseChanges
   const state = changes.changes;
   const value = state.status === "ready" ? state.value : null;
   const name = value === null ? t("world.changesReleaseRelease", { release: changes.release })
-    : t("world.changesValueRelease", { value: value.from === null ? t("world.firstRelease") : value.from, release: changes.release });
+    : t("world.changesValueRelease", { value: value.from ?? t("world.firstRelease"), release: changes.release });
   return (
     <Panel flush name={name}>
       {state.status === "error"

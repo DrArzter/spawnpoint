@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { Notice as NoticeModel, SessionOverview, WorldRow, WorldsModel } from "../../core/models";
-import { formatDateTime, plural } from "../../lib/format";
+import { formatDateTime } from "../../lib/format";
 import { useMediaQuery } from "../../shell/hooks";
 import { GameIcon } from "./GameIcon";
 import { Address, Col, Empty, Ghost, Help, Indicator, Notice, Overflow, Page, Panel, Skeleton, SkeletonGroup, State, Table, Verb } from "./ui";

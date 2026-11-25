@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useFilter } from "../../components/ui/Filter";
 import type { AccessModel, CandidateRow, InvitationsModel, MemberRow, NotificationsModel, RoleChoice, RoleEditorModel, RolesModel, UsersModel } from "../../core/models";
 import { Icon, type IconName } from "../../icons";
-import { formatDateTime, plural } from "../../lib/format";
+import { formatDateTime } from "../../lib/format";
 import { permissionGroups, ROLE_ID_HINT, roleFormFields, protectedRoleName, rolePermissions } from "../../core/roles";
 import type { Game, LinkKind, Member, PermissionInfo, Role } from "../../model";
 import { ConfirmationDialog } from "./Dialogs";

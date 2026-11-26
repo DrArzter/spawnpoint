@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readdir } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { gameFootprints, gameCatalog } from "../src/control-plane/catalog.ts";
@@ -48,5 +48,13 @@ test("one module owns the records that name no game, and no Lambda source names 
   for (const name of (await readdir(source, { recursive: true })).filter((file) => file.endsWith(".ts"))) {
     const text = await readFile(new URL(name, source), "utf8");
     assert.doesNotMatch(text, literal, `${name} names a game; read it from the game's module instead (ADR-0088)`);
+  }
+});
+
+test("every manifest states whether its game may run on Spot (ADR-0102)", async () => {
+  for (const module of gameModules) {
+    const manifest = JSON.parse(await readFile(new URL(`${module.id}/game.json`, games), "utf8")) as { capabilities: Record<string, unknown> };
+    assert.equal(typeof manifest.capabilities.spot, "boolean", `${module.id}: capabilities.spot is not stated`);
+    assert.equal(module.spot, manifest.capabilities.spot);
   }
 });

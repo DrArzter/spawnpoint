@@ -202,6 +202,31 @@ wait "${save_rcon_pid}"
   diff -u <(printf 'save-off\nsave-all flush\nsave-on\n') "${fixture}/minecraft-save-commands"
 )
 
+# --- game_announce (ADR-0102): text to the players, never a command ---
+(
+  source "${GAMES}/minecraft/game.sh"
+  rcon() { printf '%s\n' "$*" >"${fixture}/announce-minecraft"; }
+  game_announce 'Server moves in 2 minutes'
+  [[ "$(cat "${fixture}/announce-minecraft")" == "say Server moves in 2 minutes" ]]
+)
+(
+  source "${GAMES}/factorio/game.sh"
+  factorio_rcon() { printf '%s\n' "$1" >"${fixture}/announce-factorio"; }
+  game_announce ' /c game.print(1)'
+  [[ "$(cat "${fixture}/announce-factorio")" == "c game.print(1)" ]]
+  if game_announce '//' 2>/dev/null; then exit 1; fi
+)
+(
+  source "${GAMES}/zomboid/game.sh"
+  zomboid_rcon() { printf '%s\n' "$1" >"${fixture}/announce-zomboid"; }
+  game_announce 'Server "moves" soon'
+  [[ "$(cat "${fixture}/announce-zomboid")" == "servermsg \"Server 'moves' soon\"" ]]
+)
+(
+  source "${GAMES}/valheim/game.sh"
+  if declare -F game_announce >/dev/null; then exit 1; fi
+)
+
 # --- dispatch: the catalog names the game, absence means minecraft ---
 cat >"${fixture}/catalog.json" <<'EOF'
 {"schema_version":1,"profile_source":{"repository":"https://example.invalid/profiles","commit":"0000000000000000000000000000000000000000"},"worlds":[{"id":"factorio","display_name":"Factorio test","profile_id":"factorio-vanilla","game":"factorio"}]}
@@ -829,6 +854,7 @@ listed_players=2" ]]
   [[ "$(game_console info)" == *'"servername":"Spawnpoint"'* ]]
   [[ "$(game_console save)" == "saved" ]]
   [[ "$(game_console 'announce Server stops "soon" in 5 minutes')" == "announced" ]]
+  game_announce 'Server moves in 2 minutes'
   grep -Fxq 'POST /v1/api/announce {"message":"Server stops \"soon\" in 5 minutes"}' "${fixture}/palworld-requests"
   [[ "$(game_console 'announce')" == "usage: announce <message>" ]]
   [[ "$(game_console 'shutdown 1')" == "unknown command: shutdown"* ]]

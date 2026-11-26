@@ -45,6 +45,8 @@
 #   game_console               one command an operator typed (ADR-0063), handed to
 #                              the game's own RCON as a single argument; print the reply
 #   game_save                  flush the running game to durable storage
+#   game_announce              optional: show one line of text to the players in the
+#                              game (an interruption notice, ADR-0102); never a command
 #   game_save_paths            print NUL-separated paths under the data dir to archive
 #   game_save_sentinel         succeed only if the data dir holds a real save
 #                              (both take the data dir and the world's name; the name
@@ -96,6 +98,7 @@ GAME_REQUIRED_HOOKS=(
 GAME_OPTIONAL_HOOKS=(
   game_ready
   game_console
+  game_announce
   game_save_excludes
   game_mod_data_paths
   game_prepare_runtime

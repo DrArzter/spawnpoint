@@ -102,6 +102,16 @@ game_console() {
   return $?
 }
 
+# Text without a leading slash is chat from the server. A leading slash would
+# run a command, so it is removed: announce shows text, never a command.
+game_announce() {
+  local text="$1"
+  text="${text#"${text%%[!/[:space:]]*}"}"
+  [[ -n "${text}" ]] || return 1
+  factorio_rcon "${text}" >/dev/null
+  return $?
+}
+
 # Milliseconds per tick from two readings of the tick counter. Factorio has no
 # server-side UPS query, so this asks Lua for game.tick — a console command that
 # disables achievements on the save, which is why it runs only when the caller

@@ -1045,3 +1045,50 @@ run "session_volume_sweeper_deletes_only_tagged_volumes_and_alarms_on_a_survivor
     error_message = "A volume that survives one sweep alarms."
   }
 }
+
+run "spot_is_off_by_default_and_creates_nothing" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      var.spot == "disabled",
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Initialize"].Parameters.spot.mode == "disabled",
+      length(aws_iam_service_linked_role.spot) == 0,
+    ])
+    error_message = "Spot is off unless SPAWNPOINT_SPOT turns it on, and off creates no service-linked role (ADR-0102)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Launch Host"].Parameters.TargetCapacitySpecification.DefaultTargetCapacityType == "on-demand"
+    error_message = "The on-demand launch stays the request it was."
+  }
+}
+
+run "spot_can_be_switched_on" {
+  command = plan
+
+  variables {
+    spot           = "enabled"
+    session_volume = "enabled"
+  }
+
+  assert {
+    condition = alltrue([
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Initialize"].Parameters.spot.mode == "enabled",
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Launch Spot Host"].Parameters.TargetCapacitySpecification.DefaultTargetCapacityType == "spot",
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Launch Spot Host"].Parameters.SpotOptions.AllocationStrategy == "price-capacity-optimized",
+      one(aws_iam_service_linked_role.spot[*].aws_service_name) == "spot.amazonaws.com",
+    ])
+    error_message = "The switch reaches the start workflow and creates the Spot service-linked role."
+  }
+}
+
+run "spot_accepts_only_its_two_values" {
+  command = plan
+
+  variables {
+    spot = "on"
+  }
+
+  expect_failures = [var.spot]
+}

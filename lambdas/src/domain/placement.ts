@@ -65,6 +65,14 @@ export type HostState = "provisioning" | "ready" | "draining" | "stopped" | "ter
  */
 export type HostProvenance = "configured" | "launched";
 
+/**
+ * How EC2 sells the host (ADR-0102). A `spot` host can be interrupted and
+ * cannot be stopped, so it takes only sessions that are `cold` and of a game
+ * that declares `capabilities.spot`. A record written before ADR-0102 has no
+ * market and is `on-demand`.
+ */
+export type HostMarket = "on-demand" | "spot";
+
 export type Reservation = Readonly<{
   sessionId: string;
   worldId: string;
@@ -78,6 +86,7 @@ export type HostRecord = Readonly<{
   hostId: string;
   shape: HostShape;
   provenance: HostProvenance;
+  market?: HostMarket;
   state: HostState;
   reservations: readonly Reservation[];
   drainingSinceEpochSeconds: number | null;
@@ -196,7 +205,8 @@ function slotFree(host: HostRecord, slot: number | undefined): boolean {
  * `slot` — zero, for a public world or a game that names its own ports — must
  * be free as well.
  */
-export function accepts(host: HostRecord, footprint: Footprint, worldId: string, slot?: number): boolean {
+export function accepts(host: HostRecord, footprint: Footprint, worldId: string, slot?: number, spotEligible = false): boolean {
+  if (host.market === "spot" && !spotEligible) return false;
   if (host.reservations.length >= MAX_SLOTS) return false;
   if (!slotFree(host, slot)) return false;
   if (host.state === "stopped") return host.keptWorldId === worldId && fitsWithin(remaining(host), footprint);
@@ -211,10 +221,16 @@ export function accepts(host: HostRecord, footprint: Footprint, worldId: string,
  * next one rather than reading the fleet again, which is what keeps many
  * simultaneous starts from queueing on one tight host.
  */
-export function placementCandidates(hosts: readonly HostRecord[], footprint: Footprint, worldId: string, slot?: number): readonly HostRecord[] {
+export function placementCandidates(
+  hosts: readonly HostRecord[],
+  footprint: Footprint,
+  worldId: string,
+  slot?: number,
+  spotEligible = false,
+): readonly HostRecord[] {
   requireFootprint(footprint);
   requireId("worldId", worldId);
-  const candidates = hosts.filter((host) => accepts(host, footprint, worldId, slot));
+  const candidates = hosts.filter((host) => accepts(host, footprint, worldId, slot, spotEligible));
   const kept = candidates.filter((host) => host.state === "stopped");
   const live = candidates
     .filter((host) => host.state !== "stopped")
@@ -238,14 +254,27 @@ export function place(hosts: readonly HostRecord[], footprint: Footprint, worldI
   return { kind: "launch", requirements: requirementsFor(footprint) };
 }
 
-export function newHost(hostId: string, shape: HostShape, nowEpochSeconds: number, provenance: HostProvenance = "configured"): HostRecord {
+/** Whether a session may run on a Spot host (ADR-0102): cold, and of a game that declares it. */
+export function spotEligible(policy: SessionPolicy, gameSpot: boolean): boolean {
+  return policy === "cold" && gameSpot;
+}
+
+export function newHost(
+  hostId: string,
+  shape: HostShape,
+  nowEpochSeconds: number,
+  provenance: HostProvenance = "configured",
+  market?: HostMarket,
+): HostRecord {
   requireId("hostId", hostId);
   requireEpoch("nowEpochSeconds", nowEpochSeconds);
+  if (market === "spot" && provenance !== "launched") throw new Error("only a launched host can be spot");
   return {
     schemaVersion: 1,
     hostId,
     shape,
     provenance,
+    ...(market === undefined ? {} : { market }),
     state: "provisioning",
     reservations: [],
     drainingSinceEpochSeconds: null,
@@ -276,7 +305,7 @@ export function markReady(host: HostRecord, nowEpochSeconds: number): HostRecord
 
 export function reserve(
   host: HostRecord,
-  request: Readonly<{ sessionId: string; worldId: string; footprint: Footprint; policy: SessionPolicy; slot?: number }>,
+  request: Readonly<{ sessionId: string; worldId: string; footprint: Footprint; policy: SessionPolicy; slot?: number; spotEligible?: boolean }>,
   nowEpochSeconds: number,
 ): HostRecord {
   requireId("sessionId", request.sessionId);
@@ -285,7 +314,7 @@ export function reserve(
   if (host.reservations.some((reservation) => reservation.sessionId === request.sessionId)) {
     throw new PlacementConflict(`session ${request.sessionId} is already placed on ${host.hostId}`);
   }
-  if (!accepts(host, request.footprint, request.worldId, request.slot)) {
+  if (!accepts(host, request.footprint, request.worldId, request.slot, request.spotEligible ?? false)) {
     const slotDescription = request.slot === undefined ? "" : ` on slot ${request.slot}`;
     throw new PlacementConflict(`host ${host.hostId} has no room for ${request.worldId}${slotDescription}`);
   }

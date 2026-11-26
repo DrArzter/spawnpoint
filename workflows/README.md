@@ -101,6 +101,24 @@ it when it shut down. Every failure in the release goes on to mark the session s
 verified, and a volume left behind is the sweeper's to delete. The forced-stop path of a failed start does not release
 the volume either; it becomes available when the drain terminates the host.
 
+## Spot launch
+
+[ADR-0102](../docs/adr/0102-spot-for-cold-launched-hosts-with-a-session-volume.md), step 3. The Terraform variable
+`spot` (repository variable `SPAWNPOINT_SPOT`, unset means `disabled`) is rendered into Start server V2. When it is
+`disabled`, every launch is the on-demand request it was before.
+
+The coordinator's `launch` answer carries `spot`: true when the session is `cold` and its game declares
+`capabilities.spot`. `Route Launch Market` sends the launch to `Launch Spot Host` only when `spot` and
+`session_volume` are both `enabled`, the request is `cold` and the answer says `spot`. That request is the on-demand one
+with `DefaultTargetCapacityType: spot`, `SpotOptions.AllocationStrategy: price-capacity-optimized` and no maximum price.
+An instant Fleet without capacity answers with errors and no instance; `Route Spot Answer` sends a capacity error
+(`InsufficientInstanceCapacity`, `UnfulfillableCapacity`, `InsufficientCapacity`), and a thrown one, to `Launch Host`
+on demand. Any other refusal fails the placement. Neither launch is retried, because neither carries a client token.
+
+The launched host is registered with `market` (`spot` or `on-demand`). A host record with `market: spot` takes only
+sessions that are `cold` and of a game that declares Spot, so a warm session or another game is never placed on it.
+A record without `market` is on demand.
+
 ## Stop server
 
 `stop-server.asl.json` is the host step of a session stop, under Stop server V2. It sends the `spawnpoint-stop-session`

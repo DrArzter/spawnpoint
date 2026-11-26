@@ -451,6 +451,15 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     }
   }
 
+  # Terraform tags every resource it creates, this role too. TagRole has no
+  # service-name key, so it is its own statement on the same one role.
+  statement {
+    sid       = "TagOnlyTheSpotServiceLinkedRole"
+    effect    = "Allow"
+    actions   = ["iam:TagRole", "iam:UntagRole"]
+    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot"]
+  }
+
   statement {
     sid       = "AttachOnlyLambdaLoggingPolicy"
     effect    = "Allow"

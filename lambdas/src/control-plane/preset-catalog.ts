@@ -1,3 +1,4 @@
+import type { Footprint } from "../domain/placement.ts";
 import type { BuildView } from "./release-builds.ts";
 
 export type PresetObservation = Readonly<{
@@ -16,6 +17,8 @@ export type PresetObservation = Readonly<{
   olderReleases?: readonly string[];
   buildAvailable?: boolean;
   build?: BuildView;
+  /** What a session of this preset is placed with, when it needs more than its game's (ADR-0054). */
+  footprint?: Footprint;
 }>;
 
 type ObjectValue = Record<string, unknown>;
@@ -63,6 +66,17 @@ function parseOlderReleases(value: unknown, releases: readonly string[], digest:
   return releases.filter((release) => older.includes(release));
 }
 
+// Absent is no footprint of its own; anything present must be a whole one.
+function parseFootprint(value: unknown): Footprint | undefined | null {
+  if (value === undefined) return undefined;
+  const footprint = object(value);
+  if (footprint === null || Object.keys(footprint).some((key) => key !== "memory_mib" && key !== "cores")) return null;
+  const { memory_mib: memoryMiB, cores } = footprint;
+  if (typeof memoryMiB !== "number" || !Number.isInteger(memoryMiB) || memoryMiB <= 0) return null;
+  if (typeof cores !== "number" || !(cores > 0)) return null;
+  return { memoryMiB, cores };
+}
+
 function parsePreset(candidate: unknown, source: CatalogSource, gameId: string, ids: ReadonlySet<string>): PresetObservation | null {
   const preset = object(candidate);
   if (preset === null || typeof preset.id !== "string" || !ID.test(preset.id) || ids.has(preset.id)) return null;
@@ -80,6 +94,8 @@ function parsePreset(candidate: unknown, source: CatalogSource, gameId: string, 
   if (status !== "ready" && latestRelease !== null && !releases.includes(latestRelease)) return null;
   const olderReleases = parseOlderReleases(preset.built_from, releases, preset.profile_digest);
   if (olderReleases === null) return null;
+  const footprint = parseFootprint(preset.footprint);
+  if (footprint === null) return null;
   return {
     id: preset.id,
     displayName: preset.display_name,
@@ -91,6 +107,7 @@ function parsePreset(candidate: unknown, source: CatalogSource, gameId: string, 
     latestRelease,
     buildStatus: status,
     olderReleases,
+    ...(footprint === undefined ? {} : { footprint }),
   };
 }
 

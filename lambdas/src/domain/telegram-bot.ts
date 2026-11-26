@@ -9,7 +9,7 @@
 // apart silently.
 
 import { WATCHDOG_TIMING } from "./watchdog-timing.ts";
-import type { HostMarket, SessionPolicy } from "./placement.ts";
+import type { Footprint, HostMarket, SessionPolicy } from "./placement.ts";
 import type { LifecycleRecord } from "./lifecycle.ts";
 
 function escapeHtml(value: string): string {
@@ -109,6 +109,8 @@ export function buildLifecycleStartInput(args: Readonly<{
   policy?: SessionPolicy;
   // ADR-0102: `on-demand` keeps the world off Spot. Left out, Spot where allowed.
   market?: HostMarket;
+  // ADR-0054: the world's preset footprint. Left out, the game's.
+  footprint?: Footprint;
   // ADR-0102: the same session again after its Spot host was reclaimed, on the
   // volume that holds its world ("" when none is left and S3 restores it).
   moveVolumeId?: string;
@@ -129,6 +131,7 @@ export function buildLifecycleStartInput(args: Readonly<{
     appCommit: args.appCommit ?? "main",
     ...(args.policy === undefined ? {} : { policy: args.policy }),
     ...(args.market === undefined ? {} : { market: args.market }),
+    ...(args.footprint === undefined ? {} : { footprint: args.footprint }),
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     ...(args.moveVolumeId === undefined ? {} : { move: true, moveVolumeId: args.moveVolumeId }),
     startTiming: POLL_TIMING,
@@ -181,6 +184,7 @@ export function buildPromotionInput(args: Readonly<{
   appCommit: string;
   policy: SessionPolicy;
   market?: HostMarket;
+  footprint?: Footprint;
   requestedBy: string;
   /** False stops a world that was stopped before its update again; by default it keeps running (ADR-0078). */
   startAfter?: boolean;
@@ -202,6 +206,7 @@ export function buildPromotionInput(args: Readonly<{
     appCommit: args.appCommit,
     policy: args.policy,
     ...(args.market === undefined ? {} : { market: args.market }),
+    ...(args.footprint === undefined ? {} : { footprint: args.footprint }),
     requestedBy: args.requestedBy,
     startAfter: args.startAfter !== false,
     leaseTtlSeconds: 1800,

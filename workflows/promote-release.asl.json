@@ -19,6 +19,7 @@
           "appCommit": "main",
           "policy": "cold",
           "market": "spot",
+          "footprint": null,
           "startAfter": true
         }
       },
@@ -206,6 +207,7 @@
           "appCommit.$": "$.request.appCommit",
           "policy.$": "$.request.policy",
           "market.$": "$.request.market",
+          "footprint.$": "$.request.footprint",
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "watchdogRegistrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
           "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
@@ -302,6 +304,7 @@
           "appCommit.$": "$.request.appCommit",
           "policy.$": "$.request.policy",
           "market.$": "$.request.market",
+          "footprint.$": "$.request.footprint",
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "watchdogRegistrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
           "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",

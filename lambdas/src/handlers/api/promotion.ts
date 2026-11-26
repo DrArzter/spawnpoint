@@ -58,9 +58,9 @@ export function promotionFeature({ sources, machines, worlds }: PromotionDepende
     const releaseUsability = record !== undefined && typeof parsed.release === "string" && /^\d+\.\d+$/.test(parsed.release)
       ? await checkReleaseUsable(sources.readReleaseState ?? noReleaseState, gameId, record.preset.id, parsed.release)
       : "usable";
+    const preset = presets.find((candidate) => candidate.gameId === gameId && candidate.id === record?.preset.id);
     const plan = planPromotion({
-      gameId, release: parsed.release, record, releaseUsability,
-      preset: presets.find((candidate) => candidate.gameId === gameId && candidate.id === record?.preset.id),
+      gameId, release: parsed.release, record, releaseUsability, preset,
       pointer, session, hasBackup,
       blockingOperations: operations.length,
       launchEnabled: process.env.SPAWNPOINT_LAUNCH === "enabled",
@@ -73,6 +73,7 @@ export function promotionFeature({ sources, machines, worlds }: PromotionDepende
       generationId: plan.record.currentGeneration.id, release: plan.release,
       policy: plan.record.warm === true ? "warm" : "cold",
       ...(plan.record.onDemand === true ? { market: "on-demand" as const } : {}),
+      ...(preset?.footprint === undefined ? {} : { footprint: preset.footprint }),
       requestedBy: `identity:${identity.id}`, startAfter,
     });
     return response(202, { result: "requested", operationId, release: plan.release, previousRelease: plan.previous, startAfter });

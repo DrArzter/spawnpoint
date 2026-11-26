@@ -1,3 +1,4 @@
+import type { Footprint } from "../domain/placement.ts";
 import { LifecycleConflict, beginMoving, type LifecycleRecord } from "../domain/lifecycle.ts";
 import { PlacementConflict, release } from "../domain/placement.ts";
 import type { LifecycleStore } from "../lifecycle/coordinator.ts";
@@ -30,6 +31,8 @@ export type SessionMove = Readonly<{
   worldName: string;
   /** Empty when the session has no volume left: the start restores from S3. */
   volumeId: string;
+  /** What the session was placed with, so the new host holds it as the old one did. */
+  footprint: Footprint;
 }>;
 
 /** The port that starts a move: Start server V2 for the same session. */
@@ -105,6 +108,7 @@ export async function moveHostSessions(
       gameId: origin?.gameId ?? reservation.worldId,
       worldName: origin?.worldName ?? reservation.worldId,
       volumeId,
+      footprint: reservation.footprint,
     });
     log.info("moving session", reservation.worldId, reservation.sessionId, volumeId || "from S3");
     worlds.push(reservation.worldId);

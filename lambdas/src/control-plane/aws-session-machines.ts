@@ -39,7 +39,7 @@ function configuredPlacement(): "single" | "shared" | "fleet" {
 }
 
 async function startSessionExecution(args: StartSessionRun): Promise<string> {
-  const { operationId, instanceId, requestedBy, serverId, gameId, worldId, worldName, placement, policy, market } = args;
+  const { operationId, instanceId, requestedBy, serverId, gameId, worldId, worldName, placement, policy, market, footprint } = args;
   requireWorldId(worldId);
   const started = await sfn.send(new StartExecutionCommand({
     stateMachineArn: machineArn("start"), name: operationId,
@@ -50,6 +50,7 @@ async function startSessionExecution(args: StartSessionRun): Promise<string> {
       appCommit: process.env.SPAWNPOINT_APP_COMMIT || "main",
       ...(policy === undefined ? {} : { policy }),
       ...(market === undefined ? {} : { market }),
+      ...(footprint === undefined ? {} : { footprint }),
     })),
   }));
   if (!started.executionArn) throw new Error("start execution did not return an ARN");

@@ -812,6 +812,22 @@ this order.
    Telegram). A client on the old pack cannot join, and the error does not say why.
 10. To undo the update, follow [Roll back a release](#roll-back-a-release). Do not promote the old release again.
 
+### A bigger host for one preset
+
+A fleet world's host is sized by its game's `footprint` in `server/games/<game>/game.json` (Minecraft: 7168 MiB, 1
+core). A heavy modpack can ask for more in its own `profiles/<id>/profile.json`, beside `display_name`:
+
+```json
+"footprint": { "memory_mib": 14336, "cores": 1.5 }
+```
+
+Both fields are required: `memory_mib` a whole number above 0, `cores` a number above 0. The catalog builder refuses
+any other shape. The next start of each world on that preset asks EC2 for the footprint plus the host's reserve (1024 MiB,
+0.5 core), with vCPUs rounded up. With the example that is 15 GiB and 2 vCPU, so a 2 vCPU / 16 GiB host such as
+`r8i-flex.large` qualifies. `cores: 2` would round up to 3 vCPU, and only a 4 vCPU host meets that.
+A promotion and a Spot move use the same footprint. Without the field, the world keeps its game's footprint. A
+configured world on the persistent host is not affected.
+
 ### Extra mods on a modpack preset
 
 ADR-0077. Add `"addons": "extras/addons.json"` to the profile's `mods` block, and pin each extra mod in that file.

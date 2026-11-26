@@ -37,6 +37,16 @@ test("parses a versioned per-game preset catalog", () => {
   }]);
 });
 
+// ADR-0054: a heavy preset names what its sessions need; a broken one is not read at all.
+test("a preset's own footprint is read, and a malformed one makes the catalog unreadable, as any broken preset does", () => {
+  const withFootprint = (footprint: unknown) => ({ ...document, presets: [{ ...document.presets[0], footprint }] });
+  assert.deepEqual(parsePresetCatalog(withFootprint({ memory_mib: 14336, cores: 2 }), "factorio")?.[0]?.footprint, { memoryMiB: 14336, cores: 2 });
+  assert.equal("footprint" in (parsePresetCatalog(document, "factorio")?.[0] ?? {}), false, "absent: the game's");
+  for (const broken of [{ memory_mib: 0, cores: 1 }, { memory_mib: 1.5, cores: 1 }, { memory_mib: 4096 }, { memory_mib: 4096, cores: 1, disk: 1 }, "big"]) {
+    assert.equal(parsePresetCatalog(withFootprint(broken), "factorio"), null, JSON.stringify(broken));
+  }
+});
+
 test("uses each profile revision rather than the repository catalog revision", () => {
   const commit = "a".repeat(40);
   const preset = { ...document.presets[0], source_commit: commit };

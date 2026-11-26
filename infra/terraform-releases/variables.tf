@@ -15,6 +15,9 @@ variable "aws_profile" {
   default     = "spawnpoint"
 }
 
+# Production sets objects-v1 from SPAWNPOINT_RELEASE_STORAGE_LAYOUT (2026-11-26), after the extra-keys check of every
+# legacy release folder and a clean reconciler report. The deploy applies this root only when a commit changes one
+# of its .tf files.
 variable "release_storage_layout" {
   description = "Storage layout the release builder writes: legacy (per-release keys) or objects-v1 (content-addressed, ADR-0080). Keep legacy until the readers are deployed."
   type        = string

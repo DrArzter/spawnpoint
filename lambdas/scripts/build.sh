@@ -6,7 +6,7 @@ lambda_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 output_dir="${lambda_dir}/dist/lifecycle-coordinator"
 archive="${lambda_dir}/dist/lifecycle-coordinator.zip"
 
-mkdir -p "${output_dir}" "${lambda_dir}/dist/bot" "${lambda_dir}/dist/notifier" "${lambda_dir}/dist/world-lifecycle" "${lambda_dir}/dist/release-state" "${lambda_dir}/dist/control-plane-projector" "${lambda_dir}/dist/control-plane-subscriptions" "${lambda_dir}/dist/fleet-sweeper" "${lambda_dir}/dist/session-volume-sweeper" "${lambda_dir}/dist/backup-retention" "${lambda_dir}/dist/release-reconciler" "${lambda_dir}/dist/release-retirement" "${lambda_dir}/dist/release-writer" "${lambda_dir}/dist/assistant-worker"
+mkdir -p "${output_dir}" "${lambda_dir}/dist/bot" "${lambda_dir}/dist/notifier" "${lambda_dir}/dist/world-lifecycle" "${lambda_dir}/dist/release-state" "${lambda_dir}/dist/control-plane-projector" "${lambda_dir}/dist/control-plane-subscriptions" "${lambda_dir}/dist/fleet-sweeper" "${lambda_dir}/dist/session-volume-sweeper" "${lambda_dir}/dist/spot-interruption" "${lambda_dir}/dist/backup-retention" "${lambda_dir}/dist/release-reconciler" "${lambda_dir}/dist/release-retirement" "${lambda_dir}/dist/release-writer" "${lambda_dir}/dist/assistant-worker"
 "${lambda_dir}/node_modules/.bin/esbuild" \
   "${lambda_dir}/src/handlers/lifecycle-coordinator.ts" \
   --bundle \
@@ -72,6 +72,15 @@ mkdir -p "${lambda_dir}/dist/access-api"
   --format=cjs \
   --external:@aws-sdk/* \
   --outfile="${lambda_dir}/dist/session-volume-sweeper/index.cjs"
+
+"${lambda_dir}/node_modules/.bin/esbuild" \
+  "${lambda_dir}/src/handlers/spot-interruption.ts" \
+  --bundle \
+  --platform=node \
+  --target=node22 \
+  --format=cjs \
+  --external:@aws-sdk/* \
+  --outfile="${lambda_dir}/dist/spot-interruption/index.cjs"
 
 "${lambda_dir}/node_modules/.bin/esbuild" \
   "${lambda_dir}/src/handlers/backup-retention.ts" \
@@ -147,7 +156,7 @@ rm -f "${lambda_dir}/dist/bot/index.mjs"
   --external:@aws-sdk/* \
   --outfile="${lambda_dir}/dist/notifier/index.mjs"
 
-printf 'result=built\narchive=%s\naccess_api=%s\nworld_lifecycle=%s\nrelease_state=%s\ncontrol_plane_projector=%s\nfleet_sweeper=%s\nsession_volume_sweeper=%s\nbackup_retention=%s\nrelease_reconciler=%s\nrelease_retirement=%s\nrelease_writer=%s\ncontrol_plane_subscriptions=%s\nassistant_worker=%s\nbot=%s\nnotifier=%s\n' \
+printf 'result=built\narchive=%s\naccess_api=%s\nworld_lifecycle=%s\nrelease_state=%s\ncontrol_plane_projector=%s\nfleet_sweeper=%s\nsession_volume_sweeper=%s\nspot_interruption=%s\nbackup_retention=%s\nrelease_reconciler=%s\nrelease_retirement=%s\nrelease_writer=%s\ncontrol_plane_subscriptions=%s\nassistant_worker=%s\nbot=%s\nnotifier=%s\n' \
   "${archive}" \
   "${lambda_dir}/dist/access-api/index.cjs" \
   "${lambda_dir}/dist/world-lifecycle/index.cjs" \
@@ -155,6 +164,7 @@ printf 'result=built\narchive=%s\naccess_api=%s\nworld_lifecycle=%s\nrelease_sta
   "${lambda_dir}/dist/control-plane-projector/index.cjs" \
   "${lambda_dir}/dist/fleet-sweeper/index.cjs" \
   "${lambda_dir}/dist/session-volume-sweeper/index.cjs" \
+  "${lambda_dir}/dist/spot-interruption/index.cjs" \
   "${lambda_dir}/dist/backup-retention/index.cjs" \
   "${lambda_dir}/dist/release-reconciler/index.cjs" \
   "${lambda_dir}/dist/release-retirement/index.cjs" \

@@ -176,6 +176,14 @@ mock_provider "aws" {
     target = data.aws_iam_policy_document.session_volume_sweeper_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
+  override_data {
+    target = data.aws_iam_policy_document.spot_interruption_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+  override_data {
+    target = data.aws_iam_policy_document.spot_interruption
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
 
   override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_watchdog_assume
@@ -1054,6 +1062,8 @@ run "spot_is_off_by_default_and_creates_nothing" {
       var.spot == "disabled",
       jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Initialize"].Parameters.spot.mode == "disabled",
       length(aws_iam_service_linked_role.spot) == 0,
+      length(aws_lambda_function.spot_interruption) == 0,
+      length(aws_cloudwatch_event_rule.spot_interruption) == 0,
     ])
     error_message = "Spot is off unless SPAWNPOINT_SPOT turns it on, and off creates no service-linked role (ADR-0102)."
   }
@@ -1078,6 +1088,9 @@ run "spot_can_be_switched_on" {
       jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Launch Spot Host"].Parameters.TargetCapacitySpecification.DefaultTargetCapacityType == "spot",
       jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Launch Spot Host"].Parameters.SpotOptions.AllocationStrategy == "price-capacity-optimized",
       one(aws_iam_service_linked_role.spot[*].aws_service_name) == "spot.amazonaws.com",
+      length(aws_lambda_function.spot_interruption) == 1,
+      toset(keys(aws_cloudwatch_event_rule.spot_interruption)) == toset(["warning", "terminated", "saved"]),
+      jsondecode(aws_cloudwatch_event_rule.spot_interruption["terminated"].event_pattern).detail.state == ["terminated"],
     ])
     error_message = "The switch reaches the start workflow and creates the Spot service-linked role."
   }

@@ -84,7 +84,8 @@ function sessionView(serverId: string, record: LifecycleRecord | null): WorldSes
   return {
     serverId,
     desiredState: record.desiredState,
-    observedState: record.observedState,
+    // The panel learns `moving` in ADR-0102 step 6; until then a move reads as the start it ends in.
+    observedState: record.observedState === "moving" ? "starting" : record.observedState,
     activeSessionId: record.activeSessionId,
     activeWorldId: record.activeWorldId ?? null,
     // Named field by field: the watchdog's execution and command ids are its own.

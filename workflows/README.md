@@ -119,6 +119,28 @@ The launched host is registered with `market` (`spot` or `on-demand`). A host re
 sessions that are `cold` and of a game that declares Spot, so a warm session or another game is never placed on it.
 A record without `market` is on demand.
 
+## Spot interruption
+
+[ADR-0102](../docs/adr/0102-spot-for-cold-launched-hosts-with-a-session-volume.md), step 5. While `spot` is `enabled`,
+three EventBridge rules send the `spawnpoint-spot-interruption` Lambda the EC2 interruption warning, the EC2
+`terminated` state change and the host's own `Sessions saved for interruption` report. It acts only on a host that has
+a `launched` record in placement.
+
+- **Warning.** Each `ready` session on the host becomes `moving`. A session that is still starting or already stopping
+  is left to its own workflow.
+- **Terminated.** Each `moving` session leaves the dead host's reservation, and Start server V2 runs again for the
+  **same session id** with `move: true` and `moveVolumeId`. The game and world name come from the input of the
+  session's watchdog. `Route Moved Session Volume` adopts that volume instead of creating one, waits while it is still
+  `in-use`, and refuses it when it is not in the new host's zone. A session whose volume is gone gets a new one and
+  restores from S3, as any start does.
+- **Report.** Only logged. The host's word is not a command.
+
+Every launched host is in the one public subnet, so the new host is in the volume's zone. There is no snapshot path to
+another zone; a move that cannot start fails into the start's compensation, and the next start restores the last S3
+archive. The idle watchdog whose host is gone reads the record first: it reconciles only a session that is not
+`moving` and that it still owns, and otherwise ends with `session_moved`. Telegram says `[MOVING]` when the move starts
+and `[BACK]` with the address when it is ready.
+
 ## Stop server
 
 `stop-server.asl.json` is the host step of a session stop, under Stop server V2. It sends the `spawnpoint-stop-session`

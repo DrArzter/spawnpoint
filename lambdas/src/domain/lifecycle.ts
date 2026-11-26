@@ -1,5 +1,10 @@
 export type DesiredServerState = "stopped" | "running";
-export type ObservedServerState = "stopped" | "starting" | "ready" | "stopping" | "unknown";
+/**
+ * `moving`: the session's Spot host is being reclaimed (ADR-0102). The session
+ * keeps its id, its world and its session volume, and starts again on a new
+ * host; nothing may stop it meanwhile.
+ */
+export type ObservedServerState = "stopped" | "starting" | "ready" | "stopping" | "moving" | "unknown";
 
 export type Lease = Readonly<{
   ownerOperationId: string;
@@ -211,6 +216,21 @@ export function beginSession(
   ) {
     return record;
   }
+  // A moving session starts again under its own id on a new host (ADR-0102).
+  if (
+    record.activeSessionId === sessionId &&
+    record.activeWorldId === worldId &&
+    record.desiredState === "running" &&
+    record.observedState === "moving"
+  ) {
+    return {
+      ...record,
+      observedState: "starting",
+      readyAtEpochSeconds: null,
+      idle: null,
+      updatedAtEpochSeconds: nowEpochSeconds,
+    };
+  }
   if (
     record.desiredState !== "stopped" ||
     record.observedState !== "stopped" ||
@@ -316,6 +336,8 @@ export function recordPlayerObservation(
   if (playersOnline !== null && (!Number.isSafeInteger(playersOnline) || playersOnline < 0)) {
     throw new Error("playersOnline must be a non-negative integer or null for a failed read");
   }
+  // A moving session has no host to observe; its watchdog's reading counts for nothing.
+  if (record.observedState === "moving") return record;
   if (
     record.desiredState !== "running" ||
     record.observedState !== "ready" ||
@@ -420,4 +442,24 @@ export function markStopped(
     idle: null,
     updatedAtEpochSeconds: nowEpochSeconds,
   };
+}
+
+/**
+ * The session's Spot host has its interruption warning (ADR-0102). No lease:
+ * the event is EC2's, not an operation's, and only a ready session moves. A
+ * session still starting fails and compensates on its own; one stopping is
+ * already on its way to S3.
+ */
+export function beginMoving(
+  record: LifecycleRecord,
+  sessionId: string,
+  nowEpochSeconds: number,
+): LifecycleRecord {
+  requireEpoch("nowEpochSeconds", nowEpochSeconds);
+  requireSession(record, sessionId);
+  if (record.observedState === "moving" && record.desiredState === "running") return record;
+  if (record.desiredState !== "running" || record.observedState !== "ready") {
+    throw new LifecycleConflict("only a ready session can move");
+  }
+  return { ...record, observedState: "moving", updatedAtEpochSeconds: nowEpochSeconds };
 }

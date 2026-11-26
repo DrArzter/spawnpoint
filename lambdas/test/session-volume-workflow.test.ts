@@ -110,7 +110,7 @@ test("the volume is created tagged in the host's zone, attached by slot, and han
 
   const device = state(start, "Attach Session Volume").Parameters!["Device.$"] as string;
   assert.match(device, /^States\.ArrayGetItem\(States\.Array\('\/dev\/sdf', .*'\/dev\/sdz'\), \$\.request\.placed\.slot\)$/);
-  assert.equal(state(start, "Session Volume Available").Choices![0]!.Next, "Attach Session Volume");
+  assert.equal(state(start, "Session Volume Available").Choices![1]!.Next, "Attach Session Volume");
   assert.equal(state(start, "Session Volume Attached").Choices![0]!.Next, "Adopt Session Volume");
   assert.equal(state(start, "Adopt Session Volume").InputPath, "$.sessionVolume.created.volumeId");
   assert.equal(state(start, "Adopt Session Volume").ResultPath, "$.sessionVolume.volumeId");
@@ -123,6 +123,8 @@ test("a volume that cannot be made ready fails the start into its compensation",
   const start = await load("start-server-v2.asl.json.tftpl", { ...TAGS, session_volume: "enabled", session_volume_size_gib: "30" });
   const chain = [
     "Describe Session Host Zone",
+    "Route Moved Session Volume",
+    "Adopt Moved Session Volume",
     "Create Session Volume",
     "Wait Before Created Volume Poll",
     "Describe Created Session Volume",

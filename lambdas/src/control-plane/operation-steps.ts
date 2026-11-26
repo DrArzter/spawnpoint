@@ -104,7 +104,7 @@ const START: Table = {
   "start.launching_host": ["Route Launch Market", "Launch Spot Host", "Route Spot Answer", "Spot Launch Refused", "Adopt Spot Host", "Launch Host", "Describe Launched Host Shape", "Register Launched Host", "Reserve On Launched Host"],
   // ADR-0102: the session volume is part of getting the server ready to start.
   "start.starting_server": [
-    "Route Session Volume", "Describe Session Host Zone", "Create Session Volume", "Wait Before Created Volume Poll",
+    "Route Session Volume", "Describe Session Host Zone", "Route Moved Session Volume", "Adopt Moved Session Volume", "Create Session Volume", "Wait Before Created Volume Poll",
     "Describe Created Session Volume", "Session Volume Available", "Count Created Volume Poll",
     "Created Volume Poll Limit Reached", "Attach Session Volume", "Wait Before Attached Volume Poll",
     "Describe Attached Session Volume", "Session Volume Attached", "Count Attached Volume Poll",

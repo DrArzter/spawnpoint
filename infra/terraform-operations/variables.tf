@@ -108,3 +108,14 @@ variable "session_volume_size_gib" {
     error_message = "session_volume_size_gib must be a whole number from 1 to 1024."
   }
 }
+
+variable "spot" {
+  description = "Whether a launched host whose sessions are all cold, of games that declare capabilities.spot, is asked for on Spot (ADR-0102, step 3). It takes effect only while session_volume is enabled. `disabled` launches exactly as before. CI sets it from the repository variable SPAWNPOINT_SPOT; an unset variable means disabled."
+  type        = string
+  default     = "disabled"
+
+  validation {
+    condition     = contains(["disabled", "enabled"], var.spot)
+    error_message = "spot must be disabled or enabled."
+  }
+}

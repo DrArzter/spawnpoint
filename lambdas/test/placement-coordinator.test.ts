@@ -89,7 +89,7 @@ test("with nothing up, placing asks for a launch; with a host up, it reserves a 
   const fleet = new MemoryFleet();
   const coordinate = coordinator(fleet);
   const nothing = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "arrived-later", serverId: "minecraft" });
-  assert.deepEqual(nothing.placement, { kind: "launch", requirements: { memoryMiB: 7 * 1024 + SYSTEM_RESERVE_MIB, vcpu: 2 } });
+  assert.deepEqual(nothing.placement, { kind: "launch", requirements: { memoryMiB: 7 * 1024 + SYSTEM_RESERVE_MIB, vcpu: 2 }, spot: true });
 
   await coordinate({ action: "registerHost", hostId: "i-1", shape: SMALL, ready: true });
   const placed = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world", serverId: "minecraft" });
@@ -195,7 +195,7 @@ test("fleet-only placement ignores a configured host and launches from zero", as
     serverId: "factorio",
     eligibleProvenance: "launched",
   });
-  assert.deepEqual(portable.placement, { kind: "launch", requirements: { memoryMiB: 3 * 1024, vcpu: 1 } });
+  assert.deepEqual(portable.placement, { kind: "launch", requirements: { memoryMiB: 3 * 1024, vcpu: 1 }, spot: true });
 
   await coordinate({ action: "registerHost", hostId: "i-fleet", shape: LARGE, ready: true, provenance: "launched" });
   const reused = await coordinate({
@@ -252,4 +252,46 @@ test("a warm placement keeps its launched host stopped for the world; a cold one
 
   await assert.rejects(coordinate({ action: "placeSession", sessionId: "s4", worldId: "world-d", serverId: "minecraft", policy: "hot" as never }), /policy must be cold or warm/);
   await assert.rejects(coordinate({ action: "reserveOnHost", hostId: "i-cold", sessionId: "s5", worldId: "world-e", serverId: "minecraft", policy: "" as never }), /policy must be cold or warm/);
+});
+
+test("a launch says whether the session may run on Spot: cold, and of a game that declares it (ADR-0102)", async () => {
+  const coordinate = coordinator(new MemoryFleet());
+  const cold = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "w1", gameId: "minecraft", policy: "cold" });
+  assert.equal(cold.placement?.kind === "launch" && cold.placement.spot, true);
+  const warm = await coordinate({ action: "placeSession", sessionId: "s2", worldId: "w2", gameId: "minecraft", policy: "warm" });
+  assert.equal(warm.placement?.kind === "launch" && warm.placement.spot, false);
+  const undeclared = await coordinate({ action: "placeSession", sessionId: "s3", worldId: "w3", gameId: "no-spot-game", footprint: VANILLA });
+  assert.equal(undeclared.placement?.kind === "launch" && undeclared.placement.spot, false);
+});
+
+test("a Spot host takes only Spot-eligible sessions and records its market", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  const registered = await coordinate({ action: "registerHost", hostId: "i-spot", shape: LARGE, ready: true, provenance: "launched", market: "spot" });
+  assert.equal(registered.host?.record.market, "spot");
+
+  const warm = await coordinate({ action: "placeSession", sessionId: "s-warm", worldId: "w1", gameId: "minecraft", policy: "warm", footprint: VANILLA });
+  assert.equal(warm.placement?.kind, "launch", "a warm session needs a host that can stop");
+  const undeclared = await coordinate({ action: "placeSession", sessionId: "s-other", worldId: "w2", gameId: "no-spot-game", footprint: VANILLA });
+  assert.equal(undeclared.placement?.kind, "launch", "a game without capabilities.spot never lands on Spot");
+  await assert.rejects(
+    coordinate({ action: "reserveOnHost", hostId: "i-spot", sessionId: "s-warm", worldId: "w1", gameId: "minecraft", policy: "warm", footprint: VANILLA }),
+    PlacementConflict,
+  );
+
+  const cold = await coordinate({ action: "placeSession", sessionId: "s-cold", worldId: "w3", gameId: "minecraft", policy: "cold", footprint: VANILLA });
+  assert.deepEqual(cold.placement, { kind: "reuse", hostId: "i-spot", slot: 0 });
+});
+
+test("a host with no market is on demand and takes any session; an unknown market is refused", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  const plain = await coordinate({ action: "registerHost", hostId: "i-1", shape: LARGE, ready: true, provenance: "launched" });
+  assert.equal(plain.host?.record.market, undefined, "off, the record is written as before");
+  const warm = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "w1", gameId: "minecraft", policy: "warm", footprint: VANILLA });
+  assert.equal(warm.placement?.kind, "reuse");
+  await assert.rejects(
+    coordinate({ action: "registerHost", hostId: "i-2", shape: LARGE, provenance: "launched", market: "reserved" as never }),
+    /market must be on-demand or spot/,
+  );
 });

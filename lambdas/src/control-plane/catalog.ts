@@ -12,6 +12,11 @@ export const gameFootprints: Readonly<Record<string, Footprint>> = Object.fromEn
   gameModules.map((module) => [module.id, module.footprint]),
 );
 
+// Which games may run on a Spot host (ADR-0102), from `capabilities.spot`.
+export const gameSpot: Readonly<Record<string, boolean>> = Object.fromEntries(
+  gameModules.map((module) => [module.id, module.spot]),
+);
+
 // The instance families a launch may draw from, as EC2 Fleet AllowedInstanceTypes
 // patterns: a filter, never a ranking. ADR-0032 chose x86 for single-thread
 // speed and the pool the presets were proven on; burstable and Graviton are out.

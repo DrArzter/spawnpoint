@@ -7,7 +7,7 @@ import { ENDED, mappedStates, STEP_LABELS, stepOfState, WORKFLOW_FILES, workflow
 // A template's placeholders become plain strings; only the state names matter.
 function statesOf(workflow: WorkflowName): string[] {
   const text = readFileSync(new URL(`../../workflows/${WORKFLOW_FILES[workflow]}`, import.meta.url), "utf8")
-    .replace("${allowed_instance_types}", "[]")
+    .replaceAll("${allowed_instance_types}", "[]")
     .replace(/\$\{[^}]*\}/g, "x");
   return Object.keys((JSON.parse(text) as { States: Record<string, unknown> }).States);
 }

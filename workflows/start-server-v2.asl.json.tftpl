@@ -25,6 +25,9 @@
           "attachPolls": { "count": 0 },
           "unmountPolls": { "count": 0 },
           "detachPolls": { "count": 0 }
+        },
+        "spot": {
+          "mode": "${spot}"
         }
       },
       "Next": "Apply Request Defaults"
@@ -35,7 +38,8 @@
       "Parameters": {
         "request.$": "States.JsonMerge($.defaults, $.request, false)",
         "coordination.$": "$.coordination",
-        "sessionVolume.$": "$.sessionVolume"
+        "sessionVolume.$": "$.sessionVolume",
+        "spot.$": "$.spot"
       },
       "Next": "Initialize Lifecycle"
     },
@@ -343,10 +347,131 @@
             { "Variable": "$.placement.placement.kind", "StringEquals": "launch" },
             { "Variable": "$.request.launch", "StringEquals": "enabled" }
           ],
-          "Next": "Launch Host"
+          "Next": "Route Launch Market"
         }
       ],
       "Default": "No Host Has Room"
+    },
+    "Route Launch Market": {
+      "Type": "Choice",
+      "Comment": "ADR-0102, step 3: a host whose session may lose it (cold, of a game that declares spot) is asked for on Spot, but only with the session volume on, because a Spot host without one has no local copy to save to. Off, or any other session, launches on demand exactly as before.",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.spot.mode", "StringEquals": "enabled" },
+            { "Variable": "$.sessionVolume.mode", "StringEquals": "enabled" },
+            { "Variable": "$.request.policy", "StringEquals": "cold" },
+            { "Variable": "$.placement.placement.spot", "BooleanEquals": true }
+          ],
+          "Next": "Launch Spot Host"
+        }
+      ],
+      "Default": "Launch Host"
+    },
+    "Launch Spot Host": {
+      "Type": "Task",
+      "Comment": "ADR-0102: the on-demand request with Spot as the target, price-capacity-optimized and no maximum price. An instant Fleet that finds no capacity answers with errors and no instance rather than failing.",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:createFleet",
+      "Parameters": {
+        "Type": "instant",
+        "LaunchTemplateConfigs": [
+          {
+            "LaunchTemplateSpecification": {
+              "LaunchTemplateName": "${fleet_launch_template_name}",
+              "Version": "$Latest"
+            },
+            "Overrides": [
+              {
+                "InstanceRequirements": {
+                  "MemoryMiB": { "Min.$": "$.placement.placement.requirements.memoryMiB" },
+                  "VCpuCount": { "Min.$": "$.placement.placement.requirements.vcpu" },
+                  "AllowedInstanceTypes": ${allowed_instance_types},
+                  "BurstablePerformance": "excluded"
+                }
+              }
+            ]
+          }
+        ],
+        "TargetCapacitySpecification": {
+          "TotalTargetCapacity": 1,
+          "DefaultTargetCapacityType": "spot"
+        },
+        "SpotOptions": {
+          "AllocationStrategy": "price-capacity-optimized"
+        },
+        "TagSpecifications": [
+          {
+            "ResourceType": "instance",
+            "Tags": [
+              { "Key": "AppCommit", "Value.$": "$.request.appCommit" },
+              { "Key": "LaunchedFor", "Value.$": "$.request.sessionId" }
+            ]
+          }
+        ]
+      },
+      "ResultPath": "$.spotLaunch",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Ec2.InsufficientInstanceCapacityException",
+            "Ec2.InsufficientInstanceCapacity",
+            "Ec2.UnfulfillableCapacityException",
+            "Ec2.UnfulfillableCapacity"
+          ],
+          "ResultPath": "$.spotFailure",
+          "Next": "Launch Host"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.placementFailure",
+          "Next": "Placement Unavailable"
+        }
+      ],
+      "Next": "Route Spot Answer"
+    },
+    "Route Spot Answer": {
+      "Type": "Choice",
+      "Comment": "An instance means Spot answered. No instance for want of capacity falls back to on demand, which ADR-0102 accepts knowingly: one instance an evening, against no server that evening. Any other refusal fails the placement.",
+      "Choices": [
+        {
+          "Variable": "$.spotLaunch.Instances[0].InstanceIds[0]",
+          "IsPresent": true,
+          "Next": "Adopt Spot Host"
+        },
+        {
+          "Variable": "$.spotLaunch.Errors[0].ErrorCode",
+          "IsPresent": false,
+          "Next": "Spot Launch Refused"
+        },
+        {
+          "Or": [
+            { "Variable": "$.spotLaunch.Errors[0].ErrorCode", "StringEquals": "InsufficientInstanceCapacity" },
+            { "Variable": "$.spotLaunch.Errors[0].ErrorCode", "StringEquals": "UnfulfillableCapacity" },
+            { "Variable": "$.spotLaunch.Errors[0].ErrorCode", "StringEquals": "InsufficientCapacity" }
+          ],
+          "Next": "Launch Host"
+        }
+      ],
+      "Default": "Spot Launch Refused"
+    },
+    "Spot Launch Refused": {
+      "Type": "Pass",
+      "Parameters": {
+        "Error": "SpotLaunchRefused",
+        "Cause.$": "States.JsonToString($.spotLaunch)"
+      },
+      "ResultPath": "$.placementFailure",
+      "Next": "Placement Unavailable"
+    },
+    "Adopt Spot Host": {
+      "Type": "Pass",
+      "Parameters": {
+        "instanceId.$": "$.spotLaunch.Instances[0].InstanceIds[0]",
+        "instanceType.$": "$.spotLaunch.Instances[0].InstanceType",
+        "market": "spot"
+      },
+      "ResultPath": "$.launched",
+      "Next": "Describe Launched Host Shape"
     },
     "Launch Host": {
       "Type": "Task",
@@ -392,7 +517,8 @@
       },
       "ResultSelector": {
         "instanceId.$": "$.Instances[0].InstanceIds[0]",
-        "instanceType.$": "$.Instances[0].InstanceType"
+        "instanceType.$": "$.Instances[0].InstanceType",
+        "market": "on-demand"
       },
       "ResultPath": "$.launched",
       "Catch": [
@@ -445,6 +571,7 @@
           "hostId.$": "$.launched.instanceId",
           "ready": true,
           "provenance": "launched",
+          "market.$": "$.launched.market",
           "shape": {
             "instanceType.$": "$.launched.instanceType",
             "memoryMiB.$": "$.launched.shape.memoryMiB",

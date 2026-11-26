@@ -176,7 +176,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
   name     = "spawnpoint-start-server-v2"
   role_arn = aws_iam_role.lifecycle_v2_start.arn
   type     = "STANDARD"
-  definition = templatefile("${path.module}/../../workflows/start-server-v2.asl.json.tftpl", merge(local.session_volume_template_vars, {
+  definition = templatefile("${path.module}/../../workflows/start-server-v2.asl.json.tftpl", merge(local.session_volume_template_vars, local.spot_template_vars, {
     coordinator_function_arn   = local.lifecycle_v2_coordinator_arn
     release_state_function_arn = local.release_state_function_arn
     start_v1_state_machine_arn = local.start_state_machine_arn
@@ -191,6 +191,9 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
     Name    = "spawnpoint-start-server-v2"
     Purpose = "fenced-session-start"
   }
+
+  # A Spot request needs the service-linked role to exist first.
+  depends_on = [aws_iam_service_linked_role.spot]
 }
 
 data "aws_iam_policy_document" "lifecycle_v2_stop_assume" {

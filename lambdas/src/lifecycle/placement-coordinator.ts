@@ -3,7 +3,7 @@
 // revision. Two starts that race for the last gigabyte both compute a fit;
 // one write lands; the other takes its next candidate.
 
-import { gameFootprints, worldNeedsSlotZero } from "../control-plane/catalog.ts";
+import { gameFootprints, gameSpot, worldNeedsSlotZero } from "../control-plane/catalog.ts";
 import {
   PlacementConflict,
   drainDecision,
@@ -18,6 +18,8 @@ import {
   reserve,
   type DrainDecision,
   type Footprint,
+  spotEligible,
+  type HostMarket,
   type HostProvenance,
   type HostRecord,
   type HostShape,
@@ -54,7 +56,7 @@ type SessionRequest = Readonly<{
 }>;
 
 export type PlacementInput =
-  | Readonly<{ action: "registerHost"; hostId: string; shape: HostShape; ready?: boolean; provenance?: HostProvenance }>
+  | Readonly<{ action: "registerHost"; hostId: string; shape: HostShape; ready?: boolean; provenance?: HostProvenance; market?: HostMarket }>
   | Readonly<{ action: "markHostReady"; hostId: string }>
   | Readonly<{ action: "getHost"; hostId: string }>
   | Readonly<{ action: "listHosts" }>
@@ -67,7 +69,8 @@ export type PlacementInput =
 
 export type PlacementOutcome =
   | Readonly<{ kind: "reuse"; hostId: string; slot: number }>
-  | Readonly<{ kind: "launch"; requirements: LaunchRequirements }>;
+  /** `spot`: the session may run on a Spot host; the start workflow decides whether to ask for one. */
+  | Readonly<{ kind: "launch"; requirements: LaunchRequirements; spot: boolean }>;
 
 export type PlacementOutput = Readonly<{
   /** `null` is an answer: the host in question does not exist. */
@@ -92,6 +95,16 @@ const MAX_CAS_ATTEMPTS = 5;
 function requireId(name: string, value: unknown): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must not be empty`);
   return value;
+}
+
+function requireMarket(value: unknown): void {
+  if (value !== undefined && value !== "on-demand" && value !== "spot") throw new Error("market must be on-demand or spot");
+}
+
+// A Spot host takes a session only when the session may lose its host (ADR-0102).
+function sessionSpotEligible(request: SessionRequest): boolean {
+  const gameId = requestGame(request);
+  return spotEligible(request.policy ?? "cold", gameId !== undefined && gameSpot[gameId] === true);
 }
 
 // A world's warm choice arrives from the start input; anything else is refused, never read as cold.
@@ -168,6 +181,7 @@ async function reserveOnFirst(
       worldId: request.worldId,
       footprint,
       policy: request.policy ?? "cold",
+      spotEligible: sessionSpotEligible(request),
       ...(slot === undefined ? {} : { slot }),
     }, context.nowEpochSeconds());
     if (await context.store.compareAndSetHost(candidate.record.hostId, candidate.revision, record)) {
@@ -184,6 +198,7 @@ async function registerHost(
   input: Extract<PlacementInput, { action: "registerHost" }>,
 ): Promise<PlacementOutput> {
   const hostId = requireId("hostId", input.hostId);
+  requireMarket(input.market);
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
     const current = await context.store.readHost(hostId);
     if (current !== null) {
@@ -192,7 +207,7 @@ async function registerHost(
         : current;
       return { host };
     }
-    let record = newHost(hostId, input.shape, context.nowEpochSeconds(), input.provenance ?? "configured");
+    let record = newHost(hostId, input.shape, context.nowEpochSeconds(), input.provenance ?? "configured", input.market);
     if (input.ready) record = markReady(record, context.nowEpochSeconds());
     if (await context.store.createHost(record)) return { host: { revision: 1, record } };
   }
@@ -210,6 +225,7 @@ function rankedCandidates(
     footprint,
     request.worldId,
     pinnedSlot(request),
+    sessionSpotEligible(request),
   );
   return ranked.map((record) => {
     const candidate = eligible.find((host) => host.record.hostId === record.hostId);
@@ -218,8 +234,8 @@ function rankedCandidates(
   });
 }
 
-function noCandidateOutcome(footprint: Footprint): PlacementOutcome {
-  return { kind: "launch", requirements: requirementsFor(footprint) };
+function noCandidateOutcome(request: SessionRequest, footprint: Footprint): PlacementOutcome {
+  return { kind: "launch", requirements: requirementsFor(footprint), spot: sessionSpotEligible(request) };
 }
 
 async function placeSession(context: CoordinatorContext, request: SessionRequest): Promise<PlacementOutput> {
@@ -232,7 +248,7 @@ async function placeSession(context: CoordinatorContext, request: SessionRequest
     const already = existingReservation(hosts, request.sessionId);
     if (already) return { placement: already };
     const candidates = rankedCandidates(hosts, request, footprint);
-    if (candidates.length === 0) return { placement: noCandidateOutcome(footprint) };
+    if (candidates.length === 0) return { placement: noCandidateOutcome(request, footprint) };
     const taken = await reserveOnFirst(context, candidates, request, footprint);
     if (taken) return { placement: taken };
   }

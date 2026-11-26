@@ -108,6 +108,7 @@ test("every V2 EC2 and SSM call retries throttling, except the fleet launch", as
 test("the fleet launch is never retried until it carries a client token", async () => {
   const launches = (await v2Machines()).flatMap(([file, machine]) =>
     [...tasks(machine)].filter(([, state]) => state.Resource === CREATE_FLEET).map(([name, state]) => ({ file, name, state })));
-  assert.equal(launches.length, 1);
-  assert.equal(launches[0]!.state.Retry, undefined, `${launches[0]!.file}: ${launches[0]!.name}`);
+  // The on-demand launch and, ADR-0102, the Spot launch with its on-demand fallback.
+  assert.deepEqual(launches.map(({ name }) => name).sort(), ["Launch Host", "Launch Spot Host"]);
+  for (const launch of launches) assert.equal(launch.state.Retry, undefined, `${launch.file}: ${launch.name}`);
 });

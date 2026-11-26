@@ -101,7 +101,7 @@ const START: Table = {
     "Route Placement Mode", "Adopt Configured Host", "Place Fleet Session", "Describe Configured Host", "Describe Configured Host Shape",
     "Register Configured Host", "Place Session", "Route Placement", "Adopt Placement",
   ],
-  "start.launching_host": ["Launch Host", "Describe Launched Host Shape", "Register Launched Host", "Reserve On Launched Host"],
+  "start.launching_host": ["Route Launch Market", "Launch Spot Host", "Route Spot Answer", "Spot Launch Refused", "Adopt Spot Host", "Launch Host", "Describe Launched Host Shape", "Register Launched Host", "Reserve On Launched Host"],
   // ADR-0102: the session volume is part of getting the server ready to start.
   "start.starting_server": [
     "Route Session Volume", "Describe Session Host Zone", "Create Session Volume", "Wait Before Created Volume Poll",

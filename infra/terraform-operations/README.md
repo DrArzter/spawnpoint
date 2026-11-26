@@ -67,6 +67,14 @@ The `spawnpoint-session-volume-sweeper` Lambda runs every 15 minutes, whether or
 A volume it cannot delete, one still attached four hours after its session ended, or one with no `SessionId` tag fails
 the run, and the `spawnpoint-session-volume-survived` alarm reports it.
 
+## Spot
+
+ADR-0102, step 3. `spot` is `disabled` unless the repository variable `SPAWNPOINT_SPOT` is `enabled`, and it takes
+effect only while `session_volume` is also `enabled`. When it is `enabled`, `spot.tf` creates the
+`AWSServiceRoleForEC2Spot` service-linked role, which EC2 needs to launch Spot capacity and which the account does not
+have yet (checked 2026-11-26). The start role keeps `ec2:CreateFleet` and gains no IAM rights. To switch Spot off again,
+first let every Spot host end: AWS refuses to delete the role while an instance uses it.
+
 ## Local verification
 
 ```bash

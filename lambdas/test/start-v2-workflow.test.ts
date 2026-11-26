@@ -274,7 +274,8 @@ test("the placement mode routes the start: single uses the configured host, shar
   }
   assert.equal((state(definition, "Place Session").Parameters?.Payload as Record<string, unknown>).action, "placeSession");
   assert.equal(state(definition, "Route Placement").Choices?.[0]?.Next, "Adopt Placement");
-  assert.equal(state(definition, "Route Placement").Choices?.[1]?.Next, "Launch Host");
+  assert.equal(state(definition, "Route Placement").Choices?.[1]?.Next, "Route Launch Market");
+  assert.equal(state(definition, "Route Launch Market").Default, "Launch Host", "off, the launch is the on-demand request it always was");
   assert.match(JSON.stringify(state(definition, "Route Placement").Choices?.[1]), /\$\.request\.launch/, "launching is a setting, off by default");
   assert.equal(state(definition, "Route Placement").Default, "No Host Has Room");
   assert.deepEqual(state(definition, "Adopt Placement").Parameters, { "hostId.$": "$.placement.placement.hostId", "slot.$": "$.placement.placement.slot" });

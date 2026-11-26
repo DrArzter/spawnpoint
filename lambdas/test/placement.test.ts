@@ -22,6 +22,7 @@ import {
   remaining,
   requirementsFor,
   reserve,
+  spotEligible,
 } from "../src/domain/placement.ts";
 import type { Footprint, HostRecord, HostShape } from "../src/domain/placement.ts";
 
@@ -236,4 +237,15 @@ test("a pinned slot must be free: a world that needs slot zero waits for it or g
   assert.equal(other.reservations[0]?.slot, 0);
   assert.deepEqual(placementCandidates([host, other], FACTORIO, "d", 0), [], "neither host has slot zero free");
   assert.deepEqual(place([host, readyHost("i-3", SHAPES[0]!)], FACTORIO, "d", 0), { kind: "reuse", hostId: "i-3" });
+});
+
+test("spot eligibility and a Spot host's acceptance (ADR-0102)", () => {
+  assert.equal(spotEligible("cold", true), true);
+  assert.equal(spotEligible("warm", true), false);
+  assert.equal(spotEligible("cold", false), false);
+  const spot = markReady(newHost("i-spot", { instanceType: "r7i.large", memoryMiB: 16 * 1024, vcpu: 2 }, 1, "launched", "spot"), 2);
+  const footprint = { memoryMiB: 1024, cores: 0.5 };
+  assert.equal(accepts(spot, footprint, "w"), false);
+  assert.equal(accepts(spot, footprint, "w", undefined, true), true);
+  assert.throws(() => newHost("i-c", { instanceType: "m7i.large", memoryMiB: 8192, vcpu: 2 }, 1, "configured", "spot"), /only a launched host/);
 });

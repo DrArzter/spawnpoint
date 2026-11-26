@@ -53,5 +53,26 @@ printf 'SPAWNPOINT_DNS_ZONE_ID=%s\n' '${game_dns_zone_id}' >>"$env_file"
 printf 'SPAWNPOINT_DNS_SUFFIX=%s\n' '${game_dns_suffix}' >>"$env_file"
 %{ endif ~}
 
+# A Spot host (ADR-0102) watches for its interruption notice and saves every
+# session to its volume. An on-demand host is never reclaimed and runs no watcher.
+if [ "$(imds meta-data/instance-life-cycle 2>/dev/null || true)" = spot ]; then
+  fleet_log "installing the Spot interruption watcher"
+  cat >/etc/systemd/system/spawnpoint-spot-watcher.service <<UNIT
+[Unit]
+Description=Spawnpoint Spot interruption watcher (ADR-0102)
+After=network-online.target docker.service
+
+[Service]
+ExecStart=$app_directory/server/scripts/spot-watcher.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now spawnpoint-spot-watcher.service
+fi
+
 printf 'commit=%s\nready_at=%s\n' "$app_commit" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >/etc/spawnpoint-fleet-ready
 fleet_log "fleet host is ready"

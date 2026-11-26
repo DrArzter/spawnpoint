@@ -70,6 +70,10 @@ if [[ -n "${SPAWNPOINT_SESSION_VOLUME_ID:-}" ]]; then
     exit 1
   }
   "${SCRIPT_DIR}/mount-session-volume.sh" "${WORLD_ID}" "${SPAWNPOINT_SESSION_VOLUME_ID}" >&2
+  # The Spot watcher saves this session from the record when the host is reclaimed.
+  # shellcheck source=_session-records.sh
+  source "${SCRIPT_DIR}/_session-records.sh"
+  write_session_record "${WORLD_ID}" "${SPAWNPOINT_SLOT:-}" "${SPAWNPOINT_SESSION_VOLUME_ID}" "${WORLD_CATALOG}"
   mark_step session_volume_mounted
 fi
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then

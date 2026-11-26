@@ -118,6 +118,29 @@ resource "aws_iam_role_policy" "game_host_session_logs" {
   policy = data.aws_iam_policy_document.game_host_session_logs.json
 }
 
+# A Spot host reports that it saved its sessions for an interruption
+# (ADR-0102) as one event on the default bus. Only its own source is allowed,
+# so a host cannot speak for EC2 or for the control plane.
+data "aws_iam_policy_document" "game_host_interruption_report" {
+  statement {
+    sid       = "ReportInterruptionSaves"
+    actions   = ["events:PutEvents"]
+    resources = ["arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "events:source"
+      values   = ["spawnpoint.host"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "game_host_interruption_report" {
+  name   = "spawnpoint-game-host-interruption-report"
+  role   = aws_iam_role.game_host.id
+  policy = data.aws_iam_policy_document.game_host_interruption_report.json
+}
+
 resource "aws_iam_instance_profile" "game_host" {
   name = "spawnpoint-game-host"
   role = aws_iam_role.game_host.name

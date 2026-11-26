@@ -351,3 +351,20 @@ The instance size, volume size, region and connectivity mode were chosen from th
 Two measurements are still genuinely open, both M2-or-later and neither blocking: **milliseconds per tick under real
 load** with the group on, and **peak memory with the full group** rather than one player — the number that decides
 whether the 8 GiB Free Plan host gives way to the reviewed 16 GiB upgrade.
+
+## Spot interruption and move — **not measured yet**
+
+ADR-0102, step 7. One run per game on a cold test world, with `SPAWNPOINT_SESSION_VOLUME`, `SPAWNPOINT_SPOT` and
+`SPAWNPOINT_SPOT_FAULT_TEST` enabled. Stop and start the world first, so its last S3 archive is fresh. Then run
+`scripts/spot-fault-test.sh <world-id>`, check its output, and run it again with `--run`.
+
+| Field | Where it is read | Value |
+| --- | --- | --- |
+| Notice to save done | `journalctl -u spawnpoint-spot-watcher` on the host: `event=notice`, then `saved=` | — |
+| Save result | the same block: `saved`, `failed`, `reported` | — |
+| Notice to terminated | the Lambda log `/aws/lambda/spawnpoint-spot-interruption` | — |
+| Move start to volume attached | the `move-…` Start server V2 execution: `Adopt Moved Session Volume` to `Adopt Session Volume` | — |
+| Volume attached to ready | the same execution: to `Ready` | — |
+| Player downtime | the notice time to `[BACK]` in Telegram | — |
+| Same address, same volume, same session | `[BACK]` address; the `vol-…` and session id in the execution input | — |
+| Old watchdog | ends with `session_moved` | — |

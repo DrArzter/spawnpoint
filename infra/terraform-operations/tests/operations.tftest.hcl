@@ -184,6 +184,14 @@ mock_provider "aws" {
     target = data.aws_iam_policy_document.spot_interruption
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
+  override_data {
+    target = data.aws_iam_policy_document.spot_fault_test
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+  override_data {
+    target = data.aws_iam_policy_document.spot_fault_test_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
 
   override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_watchdog_assume
@@ -1104,4 +1112,45 @@ run "spot_accepts_only_its_two_values" {
   }
 
   expect_failures = [var.spot]
+}
+
+run "spot_fault_test_is_off_unless_both_switches_are_on" {
+  command = plan
+
+  variables {
+    spot = "enabled"
+  }
+
+  assert {
+    condition     = length(aws_fis_experiment_template.spot_interruption) == 0 && length(aws_iam_role.spot_fault_test) == 0
+    error_message = "The FIS experiment exists only while spot and spot_fault_test are both enabled (ADR-0102)."
+  }
+}
+
+run "spot_fault_test_reaches_only_the_armed_fleet_host" {
+  command = plan
+
+  variables {
+    spot            = "enabled"
+    spot_fault_test = "enabled"
+  }
+
+  assert {
+    condition = alltrue([
+      one(aws_fis_experiment_template.spot_interruption[0].action).action_id == "aws:ec2:send-spot-instance-interruptions",
+      one(one(aws_fis_experiment_template.spot_interruption[0].action).parameter).value == "PT2M",
+      one(aws_fis_experiment_template.spot_interruption[0].target).selection_mode == "COUNT(1)",
+      toset([for tag in one(aws_fis_experiment_template.spot_interruption[0].target).resource_tag : "${tag.key}=${tag.value}"]) == toset(["ManagedBy=spawnpoint-fleet", "SpawnpointFaultTarget=armed"]),
+    ])
+    error_message = "The experiment sends a two-minute notice to one host that carries both the fleet and the arming tag."
+  }
+
+  assert {
+    condition = toset(flatten([
+      for statement in data.aws_iam_policy_document.spot_fault_test.statement : [
+        for condition in statement.condition : "${condition.variable}=${join(",", condition.values)}"
+      ] if statement.sid == "InterruptOnlyTheArmedFleetHost"
+    ])) == toset(["ec2:ResourceTag/ManagedBy=spawnpoint-fleet", "ec2:ResourceTag/SpawnpointFaultTarget=armed"])
+    error_message = "FIS may interrupt only an armed fleet host."
+  }
 }

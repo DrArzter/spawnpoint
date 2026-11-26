@@ -2,6 +2,11 @@
   "id": "minecraft",
   "code": "MC",
   "display_name": "Minecraft",
+  "presentation": {
+    "tint": "teal",
+    "glyph": "cube",
+    "scene": "creeper"
+  },
   "legacy_default": true,
   "connect": {
     "port": 25565,

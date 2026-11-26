@@ -35,6 +35,7 @@ test("the catalog and the footprints are the manifests' facts", () => {
     assert.equal(game.slottable !== false, module.slottable);
     assert.equal(game.whitelist === true, module.whitelist);
     assert.deepEqual(gameFootprints[module.id], module.footprint);
+    assert.deepEqual(game.presentation, module.presentation);
   }
 });
 
@@ -57,4 +58,13 @@ test("every manifest states whether its game may run on Spot (ADR-0102)", async 
     assert.equal(typeof manifest.capabilities.spot, "boolean", `${module.id}: capabilities.spot is not stated`);
     assert.equal(module.spot, manifest.capabilities.spot);
   }
+});
+
+test("a module names its look, and one with no presentation names none", () => {
+  for (const module of gameModules) {
+    for (const name of [module.presentation.tint, module.presentation.glyph, module.presentation.scene]) {
+      assert.ok(name === null || /^[a-z][a-z-]{0,31}$/.test(name), `${module.id}: ${name}`);
+    }
+  }
+  assert.ok(gameModules.some((module) => module.presentation.scene === null), "a module without a presentation falls back to the skins' defaults");
 });

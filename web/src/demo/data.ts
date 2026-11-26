@@ -1,6 +1,6 @@
 import type { AccessCandidate, AccessIdentity, AccessPermission, AccessRole, ActiveSession, AppearancePreference, BackupEntry, InvitationSummary, SubscriptionState } from "../api/contract";
 import type { AssistantAnswer, AssistantConversation, ConsoleEntry, WorldLogRead } from "../api/contract";
-import type { ControlPlaneSnapshot, Game, SettingDefinition, World, WorldSession } from "../model";
+import type { ControlPlaneSnapshot, Game, GamePresentation, SettingDefinition, World, WorldSession } from "../model";
 import { DEFAULT_ACCENT } from "../styles/accent";
 
 /** A game whose session record says nothing runs. */
@@ -9,8 +9,8 @@ function stoppedLifecycle(serverId: string): WorldSession {
 }
 
 /** A game with no presets and no session running, as the demo seeds Factorio and Zomboid. */
-function stoppedGame(id: string, code: string, displayName: string, worlds: Mutable<World>[], consoleSuggestions: string[] = []): Mutable<Game> {
-  return { id, code, displayName, lifecycle: stoppedLifecycle(id), settings: [], whitelist: false, playerName: null, consoleSuggestions, presets: [], worlds };
+function stoppedGame(id: string, code: string, displayName: string, worlds: Mutable<World>[], consoleSuggestions: string[], presentation: GamePresentation): Mutable<Game> {
+  return { id, code, displayName, lifecycle: stoppedLifecycle(id), settings: [], whitelist: false, playerName: null, consoleSuggestions, presentation, presets: [], worlds };
 }
 
 // The demo mutates its own control plane, so every record it holds is mutable
@@ -155,6 +155,7 @@ export function initialState(): DemoState {
           // As server/games/minecraft/game.json states them.
           playerName: { pattern: "^\\w{3,16}$", hint: "3 to 16 letters, digits or underscores, as the player types it" },
           consoleSuggestions: ["list", "save-all", "say Server stops in 5 minutes"],
+          presentation: { tint: "teal", glyph: "cube", scene: "creeper" },
           lifecycle: { serverId: "minecraft", desiredState: "running", observedState: "ready", activeSessionId: "session-42", activeWorldId: "minecraft-rostik-12345678", readyAtEpochSeconds: Math.floor(Date.now() / 1000) - 11_520, updatedAtEpochSeconds: Math.floor(Date.now() / 1000), idle: { playersOnline: 3, consecutiveEmpty: 0, lastObservedAtEpochSeconds: Math.floor(Date.now() / 1000) - 45, freshUntilEpochSeconds: Math.floor(Date.now() / 1000) + 2_055 } },
           presets: [
             { id: "industrial", displayName: "Industrial", repository: "https://github.com/DrArzter/my-docker-minecraft-server-config", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5", profileDigest: "41d9a8e0c73b5f26184ad0e9cb7f3520a6e81d4c95f27b03ea6d183c7b40f9e2", releases: ["1.1", "1.2", "1.3"], buildStatus: "ready", latestRelease: "1.3", buildAvailable: true },
@@ -241,12 +242,12 @@ export function initialState(): DemoState {
             // A world that can start, so the demo can show a running Factorio host.
             { id: "factorio-megabase", displayName: "Megabase", profileId: "factorio-vanilla", sessionControlAvailable: true, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: { values: {}, updatedAt: null }, materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:34197", release: { state: "available", generationId: null, activeRelease: "2.0.55", desiredRelease: "2.0.55" } },
             { id: "factorio-archive", displayName: "Archived rail world", profileId: "factorio-rail", sessionControlAvailable: false, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: { values: {}, updatedAt: null }, materialization: "archived", preset: null, wipes: [], connectionAddress: null, release: { state: "available", generationId: null, activeRelease: "1.0", desiredRelease: "1.0" } },
-        ], ["/players online", "/server-save", "/time"]),
+        ], ["/players online", "/server-save", "/time"], { tint: "amber", glyph: "gear", scene: "gear" }),
         stoppedGame("zomboid", "PZ", "Project Zomboid", [
             { id: "zomboid", displayName: "Project Zomboid vanilla", profileId: "zomboid-vanilla", sessionControlAvailable: true, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: { values: {}, updatedAt: null }, materialization: "not_created", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "unconfigured", generationId: null, activeRelease: null, desiredRelease: null } },
             // A world that can start, so the demo can show a running Zomboid host.
             { id: "zomboid-muldraugh", displayName: "Muldraugh", profileId: "zomboid-vanilla", sessionControlAvailable: true, connectivity: "zerotier", placement: "configured", auth: null, session: null, gameSettings: { values: {}, updatedAt: null }, materialization: "existing", preset: null, wipes: [], connectionAddress: "172.29.23.24:16261", release: { state: "available", generationId: null, activeRelease: "42.13.1", desiredRelease: "42.13.1" } },
-        ], ["players", "save", "servermsg \"Server stops in 5 minutes\""]),
+        ], ["players", "save", "servermsg \"Server stops in 5 minutes\""], { tint: "rose", glyph: "grid", scene: "zombie" }),
       ],
     },
     roles: [
@@ -258,9 +259,9 @@ export function initialState(): DemoState {
     ],
     defaultRoleId: "viewer",
     identities: [
-      { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "100000001", handle: "drarzter", verified: true }, { platform: "minecraft", value: "DrArzter", handle: null, verified: true }, { platform: "zerotier", value: "b9bc15e2cf", handle: null, verified: true }] },
+      { id: "identity-owner", displayName: "DrArzter", roleId: "owner", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "100000001", handle: "drarzter", verified: true }, { platform: "zerotier", value: "b9bc15e2cf", handle: null, verified: true }] },
       { id: "identity-alex", displayName: "Alex", roleId: "player", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "128381920", handle: null, verified: true }] },
-      { id: "identity-mira", displayName: "Mira", roleId: "viewer", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "998120144", handle: null, verified: true }, { platform: "factorio", value: "Mira", handle: null, verified: true }] },
+      { id: "identity-mira", displayName: "Mira", roleId: "viewer", directGrants: [], photoUrl: null, links: [{ platform: "telegram", value: "998120144", handle: null, verified: true }] },
       { id: "identity-kira", displayName: "Kira", roleId: "player", directGrants: [], photoUrl: null, links: [{ platform: "password", value: "5b1c6e0a-2d4f-4a8e-9c3b-7e6f5d4c3b2a", handle: "kira@example.com", verified: false }] },
     ],
     candidates: [

@@ -164,6 +164,7 @@ export async function readControlPlaneSnapshot(
       whitelist: game.whitelist === true,
       playerName: game.playerName ?? null,
       consoleSuggestions: game.consoleSuggestions ?? [],
+      presentation: game.presentation ?? { tint: null, glyph: null, scene: null },
       presets: (game.presets ?? []).map((preset) => ({
         id: preset.id,
         displayName: preset.displayName,

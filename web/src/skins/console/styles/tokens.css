@@ -55,11 +55,11 @@ html[data-skin="console"] {
   --c-mark-to: #5B47D6;
   --c-avatar: #6E57EB;
   --c-avatar-ink: #FFFFFF;
-  --c-g-minecraft: #17917A;
-  --c-g-factorio: #C9701C;
-  --c-g-zomboid: #A8385A;
-  --c-g-other: #56626F;
-  --c-g-ink: #FFFFFF;
+  --c-tint-teal: #17917A;
+  --c-tint-amber: #C9701C;
+  --c-tint-rose: #A8385A;
+  --c-tint-neutral: #56626F;
+  --c-tint-ink: #FFFFFF;
 
   --c-font: Manrope, system-ui, sans-serif;
   --c-font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -159,11 +159,11 @@ html[data-skin="console"][data-theme="dark"] {
   --c-tip: #2A3442;
   --c-shadow: 0 1px 2px rgb(0 0 0 / .3);
   --c-shadow-pop: 0 16px 40px rgb(0 0 0 / .5), 0 2px 6px rgb(0 0 0 / .3);
-  --c-g-minecraft: #35C3A6;
-  --c-g-factorio: #F0A04B;
-  --c-g-zomboid: #E06C8E;
-  --c-g-other: #AEB8C4;
-  --c-g-ink: #0E1319;
+  --c-tint-teal: #35C3A6;
+  --c-tint-amber: #F0A04B;
+  --c-tint-rose: #E06C8E;
+  --c-tint-neutral: #AEB8C4;
+  --c-tint-ink: #0E1319;
 }
 
 @media (max-width: 759px) {

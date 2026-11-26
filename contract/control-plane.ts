@@ -107,6 +107,9 @@ export type World = Readonly<{
   gameSettings: WorldGameSettings;
 }>;
 
+/** A game's look, named rather than drawn: each skin owns the picture for a name and a default for none. */
+export type GamePresentation = Readonly<{ tint: string | null; glyph: string | null; scene: string | null }>;
+
 export type Game = Readonly<{
   id: string;
   code: string;
@@ -121,6 +124,8 @@ export type Game = Readonly<{
   playerName: Readonly<{ pattern: string; hint: string }> | null;
   /** Commands the console offers to type, as the game's module lists them. */
   consoleSuggestions: readonly string[];
+  /** How a skin draws the game, in each skin's own vocabulary: a tint, a glyph and a scene name; null for the default (ADR-0090). */
+  presentation: GamePresentation;
   presets: readonly Preset[];
   worlds: readonly World[];
 }>;

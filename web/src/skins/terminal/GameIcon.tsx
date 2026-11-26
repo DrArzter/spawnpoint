@@ -1,31 +1,34 @@
 import { useMemo } from "react";
 
-import type { ServerState } from "../../model";
+import type { GamePresentation, ServerState } from "../../model";
 import { HostScene, type Painter } from "./HostScene";
 import marks from "./marks.json";
 import { CELL_ASPECT, capsule, disc, gearRim, rasterise, subtract, union, type Grid } from "./raster";
 
 // The terminal's own icon for a game: what the host scene draws, and how it
-// moves while the host is online. A mark sampled from a game's symbol keeps
-// still and breathes; the Factorio gear turns; the Zomboid zombie walks.
+// moves while the host is online. The game's module names a scene (ADR-0090)
+// and this skin owns its painter: the creeper keeps still and breathes, the
+// gear turns, the zombie walks. A scene this skin does not know is the
+// Spawnpoint mark.
 // Every painter answers for a phase, the scene's tick count, so a picture at
 // phase 0 is the picture at rest.
 export type SceneSize = "40x18" | "24x11";
 const dimensions: Record<SceneSize, readonly [cols: number, rows: number]> = { "40x18": [40, 18], "24x11": [24, 11] };
 
-type GameRef = Readonly<{ id: string; code?: string }> | undefined;
+type GameRef = Readonly<{ presentation: GamePresentation }> | undefined;
 
 export function GameIcon({ game, size, state }: Readonly<{ game: GameRef; size: SceneSize; state: ServerState }>) {
-  const painter = useMemo(() => painterFor(game, size), [game?.id, game?.code, size]);
+  const scene = game?.presentation.scene ?? null;
+  const painter = useMemo(() => painterFor(game, size), [scene, size]);
   return <HostScene painter={painter} state={state} />;
 }
 
 export function painterFor(game: GameRef, size: SceneSize): Painter {
-  const key = `${game?.id ?? ""} ${game?.code ?? ""}`.toLowerCase();
   const [cols, rows] = dimensions[size];
-  if (key.includes("minecraft")) return minecraftCreeper(cols, rows);
-  if (key.includes("factorio")) return turningGear(cols, rows);
-  if (key.includes("zomboid")) return walkingZombie(cols, rows);
+  const scene = game?.presentation.scene ?? null;
+  if (scene === "creeper") return creeper(cols, rows);
+  if (scene === "gear") return turningGear(cols, rows);
+  if (scene === "zombie") return walkingZombie(cols, rows);
   return still(marks.spawnpoint[size]);
 }
 
@@ -37,7 +40,7 @@ function still(grid: Grid): Painter {
 // grass block: one hard square, two square eyes and the stepped mouth are still
 // unmistakable at 24×11. The low-contrast mottling belongs to the lit face;
 // the features stay true holes, so they never dissolve into the texture.
-function minecraftCreeper(cols: number, rows: number): Painter {
+function creeper(cols: number, rows: number): Painter {
   const height = Math.max(8, Math.floor(rows * 0.8));
   const width = Math.min(cols - 4, Math.round(height * CELL_ASPECT));
   const top = Math.floor((rows - height) / 2);

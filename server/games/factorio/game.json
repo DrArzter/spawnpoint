@@ -2,6 +2,11 @@
   "id": "factorio",
   "code": "FA",
   "display_name": "Factorio",
+  "presentation": {
+    "tint": "amber",
+    "glyph": "gear",
+    "scene": "gear"
+  },
   "connect": {
     "port": 34197,
     "protocol": "udp"

@@ -2,6 +2,11 @@
   "id": "zomboid",
   "code": "PZ",
   "display_name": "Project Zomboid",
+  "presentation": {
+    "tint": "rose",
+    "glyph": "grid",
+    "scene": "zombie"
+  },
   "connect": {
     "port": 16261,
     "protocol": "udp"

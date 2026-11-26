@@ -10,11 +10,13 @@ import { painterFor, type SceneSize } from "../src/skins/terminal/GameIcon.tsx";
 // so only through their phase, and the ones that do not stay put.
 
 const sizes: readonly SceneSize[] = ["40x18", "24x11"];
+const scene = (name: string | null) => ({ presentation: { tint: null, glyph: null, scene: name } });
 const games = {
   spawnpoint: undefined,
-  minecraft: { id: "minecraft", code: "MC" },
-  factorio: { id: "factorio" },
-  zomboid: { id: "zomboid" },
+  minecraft: scene("creeper"),
+  factorio: scene("gear"),
+  zomboid: scene("zombie"),
+  unknown: scene("not-a-scene"),
 } as const;
 
 function ink(grid: readonly (readonly number[])[]): number {
@@ -64,4 +66,8 @@ test("the zombie stands in the middle of the scene at rest and never leaves for 
   assert.ok(middle > ink(rest) * 0.8, "the figure at rest is not centred");
   const later = Array.from({ length: 200 }, (_, phase) => ink(zombie.paint(phase)));
   assert.ok(later.some((amount) => amount === 0) === false || later.filter((amount) => amount > 0).length > 150, "the figure is off screen most of the time");
+});
+
+test("a scene this skin does not know draws the Spawnpoint mark", () => {
+  assert.deepEqual(painterFor(games.unknown, "40x18").paint(0), painterFor(undefined, "40x18").paint(0));
 });

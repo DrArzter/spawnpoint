@@ -13,6 +13,7 @@ import { Address } from "../src/skins/console/ui/Address.tsx";
 import { relativeTime } from "../src/skins/console/ui/Ago.tsx";
 import { Card } from "../src/skins/console/ui/Card.tsx";
 import { Copy } from "../src/skins/console/ui/Copy.tsx";
+import { GameGlyph } from "../src/skins/console/ui/GameGlyph.tsx";
 import { DetailList } from "../src/skins/console/ui/DetailList.tsx";
 import { Dialog } from "../src/skins/console/ui/Dialog.tsx";
 import { Empty, LoadError } from "../src/skins/console/ui/Empty.tsx";
@@ -511,4 +512,15 @@ test("a prose text area wraps in the body font and is spell-checked; a file's st
 test("a track title that opens its row in place is a button, marked when its row is open", () => {
   const markup = html(createElement(TrackTitle, { title: "Why the lag?", action: action("assistant.open.c1", "Why the lag?", noop), current: true }));
   assert.match(markup, /<button aria-current="true" class="c-track-title" data-action="assistant\.open\.c1" type="button">Why the lag\?<\/button>/);
+});
+
+test("GameGlyph: the tint and glyph its game names, hidden from assistive technology, the code's letter otherwise", () => {
+  const drawn = renderToStaticMarkup(createElement(GameGlyph, { game: { code: "GA", presentation: { tint: "teal", glyph: "gear", scene: null } } }));
+  assert.match(drawn, /aria-hidden="true"/);
+  assert.match(drawn, /class="c-glyph c-glyph-md c-glyph-tint-teal"/);
+  assert.match(drawn, /<svg[^>]*><path d="M12 8\.5/);
+  const unknown = renderToStaticMarkup(createElement(GameGlyph, { game: { code: "GB", presentation: { tint: "plum", glyph: "star", scene: null } } }));
+  assert.match(unknown, /class="c-glyph c-glyph-md"/, "a tint this skin does not know stays neutral");
+  assert.match(unknown, /<span class="c-glyph-letter">G<\/span>/);
+  assert.doesNotMatch(unknown, /<svg/);
 });

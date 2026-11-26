@@ -131,7 +131,7 @@ The dark block is `html[data-skin="console"][data-theme="dark"]`. Component shee
 | Band | `--c-band`, `--c-band-2`, `--c-band-3`, `--c-band-ink`, `--c-band-ink-2`, `--c-band-focus` | The ink top bar and its controls |
 | Status | `--c-ok`, `--c-warn`, `--c-err`, `--c-busy`, `--c-off`, each with `-bg` | Status text and tints |
 | Flashbar | `--c-flash-busy`, `--c-flash-ok`, `--c-flash-err`, `--c-flash-ink` | Operation fills, the same in both themes |
-| Games | `--c-g-minecraft`, `--c-g-factorio`, `--c-g-zomboid`, `--c-g-other` | Game identity tint, never a status |
+| Game tints | `--c-tint-teal`, `--c-tint-amber`, `--c-tint-rose`, `--c-tint-neutral`, `--c-tint-ink` | Game identity tint, never a status; a game's manifest names its tint (ADR-0090) |
 
 - **Accent.** The default accent is iris (`#5B47D6`, dark `#A897FF`). When a person picks a colour in Profile,
   `styles/accent.ts` derives each role with its contrast checked and marks the root `data-accent="chosen"`; the
@@ -365,9 +365,9 @@ document carries `html[data-skin="terminal"]`, which `index.html` stamps before 
   their glyphs or spacing locally.
 - **The host scene.** The first screen draws the scoped game's icon in a glyph ramp (`" .:-=+*#%@"`) on a dark cell,
   40×18 cells, 24×11 on a phone. `HostScene` is the adapter: it takes a painter's grid of brightness per cell, sets the
-  exposure from the session state and keeps time. `GameIcon` picks the painter: the Spawnpoint mark is a sampled grid
-  (`marks.json`), the Minecraft creeper face is a procedural pixel grid, and both keep still and breathe; the Factorio
-  gear and the Zomboid zombie are drawn
+  exposure from the session state and keeps time. `GameIcon` picks the painter by the scene its game's manifest names
+  (ADR-0090): the Spawnpoint mark, for no scene or one this skin does not know, is a sampled grid (`marks.json`), the
+  `creeper` face is a procedural pixel grid, and both keep still and breathe; the `gear` and the `zombie` are drawn
   by `raster.ts` from shapes and move through their phase while the host is online, the gear turning, the zombie
   walking across and coming back in. Starting and stopping show the picture at rest under one brighter scanline;
   stopped is sparse and still. Reduced motion stops the tick.

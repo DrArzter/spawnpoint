@@ -21,7 +21,7 @@ import { t } from "../i18n";
 /** The one key of a waiting account: its platform and its id on that platform. Two platforms may share an id. */
 export const candidateKey = (candidate: Readonly<{ platform: string; platformUserId: string }>) => `${candidate.platform}:${candidate.platformUserId}`;
 
-const linkKinds: readonly LinkKind[] = ["telegram", "email", "google", "discord", "minecraft", "factorio", "steam", "zerotier"];
+const linkKinds: readonly LinkKind[] = ["telegram", "email", "google", "discord", "steam", "zerotier"];
 
 // The platform an account signs in through, as the panel names its links. A
 // password account is known by its email, not by its credential id.

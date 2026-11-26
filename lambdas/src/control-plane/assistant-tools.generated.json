@@ -1591,6 +1591,14 @@
         "warm": {
           "type": "boolean",
           "description": "Keep its launched host stopped, not destroyed, between sessions (fleet only)"
+        },
+        "market": {
+          "type": "string",
+          "enum": [
+            "spot",
+            "on-demand"
+          ],
+          "description": "Launch its host on Spot where its game allows, or always On-Demand (fleet only)"
         }
       },
       "required": [

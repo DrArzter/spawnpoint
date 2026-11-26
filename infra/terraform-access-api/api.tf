@@ -392,6 +392,7 @@ resource "aws_lambda_function" "access_api" {
       ASSISTANT_PRICES                 = local.assistant_environment.ASSISTANT_PRICES
       SPAWNPOINT_PLACEMENT             = var.placement
       SPAWNPOINT_LAUNCH                = var.launch
+      SPAWNPOINT_SPOT                  = var.spot == "enabled" && var.session_volume == "enabled" ? "enabled" : "disabled"
       SPAWNPOINT_APP_COMMIT            = var.app_commit
       GAME_DNS_SUFFIX                  = var.game_dns_suffix
       REFRESH_COOKIE_SAME_SITE         = local.custom_api_domain_enabled ? "Strict" : "None"

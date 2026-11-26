@@ -1,4 +1,4 @@
-import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, WorldPlacement, WorldSettingsModel } from "../../core/models";
+import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, MarketFieldModel, WorldMarket, WorldPlacement, WorldSettingsModel } from "../../core/models";
 import { startableLatest, startableReleases } from "../../core/presets";
 import { connectionLabel } from "../../core/worlds";
 import type { World } from "../../model";
@@ -52,7 +52,15 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
 
 const CONNECTION_ICONS = { zerotier: "hub", raw: "public", route53: "language" } as const;
 
-function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>) {
+function MarketField({ model }: Readonly<{ model: MarketFieldModel }>) {
+  const options: readonly RadioCardOption<WorldMarket>[] = [
+    { value: "spot", label: t("host.marketSpot"), icon: "sync" },
+    { value: "on-demand", label: t("world.marketOnDemand"), icon: "lock" },
+  ];
+  return <RadioCards legend={t("world.pricing")} name="market" onChange={model.set} options={options} value={model.value} />;
+}
+
+function ConnectionFields({ model, market = null }: Readonly<{ model: ConnectionFieldsModel; market?: MarketFieldModel | null }>) {
   const fleet = model.placement === "fleet";
   const hosting: readonly RadioCardOption<WorldPlacement>[] = [
     { value: "configured", label: t("world.persistent"), icon: "dns" },
@@ -61,6 +69,7 @@ function ConnectionFields({ model }: Readonly<{ model: ConnectionFieldsModel }>)
   const connection: readonly RadioCardOption<World["connectivity"]>[] = model.connections.map((option) => ({ ...option, icon: CONNECTION_ICONS[option.value] }));
   return <>
     <RadioCards legend={t("world.hosting")} name="hosting" onChange={model.setPlacement} options={hosting} value={model.placement} />
+    {market && <MarketField model={market} />}
     <RadioCards legend={t("world.connection")} name="connection" onChange={model.setConnectivity} options={connection} value={model.connectivity} />
     {model.connectivity !== "zerotier" && <Notice detail="tooltip" notice={{ id: "public-port", tone: "warning", title: t("world.gamePortPublic"), description: t("world.setGamesPasswordAllowlist") }} />}
   </>;
@@ -103,7 +112,7 @@ export function CreateWorldSheet({ model }: Readonly<{ model: CreateWorldModel }
 export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsModel }>) {
   return (
     <SidePanel actions={<ActionButton action={model.save} variant="primary" />} cancel={model.cancel} title={t("world.hostingConnection")}>
-      <ConnectionFields model={model.connection} />
+      <ConnectionFields market={model.market} model={model.connection} />
     </SidePanel>
   );
 }

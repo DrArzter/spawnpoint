@@ -329,3 +329,25 @@ variable "assistant_prices" {
     sonnet = { input = 2.2, output = 11 }
   }
 }
+
+variable "session_volume" {
+  description = "ADR-0102: whether fleet sessions keep their world on a session volume. The panel offers the Spot choice only while this and spot are both enabled."
+  type        = string
+  default     = "disabled"
+
+  validation {
+    condition     = contains(["disabled", "enabled"], var.session_volume)
+    error_message = "session_volume must be disabled or enabled."
+  }
+}
+
+variable "spot" {
+  description = "ADR-0102: whether a cold session of a game that declares Spot may launch on Spot. The panel shows each fleet world's Spot or On-Demand choice only while enabled."
+  type        = string
+  default     = "disabled"
+
+  validation {
+    condition     = contains(["disabled", "enabled"], var.spot)
+    error_message = "spot must be disabled or enabled."
+  }
+}

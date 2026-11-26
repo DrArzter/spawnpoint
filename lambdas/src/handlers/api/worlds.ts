@@ -42,6 +42,7 @@ type SessionExecution = Readonly<{
   worldName: string;
   fleet: boolean;
   warm: boolean;
+  onDemand: boolean;
   plan: SessionPlan | FleetSessionPlan;
   configuredHosts: readonly Readonly<{ providerRef: string }>[];
   located: Awaited<ReturnType<typeof readWorldSession>>;
@@ -202,12 +203,14 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
     if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
     // A fleet world kept warm asks placement to keep its launched host after the stop (ADR-0048).
-    const warm = fleet && worldRecords.find((record) => record.worldId === worldId)?.warm === true;
-    return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, warm, plan, configuredHosts, located, recoverySessionId, players });
+    const own = worldRecords.find((record) => record.worldId === worldId);
+    const warm = fleet && own?.warm === true;
+    const onDemand = fleet && own?.onDemand === true;
+    return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, warm, onDemand, plan, configuredHosts, located, recoverySessionId, players });
   }
 
   async function executeSessionOperation(request: SessionExecution): Promise<Response> {
-    const { identity, action, gameId, worldId, worldName, fleet, warm, located, recoverySessionId, players } = request;
+    const { identity, action, gameId, worldId, worldName, fleet, warm, onDemand, located, recoverySessionId, players } = request;
     const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
     const requestedBy = `identity:${identity.id}`;
     const hostId = plannedSessionHost(request);
@@ -222,6 +225,7 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
         worldName,
         placement: fleet ? "fleet" : "single",
         ...(fleet ? { policy: warm ? "warm" as const : "cold" as const } : {}),
+        ...(onDemand ? { market: "on-demand" as const } : {}),
       });
     }
     else {
@@ -282,6 +286,11 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     if ((warm !== undefined && typeof warm !== "boolean") || (warm === true && access.placement !== "fleet")) {
       return errorResponse(400, "invalid_world_warm");
     }
+    // ADR-0102: only a launched host has a market; left out, the world keeps its choice.
+    const { market } = parsed;
+    if ((market !== undefined && market !== "spot" && market !== "on-demand") || (market !== undefined && access.placement !== "fleet")) {
+      return errorResponse(400, "invalid_world_market");
+    }
     // Only this world's own session holds its settings back (ADR-0062). Both
     // records are read, so the answer holds for either placement.
     const [game, own, operations] = await Promise.all([
@@ -294,11 +303,16 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
         holdsWorld(game, worldId) || holdsWorld(own, worldId) || unnamed) {
       return errorResponse(409, "world_session_active");
     }
-    const hosting = warm === undefined ? access : { ...access, warm };
+    const hosting = {
+      ...access,
+      ...(warm === undefined ? {} : { warm }),
+      ...(market === undefined ? {} : { onDemand: market === "on-demand" }),
+    };
     const result = await worlds.replaceAccess(gameId, worldId, hosting);
     if (result === "missing") return errorResponse(404, "unknown_world");
     if (result === "conflict") return errorResponse(409, "world_settings_conflict");
-    return response(200, { ...hosting, auth: access.auth ?? null });
+    const { onDemand: _onDemand, ...shown } = hosting;
+    return response(200, { ...shown, ...(market === undefined ? {} : { market }), auth: access.auth ?? null });
   }
 
   // --- A world's game settings (ADR-0064) ----------------------------------------

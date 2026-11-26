@@ -14,6 +14,7 @@
           "launch": "disabled",
           "appCommit": "main",
           "policy": "cold",
+          "market": "spot",
           "move": false,
           "moveVolumeId": ""
         },
@@ -168,6 +169,7 @@
           "worldId.$": "$.request.worldId",
           "gameId.$": "$.request.gameId",
           "policy.$": "$.request.policy",
+          "market.$": "$.request.market",
           "eligibleProvenance": "launched"
         }
       },
@@ -307,7 +309,8 @@
           "sessionId.$": "$.request.sessionId",
           "worldId.$": "$.request.worldId",
           "gameId.$": "$.request.gameId",
-          "policy.$": "$.request.policy"
+          "policy.$": "$.request.policy",
+          "market.$": "$.request.market"
         }
       },
       "ResultSelector": {
@@ -615,7 +618,8 @@
           "sessionId.$": "$.request.sessionId",
           "worldId.$": "$.request.worldId",
           "gameId.$": "$.request.gameId",
-          "policy.$": "$.request.policy"
+          "policy.$": "$.request.policy",
+          "market.$": "$.request.market"
         }
       },
       "ResultSelector": {
@@ -1295,7 +1299,8 @@
           "sessionId.$": "$.request.sessionId",
           "worldId.$": "$.request.worldId",
           "gameId.$": "$.request.gameId",
-          "policy.$": "$.request.policy"
+          "policy.$": "$.request.policy",
+          "market.$": "$.request.market"
         }
       },
       "ResultSelector": {

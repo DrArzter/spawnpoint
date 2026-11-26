@@ -75,6 +75,11 @@ effect only while `session_volume` is also `enabled`. When it is `enabled`, `spo
 have yet (checked 2026-11-26). The start role keeps `ec2:CreateFleet` and gains no IAM rights. To switch Spot off again,
 first let every Spot host end: AWS refuses to delete the role while an instance uses it.
 
+Each fleet world can refuse Spot. Its **Pricing** choice in Hosting & connection (`market` on the settings API, stored as
+`on_demand` on the world record) is sent with every start and promotion; `on-demand` keeps the session off Spot hosts
+and launches its host On-Demand. A world with no saved choice runs on Spot where its game allows it. The panel offers the
+choice only while the access API root also has `spot` and `session_volume` enabled.
+
 ### Interruption and fault test
 
 ADR-0102, steps 5 and 7. While `spot` is `enabled`, `spot.tf` also creates the `spawnpoint-spot-interruption` Lambda,
@@ -86,7 +91,7 @@ fires. Only `scripts/spot-fault-test.sh` arms a host.
 
 Production values: `SPAWNPOINT_SESSION_VOLUME`, `SPAWNPOINT_SPOT` and `SPAWNPOINT_SPOT_FAULT_TEST` are `enabled` since
 2026-11-26. The deploy applies only the roots that a commit changes, so a change to one of these variables takes effect
-at the next commit that changes a `.tf` file of this root; a README does not count.
+at the next commit that changes this root.
 
 ## Local verification
 

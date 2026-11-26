@@ -98,6 +98,9 @@ export type World = Readonly<{
   connectivity: "zerotier" | "raw" | "route53";
   placement: "configured" | "fleet";
   auth: "game" | "external" | null;
+  /** How its launched host is bought (ADR-0102); null when the world has no choice: not on the fleet, its game
+   * declares no Spot, or the deployment has Spot off. */
+  market: "spot" | "on-demand" | null;
   materialization: "existing" | "not_created" | "archived";
   preset: WorldPreset | null;
   wipes: readonly Wipe[];

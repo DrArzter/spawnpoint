@@ -1,5 +1,5 @@
 import type { StopPlayersPolicy } from "../domain/telegram-bot.ts";
-import type { SessionPolicy } from "../domain/placement.ts";
+import type { HostMarket, SessionPolicy } from "../domain/placement.ts";
 
 // The lifecycle machines' port. Each call starts one execution and answers its
 // id; the execution is the operation record.
@@ -16,6 +16,8 @@ export type StartSessionRun = Readonly<{
   placement?: "single" | "shared" | "fleet";
   /** A fleet world's warm choice (ADR-0048); left out, the machine places it cold. */
   policy?: SessionPolicy;
+  /** `on-demand` keeps a fleet world off Spot (ADR-0102); left out, Spot where allowed. */
+  market?: HostMarket;
 }>;
 
 export type StopSessionRun = Readonly<{
@@ -39,6 +41,7 @@ export type PromotionRun = Readonly<{
   generationId: string;
   release: string;
   policy: SessionPolicy;
+  market?: HostMarket;
   requestedBy: string;
   /** False stops a world that was stopped before its update again; by default it keeps running (ADR-0078). */
   startAfter?: boolean;

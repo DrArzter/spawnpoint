@@ -7,7 +7,7 @@ import { action } from "./actions";
 import { startableLatest, startableReleases } from "./presets";
 import { releaseBuildCopy } from "./release-builds";
 import { connectionLabel, neverStarted, promotionTargets } from "./worlds";
-import type { ConfirmationModel, ConnectionFieldsModel, ConnectionOption, CreateWorldModel, GameSettingField, GameSettingsModel, WorldPlacement, WorldSettingsModel } from "./models";
+import type { ConfirmationModel, ConnectionFieldsModel, ConnectionOption, CreateWorldModel, GameSettingField, GameSettingsModel, WorldMarket, WorldPlacement, WorldSettingsModel } from "./models";
 import { effectiveValue, settingDefinitions, settingValueValid } from "./settings";
 import { t } from "../i18n";
 
@@ -87,8 +87,11 @@ export function useCreateWorldForm(game: Game, initialPreset: Preset | null, dep
   };
 }
 
-export function useWorldSettingsForm(game: Game, world: World, deployment: Deployment, opts: Readonly<{ busy: boolean; onSave: (placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => void; onClose: () => void }>): WorldSettingsModel {
+export function useWorldSettingsForm(game: Game, world: World, deployment: Deployment, opts: Readonly<{ busy: boolean; onSave: (placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game", market?: WorldMarket) => void; onClose: () => void }>): WorldSettingsModel {
   const connection = useConnectionFields(deployment, { placement: world.placement ?? (world.connectivity === "zerotier" ? "configured" : "fleet"), connectivity: world.connectivity });
+  const [market, setMarket] = useState<WorldMarket>(world.market ?? "spot");
+  // The choice exists only for a launched host, so it follows the drafted placement.
+  const marketShown = world.market !== null && connection.placement === "fleet";
   // Only this world's own session holds its hosting back (ADR-0062).
   const stopped = !worldSessionActive(game, world);
   return {
@@ -96,8 +99,9 @@ export function useWorldSettingsForm(game: Game, world: World, deployment: Deplo
     world,
     stopped,
     connection,
+    market: marketShown ? { value: market, set: setMarket } : null,
     valid: connection.valid,
-    save: action("world.settings.save", t("world.saveSettings"), () => opts.onSave(connection.placement, connection.connectivity, connection.auth), { disabled: !connection.valid || !stopped || opts.busy, busy: opts.busy, hint: stopped ? undefined : t("world.stopWorldsSessionBefore") }),
+    save: action("world.settings.save", t("world.saveSettings"), () => opts.onSave(connection.placement, connection.connectivity, connection.auth, marketShown ? market : undefined), { disabled: !connection.valid || !stopped || opts.busy, busy: opts.busy, hint: stopped ? undefined : t("world.stopWorldsSessionBefore") }),
     cancel: action("sheet.close", t("common.cancel"), opts.onClose, { disabled: opts.busy }),
   };
 }

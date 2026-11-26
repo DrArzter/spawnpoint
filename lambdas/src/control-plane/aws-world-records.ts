@@ -161,14 +161,14 @@ async function replaceWorldWhitelist(
 async function replaceWorldAccess(
   gameId: string,
   worldId: string,
-  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean }>,
+  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean; onDemand?: boolean }>,
 ): Promise<"updated" | "missing" | "conflict"> {
   const worlds = worldRepository();
   const stored = await worlds.read(worldId);
   if (stored?.record.gameId !== gameId) return "missing";
   if (stored.record.status !== "active") return "conflict";
   const next = withWorldAccess(stored.record, access);
-  if (next.placement === stored.record.placement && next.connectivity === stored.record.connectivity && next.auth === stored.record.auth && next.warm === stored.record.warm) return "updated";
+  if (next.placement === stored.record.placement && next.connectivity === stored.record.connectivity && next.auth === stored.record.auth && next.warm === stored.record.warm && next.onDemand === stored.record.onDemand) return "updated";
   try {
     await worlds.replace(next, stored.etag);
     return "updated";

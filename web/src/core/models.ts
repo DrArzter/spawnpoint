@@ -684,6 +684,8 @@ export type ConfirmationModel = Readonly<{
 }>;
 
 export type WorldPlacement = "configured" | "fleet";
+/** Spot where the game allows it, or always On-Demand (ADR-0102). */
+export type WorldMarket = NonNullable<World["market"]>;
 
 export type ConnectionFieldsModel = Readonly<{
   placement: WorldPlacement;
@@ -714,11 +716,19 @@ export type CreateWorldModel = Readonly<{
   cancel: Action;
 }>;
 
+/** How a fleet world's launched host is bought (ADR-0102). */
+export type MarketFieldModel = Readonly<{
+  value: WorldMarket;
+  set: (market: WorldMarket) => void;
+}>;
+
 export type WorldSettingsModel = Readonly<{
   game: Game;
   world: World;
   stopped: boolean;
   connection: ConnectionFieldsModel;
+  /** Null when the world has no choice: off the fleet, a game without Spot, or Spot off for the deployment. */
+  market: MarketFieldModel | null;
   valid: boolean;
   save: Action;
   cancel: Action;

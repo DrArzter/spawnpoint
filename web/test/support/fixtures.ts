@@ -35,6 +35,7 @@ export function aWorld(over: Partial<World> = {}): World {
     sessionControlAvailable: true,
     connectivity: "zerotier",
     placement: "configured",
+    market: null,
     materialization: "existing",
     gameSettings: { values: {}, updatedAt: null },
     wipes: [],

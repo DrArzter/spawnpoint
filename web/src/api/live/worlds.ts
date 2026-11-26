@@ -149,11 +149,11 @@ export const worldsApi = {
     return body.world as { id: string; displayName: string };
   },
 
-  async requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") {
+  async requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external", market?: "spot" | "on-demand") {
     await request<unknown>(`${worldPath(gameId, worldId)}/settings`, {
-      method: "PUT", body: { placement, connectivity, ...(auth ? { auth } : {}) },
+      method: "PUT", body: { placement, connectivity, ...(auth ? { auth } : {}), ...(market ? { market } : {}) },
       failure: t("common.worldSettingsCouldNot"),
-      refusals: { forbidden: t("world.roleCannotChangeWorld"), invalid_world_connectivity: t("world.hostNetworkCombinationNot") },
+      refusals: { forbidden: t("world.roleCannotChangeWorld"), invalid_world_connectivity: t("world.hostNetworkCombinationNot"), invalid_world_market: t("error.invalid_world_market") },
     });
   },
 

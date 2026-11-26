@@ -92,6 +92,7 @@ export const API_ERROR_TEXT: Readonly<Record<ApiErrorCode, string>> = {
   invalid_world_name: t("error.invalid_display_name"),
   invalid_world_connectivity: t("error.invalid_world_connectivity"),
   invalid_world_warm: t("error.invalid_world_warm"),
+  invalid_world_market: t("error.invalid_world_market"),
   invalid_purge_confirmation: t("error.invalid_purge_confirmation"),
   invalid_retire_confirmation: t("error.invalid_retire_confirmation"),
   unsupported_world: t("error.unsupported_world"),

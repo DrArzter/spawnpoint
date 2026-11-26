@@ -51,6 +51,8 @@ type SessionRequest = Readonly<{
   serverId?: string;
   footprint?: Footprint;
   policy?: SessionPolicy;
+  /** `on-demand`: the world chose never to run on Spot (ADR-0102). */
+  market?: HostMarket;
   /** Restrict candidates without changing the placement algorithm. */
   eligibleProvenance?: HostProvenance;
 }>;
@@ -103,6 +105,7 @@ function requireMarket(value: unknown): void {
 
 // A Spot host takes a session only when the session may lose its host (ADR-0102).
 function sessionSpotEligible(request: SessionRequest): boolean {
+  if (request.market === "on-demand") return false;
   const gameId = requestGame(request);
   return spotEligible(request.policy ?? "cold", gameId !== undefined && gameSpot[gameId] === true);
 }
@@ -242,6 +245,7 @@ async function placeSession(context: CoordinatorContext, request: SessionRequest
   requireId("sessionId", request.sessionId);
   requireId("worldId", request.worldId);
   requirePolicy(request.policy);
+  requireMarket(request.market);
   const footprint = resolveFootprint(request);
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
     const hosts = await context.store.listHosts();
@@ -263,6 +267,7 @@ async function reserveOnHost(
   requireId("sessionId", input.sessionId);
   requireId("worldId", input.worldId);
   requirePolicy(input.policy);
+  requireMarket(input.market);
   const footprint = resolveFootprint(input);
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
     const current = await loadRequired(context, hostId);

@@ -21,7 +21,7 @@ export const worldsRoutes: Readonly<Record<string, Route>> = {
     deployedWorlds.updateWorldSettings(parameter(event, "gameId"), parameter(event, "worldId"), event.body), {
     name: "update_world_settings", title: "Change world hosting", effect: "write",
     description: "Change where a stopped world runs and how players reach it. Refused while the world runs.",
-    input: { ...ACCESS, warm: { type: "boolean", description: "Keep its launched host stopped, not destroyed, between sessions (fleet only)" } },
+    input: { ...ACCESS, warm: { type: "boolean", description: "Keep its launched host stopped, not destroyed, between sessions (fleet only)" }, market: { type: "string", enum: ["spot", "on-demand"], description: "Launch its host on Spot where its game allows, or always On-Demand (fleet only)" } },
   }),
   "POST /games/{gameId}/worlds/{worldId}/start": permissionRoute("session.start", (identity, event) =>
     deployedWorlds.controlSession(identity, "start", parameter(event, "gameId"), parameter(event, "worldId")), {

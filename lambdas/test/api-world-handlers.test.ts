@@ -265,6 +265,32 @@ function storedWorld(t: TestContext, stored: WorldRecord) {
   return written;
 }
 
+test("an On-Demand fleet world asks for On-Demand at start; a Spot one sends nothing new", async (t) => {
+  const fleet = { ...record, placement: "fleet" as const, connectivity: "raw" as const, auth: "game" as const };
+  const onDemand = scenario(t, { world: { ...fleet, onDemand: true } });
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
+  assert.equal(onDemand[0]?.market, "on-demand");
+  t.mock.restoreAll();
+  const spot = scenario(t, { world: fleet });
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
+  assert.equal("market" in (spot[0] ?? {}), false);
+});
+
+test("hosting settings save the market of a fleet world, and refuse it for the configured host or an unknown value", async (t) => {
+  scenario(t);
+  const written = storedWorld(t, record);
+  const fleet = { placement: "fleet", connectivity: "raw", auth: "game" };
+  const saved = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ ...fleet, market: "on-demand" }));
+  assert.equal(saved.statusCode, 200);
+  assert.deepEqual(JSON.parse(saved.body), { ...fleet, market: "on-demand" });
+  assert.equal(written[0]?.on_demand, true);
+  const configured = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ placement: "configured", connectivity: "zerotier", market: "spot" }));
+  assert.deepEqual(JSON.parse(configured.body), { error: "invalid_world_market" });
+  const unknown = await updateWorldSettings("minecraft", record.worldId, JSON.stringify({ ...fleet, market: "reserved" }));
+  assert.deepEqual(JSON.parse(unknown.body), { error: "invalid_world_market" });
+  assert.equal(written.length, 1, "a refused setting writes nothing");
+});
+
 test("hosting settings keep a fleet world warm, and refuse warm for the configured host or as a non-boolean", async (t) => {
   scenario(t);
   const written = storedWorld(t, record);

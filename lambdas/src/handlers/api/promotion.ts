@@ -71,7 +71,9 @@ export function promotionFeature({ sources, machines, worlds }: PromotionDepende
     await machines.promote({
       operationId, serverId, gameId, presetId: plan.record.preset.id, worldId, worldName: plan.record.displayName,
       generationId: plan.record.currentGeneration.id, release: plan.release,
-      policy: plan.record.warm === true ? "warm" : "cold", requestedBy: `identity:${identity.id}`, startAfter,
+      policy: plan.record.warm === true ? "warm" : "cold",
+      ...(plan.record.onDemand === true ? { market: "on-demand" as const } : {}),
+      requestedBy: `identity:${identity.id}`, startAfter,
     });
     return response(202, { result: "requested", operationId, release: plan.release, previousRelease: plan.previous, startAfter });
   }

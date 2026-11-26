@@ -247,7 +247,7 @@ export type SpawnpointApi = Readonly<{
   requestHostDeletion(instanceId: string, snapshot: boolean): Promise<{ operationId: string }>;
   requestCreateWorld(gameId: string, presetId: string, displayName: string, release: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<{ id: string; displayName: string }>;
   requestReleaseBuild(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): Promise<{ release: string; attempt: number }>;
-  requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): Promise<void>;
+  requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external", market?: "spot" | "on-demand"): Promise<void>;
   requestPackDownload(gameId: string, worldId: string): Promise<{ release: string; url: string }>;
   loadBackups(gameId: string, worldId: string): Promise<BackupInventory>;
   /** A short-lived link to one of the world's archives; the API records who asked. */

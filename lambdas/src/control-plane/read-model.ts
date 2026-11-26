@@ -3,7 +3,7 @@ import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import type { ReleaseStateReader } from "./release-usable.ts";
 import type { OperationProgress } from "./operation-progress.ts";
 import type { SessionHost } from "../domain/session-history.ts";
-import { catalogWithPresets, displayAddress, gameCatalog, type CatalogGame, worldAddress } from "./catalog.ts";
+import { catalogWithPresets, displayAddress, gameCatalog, gameSpot, type CatalogGame, worldAddress } from "./catalog.ts";
 import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
@@ -121,6 +121,8 @@ export async function readControlPlaneSnapshot(
     connectionHost?: string | null;
     // The DNS suffix of route53 worlds; their name is fixed, so it is shown while they are stopped too.
     dnsSuffix?: string | null;
+    // Spot and the session volume both on for this deployment (ADR-0102).
+    spotEnabled?: boolean;
   }>,
   catalog: readonly CatalogGame[] = gameCatalog,
   now: () => Date = () => new Date(),
@@ -206,6 +208,9 @@ export async function readControlPlaneSnapshot(
           connectivity: world.connectivity,
           placement: world.placement ?? "configured",
           auth: record?.auth ?? null,
+          market: options.spotEnabled === true && world.placement === "fleet" && gameSpot[game.id] === true
+            ? (record?.onDemand === true ? "on-demand" as const : "spot" as const)
+            : null,
           materialization: world.materialization ?? "existing",
           preset: world.preset ?? null,
           wipes: generations.map((generation, index) => ({

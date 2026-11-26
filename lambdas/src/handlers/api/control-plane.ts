@@ -20,6 +20,7 @@ export async function controlPlane(identity: Identity): Promise<Response> {
     // from a caller who may not read the connection, like any other reference.
     connectionHost: can(identity, "connection.read") ? process.env.CONNECTION_HOST ?? null : null,
     dnsSuffix: can(identity, "connection.read") ? process.env.GAME_DNS_SUFFIX ?? null : null,
+    spotEnabled: process.env.SPAWNPOINT_SPOT === "enabled",
   });
   const body: ControlPlaneSnapshot = { ...snapshot, deployment: deployment() };
   return response(200, body);

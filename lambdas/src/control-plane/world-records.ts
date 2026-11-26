@@ -27,7 +27,7 @@ export type WorldRecords = Readonly<{
   replaceAccess: (
     gameId: string,
     worldId: string,
-    access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean }>,
+    access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean; onDemand?: boolean }>,
   ) => Promise<Exclude<WorldChange, "archived">>;
   switchReleaseBeforeFirstStart: (request: SwitchRequest) => Promise<SwitchOutcome>;
 }>;

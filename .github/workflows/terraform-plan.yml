@@ -7,10 +7,7 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
 
-permissions:
-  contents: read
-  id-token: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: terraform-plan-${{ github.event.pull_request.number }}
@@ -23,6 +20,9 @@ jobs:
     name: Select Terraform roots
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
     outputs:
       roots: ${{ steps.changes.outputs.roots }}
     steps:
@@ -55,14 +55,18 @@ jobs:
           cp terraform-comment.md "${GITHUB_STEP_SUMMARY}"
           scripts/upsert-pr-comment.sh '<!-- spawnpoint-terraform-summary -->' terraform-comment.md
 
-  # A job skipped by its condition passes the required check.
   plan:
     name: Terraform production plan
+    # A job skipped by its condition passes the required check.
     needs: changes
     if: needs.changes.outputs.roots != '[]'
     environment: production-plan
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}

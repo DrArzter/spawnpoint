@@ -122,6 +122,14 @@ game_console() {
   esac
 }
 
+# The REST API's broadcast, the same call the console's announce makes.
+game_announce() {
+  local body
+  body="$(jq -cn --arg message "$1" '{message: $message}')" || return 1
+  palworld_rest POST announce "${body}" >/dev/null
+  return $?
+}
+
 # The server's own frame time, in milliseconds, from /metrics.
 game_tick_time_ms() {
   local metrics frame_ms

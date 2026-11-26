@@ -87,6 +87,14 @@ game_console() {
   return $?
 }
 
+# servermsg takes one quoted argument; a quote inside the text would end it.
+game_announce() {
+  local apostrophe="'" text
+  text="${1//\"/${apostrophe}}"
+  zomboid_rcon "servermsg \"${text}\"" >/dev/null
+  return $?
+}
+
 # Project Zomboid exposes no tick or frame time over RCON; the acceptance
 # records it as unmeasured rather than guessing from something else.
 game_tick_time_ms() {

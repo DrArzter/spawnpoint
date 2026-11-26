@@ -14,7 +14,8 @@
     "cores": 4
   },
   "capabilities": {
-    "whitelist": false
+    "whitelist": false,
+    "spot": true
   },
   "console": {
     "lifecycle_commands": [

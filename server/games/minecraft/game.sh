@@ -76,6 +76,13 @@ game_console() {
   return $?
 }
 
+# One line to every player, as the server's own chat line.
+game_announce() {
+  local text="$1"
+  rcon "say ${text}"
+  return $?
+}
+
 game_save() {
   local save_result
   rcon save-off >/dev/null

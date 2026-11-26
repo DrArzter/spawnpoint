@@ -30,6 +30,8 @@ export type GameModule = Readonly<{
   footprint: Footprint;
   /** The game keeps a whitelist the host can write from a world's record (ADR-0066). */
   whitelist: boolean;
+  /** A session of this game may run on a Spot host (ADR-0102). Absent in the manifest means false. */
+  spot: boolean;
   /** This module owns the records written before games were an axis, which name no game (ADR-0089). */
   legacyDefault: boolean;
   /** What its console refuses (commands that end the game outside its lifecycle) and offers (ADR-0063). */
@@ -113,6 +115,7 @@ function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
       cores: field(footprint.cores, isNumber, `${id}.footprint.cores`),
     },
     whitelist: field(capabilities.whitelist, isBoolean, `${id}.capabilities.whitelist`),
+    spot: capabilities.spot === undefined ? false : field(capabilities.spot, isBoolean, `${id}.capabilities.spot`),
     legacyDefault: manifest.legacy_default === true,
     console: consoleRules(manifest, id),
     whitelistRules: whitelistRules(manifest, id),

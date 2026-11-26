@@ -48,7 +48,7 @@ function unavailableReason(world: World): string {
 function fleetRefusal(world: World, game: Game): string | null {
   const observed = fleetSessionOf(world)?.observedState;
   if (world.connectivity === "zerotier") return t("world.fleetHostsDoNotJoin");
-  if (observed === "starting" || observed === "stopping" || observed === "unknown") return t("world.worldObserved", { observed });
+  if (observed === "starting" || observed === "stopping" || observed === "moving" || observed === "unknown") return t("world.worldObserved", { observed });
   return null;
 }
 
@@ -124,6 +124,7 @@ function fleetWorlds(game: Game | undefined, state: ServerState): World[] {
 function fleetReason(game: Game | undefined): string {
   const running = fleetWorlds(game, "running");
   if (fleetWorlds(game, "unknown").length > 0) return t("world.spawnpointCannotConfirmState");
+  if (fleetWorlds(game, "moving").length > 0) return t("world.worldMovingHostReclaimed");
   if (fleetWorlds(game, "starting").length > 0) return t("world.fleetHostBeingAssigned");
   if (fleetWorlds(game, "stopping").length > 0) return t("world.worldSavingHostDraining");
   if (running.length > 1) return t("world.runningCountWorldsRunningEach", { runningCount: running.length });
@@ -166,6 +167,8 @@ export function buildSessionOverview(game: Game | undefined, snapshot: ControlPl
     fleetHosts: {
       running: hosts.filter((item) => item.provenance === "launched" && item.state === "running").length,
       pending: hosts.filter((item) => item.provenance === "launched" && item.state === "pending").length,
+      // ADR-0102: hosts EC2 may reclaim. A viewer without infrastructure detail sees no market.
+      spot: hosts.filter((item) => item.provenance === "launched" && item.state === "running" && item.market === "spot").length,
     },
   };
 }
@@ -287,7 +290,7 @@ function worldRunning(game: Game, world: World, opts: Readonly<{ fleet: boolean;
 
 function rowStatus(world: World, active: boolean, state: ServerState | null): StatusDescriptor {
   if (active) return sessionStatus("running");
-  if (state === "starting" || state === "stopping") return sessionStatus(state);
+  if (state === "starting" || state === "stopping" || state === "moving") return sessionStatus(state);
   return worldStatus(world);
 }
 

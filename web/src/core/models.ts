@@ -138,7 +138,7 @@ export type SessionOverview = Readonly<{
   players: number | null;
   observedAt: string | undefined;
   host: HostFacts | null;
-  fleetHosts: Readonly<{ running: number; pending: number }>;
+  fleetHosts: Readonly<{ running: number; pending: number; spot: number }>;
 }>;
 
 export type AddressFacts = Readonly<{ value: string; connectivity: World["connectivity"]; network: string }>;

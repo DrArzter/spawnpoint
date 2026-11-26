@@ -75,7 +75,8 @@ export type SessionIdle = Readonly<{
 export type WorldSession = Readonly<{
   serverId: string;
   desiredState: "stopped" | "running";
-  observedState: "stopped" | "starting" | "ready" | "stopping" | "unknown";
+  /** `moving`: its Spot host was reclaimed and it starts again at the same address (ADR-0102). */
+  observedState: "stopped" | "starting" | "ready" | "stopping" | "moving" | "unknown";
   activeSessionId: string | null;
   activeWorldId: string | null;
   /** Present while a watchdog is registered for the session. */
@@ -136,6 +137,8 @@ export type Host = Readonly<{
   providerRef?: string;
   instanceType?: string | null;
   availabilityZone?: string | null;
+  /** Which EC2 market the host runs on (ADR-0102); null when EC2 does not say. */
+  market?: "spot" | "on-demand" | null;
   launchedAt?: string | null;
 }>;
 

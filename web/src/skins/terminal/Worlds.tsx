@@ -115,6 +115,7 @@ function HostState({ overview, compact = false }: Readonly<{ overview: SessionOv
         {overview.fleet ? <>
           <Fact label={t("world.fleetHosts")}>{t("world.fleetRunning", { count: overview.fleetHosts.running })}</Fact>
           <Fact label={t("world.provisioning")}>{t("world.fleetHostCount", { count: overview.fleetHosts.pending })}</Fact>
+          <Fact label={t("host.marketSpot")}>{t("world.fleetHostCount", { count: overview.fleetHosts.spot })}</Fact>
         </> : <>
           <Fact label={t("common.computeHost")}>{host ? <><State kind={host.status.kind} label={host.status.label} /><small>{host.name}</small></> : <Ghost>{t("world.noHostAvailable")}</Ghost>}</Fact>
           <Fact label={t("common.instanceType")}>{host?.instanceType ? <code>{host.instanceType}</code> : <Ghost>{t("world.notReported")}</Ghost>}</Fact>

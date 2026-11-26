@@ -96,6 +96,7 @@ async function listHosts(): Promise<readonly HostObservation[]> {
       providerRef: instance.InstanceId,
       instanceType: instance.InstanceType ?? null,
       availabilityZone: instance.Placement?.AvailabilityZone ?? null,
+      market: instance.InstanceLifecycle === "spot" ? "spot" as const : "on-demand" as const,
       launchedAt: instance.LaunchTime?.toISOString() ?? null,
       publicIp: instance.PublicIpAddress ?? null,
       provenance: tag(instance, "ManagedBy") === "spawnpoint-fleet" ? "launched" as const : "configured" as const,

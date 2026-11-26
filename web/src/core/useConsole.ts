@@ -40,6 +40,7 @@ type ControlPlaneState =
 function fleetServerState(game: Game | undefined): ServerState {
   const observed = new Set([game?.lifecycle?.observedState, ...(game?.worlds ?? []).map((world) => world.session?.observedState)]);
   if (observed.has("ready")) return "running";
+  if (observed.has("moving")) return "moving";
   if (observed.has("starting")) return "starting";
   if (observed.has("stopping")) return "stopping";
   if (observed.has("unknown")) return "unknown";

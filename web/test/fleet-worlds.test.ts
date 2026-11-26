@@ -141,3 +141,25 @@ test("every session and world detail names what it is about", () => {
   assert.deepEqual(details.filter((detail) => detail.key === undefined).map((detail) => detail.label), []);
   assert.ok(details.some((detail) => detail.key === "players"));
 });
+
+// ADR-0102: a world whose Spot host was reclaimed is moving, never stopped or running.
+test("a moving fleet world reads as moving, in progress, and refuses a session action", () => {
+  const moving = fleetWorld("moving", "Moving", session("moving", "moving"));
+  const withMove: Game = { ...game, worlds: [moving, spare] };
+  assert.equal(fleetWorldState(withMove, moving), "moving");
+  assert.equal(deriveServerState(withMove, { ...snapshot(), games: [withMove] }), "moving");
+  const shared = deriveSharedHostSession(withMove, { ...snapshot(), games: [withMove] });
+  const overview = buildSessionOverview(withMove, { ...snapshot(), games: [withMove] }, "moving", shared, true);
+  assert.deepEqual(overview.status, { kind: "progress", label: "Moving" });
+  assert.match(overview.reason.text, /Spot host was reclaimed/);
+  const row = buildWorldRow(withMove, moving, { fleet: true, sharedSession: shared, granted: new Set(["session.start", "session.stop"]), pending: NO_PENDING, callbacks: {} as never });
+  assert.equal(row.status.label, "Moving");
+});
+
+test("the fleet overview counts the running launched hosts on Spot", () => {
+  const base = snapshot();
+  const hosts = base.hosts.map((host) => host.id === "i-rostik" ? { ...host, market: "spot" as const } : host);
+  const shared = deriveSharedHostSession(game, { ...base, hosts });
+  assert.equal(buildSessionOverview(game, { ...base, hosts }, "running", shared, true).fleetHosts.spot, 1);
+  assert.equal(buildSessionOverview(game, base, "running", shared, true).fleetHosts.spot, 0);
+});

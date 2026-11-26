@@ -4,6 +4,7 @@
  "steps": {
   "session_start": "Session started",
   "world_catalog": "World catalogue read",
+  "session_volume_mounted": "Session volume mounted",
   "world_prepared": "World prepared",
   "connectivity_prepared": "Network prepared",
   "release_pointer_read": "Release pointer read",

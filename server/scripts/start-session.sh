@@ -61,6 +61,17 @@ source "${SCRIPT_DIR}/_connectivity.sh"
 resolve_game
 configure_game_compose
 
+# A session volume (ADR-0102) holds the world's directory, so it is mounted
+# before anything reads or prepares that directory. Attached again after an
+# interruption, it already holds the world.
+if [[ -n "${SPAWNPOINT_SESSION_VOLUME_ID:-}" ]]; then
+  [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]] || {
+    printf 'error: a session volume holds a generation world only\n' >&2
+    exit 1
+  }
+  "${SCRIPT_DIR}/mount-session-volume.sh" "${WORLD_ID}" "${SPAWNPOINT_SESSION_VOLUME_ID}" >&2
+  mark_step session_volume_mounted
+fi
 if [[ "${WORLD_STORAGE_LAYOUT:-legacy}" == "generation" ]]; then
   export RELEASE_BUCKET="${RELEASE_BUCKET:-$(read_env_value RELEASE_BUCKET)}"
   "${SCRIPT_DIR}/reconcile-purged-worlds.sh" "${WORLD_ID}" >&2

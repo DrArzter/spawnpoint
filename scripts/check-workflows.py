@@ -120,10 +120,15 @@ def check_deploy_workflow(path: Path, text: str) -> list[str]:
 
 def check_plan_workflow(text: str) -> list[str]:
     problems: list[str] = []
-    scopes = permission_scopes(text)
-    expected = {"contents": "read", "id-token": "write", "pull-requests": "write"}
-    if scopes != expected:
-        problems.append(f"plan permissions must be {expected}, found {scopes}")
+    if permission_scopes(text):
+        problems.append("the pull request plan must grant permissions per job, not at workflow level")
+    for job, expected in (
+        ("changes", {"contents": "read", "pull-requests": "write"}),
+        ("plan", {"contents": "read", "id-token": "write", "pull-requests": "write"}),
+    ):
+        scopes = job_permission_scopes(text, job)
+        if scopes != expected:
+            problems.append(f"plan job {job!r} permissions must be {expected}, found {scopes}")
     for required in (
         "pull_request:",
         "branches: [main]",

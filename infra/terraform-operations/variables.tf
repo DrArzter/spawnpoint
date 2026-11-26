@@ -49,7 +49,7 @@ variable "control_plane_view_table_name" {
 variable "launch_families" {
   description = "The instance families a launched host may be, as EC2 Fleet AllowedInstanceTypes patterns (ADR-0054): a filter, never a ranking. Mirrors launchFamilies in lambdas/src/control-plane/catalog.ts; a test keeps them equal."
   type        = list(string)
-  default     = ["m7i-flex.*", "m7i.*", "r7i.*", "r8i-flex.*", "r8i.*", "c7i.*"]
+  default     = ["m7i-flex.*", "m7i.*", "r7i.*", "r8i-flex.*", "r8i.*", "c7i.*", "m7a.*", "r7a.*", "m6i.*", "r6i.*", "m6a.*", "r6a.*"]
 }
 
 variable "drain_grace_seconds" {

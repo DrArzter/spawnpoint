@@ -22,7 +22,7 @@ export const gameSpot: Readonly<Record<string, boolean>> = Object.fromEntries(
 // patterns: a filter, never a ranking. ADR-0032 chose x86 for single-thread
 // speed and the pool the presets were proven on; burstable and Graviton are out.
 // Which of these a launch becomes is EC2's answer, by price, at launch time.
-export const launchFamilies: readonly string[] = ["m7i-flex.*", "m7i.*", "r7i.*", "r8i-flex.*", "r8i.*", "c7i.*"];
+export const launchFamilies: readonly string[] = ["m7i-flex.*", "m7i.*", "r7i.*", "r8i-flex.*", "r8i.*", "c7i.*", "m7a.*", "r7a.*", "m6i.*", "r6i.*", "m6a.*", "r6a.*"];
 
 export type CatalogWorld = Readonly<{
   id: string;

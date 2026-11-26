@@ -285,6 +285,16 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "TagOnlyTheSpotServiceLinkedRole" &&
+      toset(statement.actions) == toset(["iam:TagRole", "iam:UntagRole"]) &&
+      toset(statement.resources) == toset(["arn:aws:iam::123456789012:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot"])
+    ])
+    error_message = "The deploy identity may tag only the EC2 Spot service-linked role among the service-linked roles (ADR-0102)."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       statement.sid == "TagOnlyReleaseBuilderSources" &&
       toset(statement.actions) == toset(["s3:PutObjectTagging"]) &&
       toset(statement.resources) == toset([

@@ -54,6 +54,14 @@ or delete action. The alarm `spawnpoint-release-reconciler-sweep-failed` fires w
 For an on-demand run, invoke the Lambda by hand with `{}` or `{"mode":"report"}`; any other mode is refused. The result and one log
 line per class are in `/aws/lambda/spawnpoint-release-reconciler`. The table is created in `../terraform-storage`.
 
+## Session volume
+
+ADR-0102, step 2. `session_volume` is `disabled` unless the repository variable `SPAWNPOINT_SESSION_VOLUME` is
+`enabled`; `session_volume_size_gib` (default 30) sizes each volume. The start and stop roles may create, attach,
+detach and delete only volumes tagged `ManagedBy=spawnpoint-session-volume`, and attach or detach them only on hosts
+tagged `ManagedBy=spawnpoint-fleet` (`session-volume.tf`). The host stack (`infra/terraform`) deploys first and owns the
+`spawnpoint-start-session` parameter and the `spawnpoint-unmount-session-volume` document the workflows use.
+
 ## Local verification
 
 ```bash

@@ -153,6 +153,21 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.session_volume_create
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.session_volume_release
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.lifecycle_v2_start_session_volume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_watchdog_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
@@ -914,4 +929,78 @@ run "delete_host_reaches_only_spawnpoint_resources" {
     )
     error_message = "Deleting a host is a tracked operation that can keep a snapshot first."
   }
+}
+
+run "session_volume_is_off_by_default_and_reached_only_by_its_tag" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      var.session_volume == "disabled",
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Initialize"].Parameters.sessionVolume.mode == "disabled",
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_stop.definition).States["Initialize"].Parameters.sessionVolume.mode == "disabled",
+    ])
+    error_message = "The session volume is off unless SPAWNPOINT_SESSION_VOLUME turns it on (ADR-0102)."
+  }
+
+  assert {
+    condition = alltrue([
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Create Session Volume"].Parameters["Size.$"] == "States.StringToJson('30')",
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Create Session Volume"].Parameters.TagSpecifications[0].Tags[0].Value == local.session_volume_managed_by,
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_stop.definition).States["Find Session Volume"].Parameters.Filters[1].Name == "tag:${local.session_volume_session_tag}",
+    ])
+    error_message = "The volume size comes from session_volume_size_gib, and the workflows tag and find the volume by the one set of tag values."
+  }
+
+  assert {
+    condition = alltrue([
+      for sid in ["CreateTaggedSessionVolumes", "TagSessionVolumesAtCreation"] :
+      anytrue([for statement in data.aws_iam_policy_document.session_volume_create.statement : statement.sid == sid && anytrue([for condition in statement.condition : condition.variable == "aws:RequestTag/ManagedBy" && contains(condition.values, "spawnpoint-session-volume")])])
+    ])
+    error_message = "A session volume can be created only with its ManagedBy tag."
+  }
+
+  assert {
+    condition = alltrue(concat(
+      [for statement in data.aws_iam_policy_document.session_volume_create.statement :
+        anytrue([for condition in statement.condition : condition.variable == "ec2:ResourceTag/ManagedBy"])
+      if contains(tolist(statement.actions), "ec2:AttachVolume")],
+      [for statement in data.aws_iam_policy_document.session_volume_release.statement :
+        anytrue([for condition in statement.condition : condition.variable == "ec2:ResourceTag/ManagedBy"])
+      if contains(tolist(statement.actions), "ec2:DetachVolume") || contains(tolist(statement.actions), "ec2:DeleteVolume")],
+    ))
+    error_message = "Attach, detach and delete reach only tagged volumes and tagged launched hosts."
+  }
+
+  assert {
+    condition     = one([for statement in data.aws_iam_policy_document.session_volume_release.statement : statement.resources if statement.sid == "UnmountThroughItsDocument"]) == toset(["arn:aws:ssm:eu-central-1:123456789012:document/spawnpoint-unmount-session-volume"])
+    error_message = "The unmount runs only through its own document."
+  }
+}
+
+run "session_volume_can_be_switched_on" {
+  command = plan
+
+  variables {
+    session_volume          = "enabled"
+    session_volume_size_gib = 50
+  }
+
+  assert {
+    condition = alltrue([
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Initialize"].Parameters.sessionVolume.mode == "enabled",
+      jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Create Session Volume"].Parameters["Size.$"] == "States.StringToJson('50')",
+    ])
+    error_message = "The switch and the size reach the start workflow."
+  }
+}
+
+run "session_volume_size_is_bounded" {
+  command = plan
+
+  variables {
+    session_volume_size_gib = 0
+  }
+
+  expect_failures = [var.session_volume_size_gib]
 }

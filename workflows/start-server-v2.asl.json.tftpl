@@ -17,6 +17,14 @@
         },
         "coordination": {
           "forcedStopPolls": 0
+        },
+        "sessionVolume": {
+          "mode": "${session_volume}",
+          "volumeId": "",
+          "createPolls": { "count": 0 },
+          "attachPolls": { "count": 0 },
+          "unmountPolls": { "count": 0 },
+          "detachPolls": { "count": 0 }
         }
       },
       "Next": "Apply Request Defaults"
@@ -26,7 +34,8 @@
       "Comment": "What a caller leaves out. ADR-0062: serverId is the lifecycle record's key, a fleet world's own or its game's; a caller that predates the split sends no gameId, and its serverId is the game. A CLI promotion's nested starts name no placement, and the configured host is the only one they can mean; a fleet world's promotion names `fleet` (ADR-0078). A caller that names no policy places the session cold (ADR-0048).",
       "Parameters": {
         "request.$": "States.JsonMerge($.defaults, $.request, false)",
-        "coordination.$": "$.coordination"
+        "coordination.$": "$.coordination",
+        "sessionVolume.$": "$.sessionVolume"
       },
       "Next": "Initialize Lifecycle"
     },
@@ -541,7 +550,313 @@
         "slot.$": "$.placement.placement.slot"
       },
       "ResultPath": "$.request.placed",
+      "Next": "Route Session Volume"
+    },
+    "Route Session Volume": {
+      "Type": "Choice",
+      "Comment": "ADR-0102, step 2: a cold session on a launched host runs its world from its own volume, created in the host's zone. Off, or any other session, starts as before.",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.sessionVolume.mode",
+              "StringEquals": "enabled"
+            },
+            {
+              "Variable": "$.request.placement",
+              "StringEquals": "fleet"
+            },
+            {
+              "Variable": "$.request.policy",
+              "StringEquals": "cold"
+            }
+          ],
+          "Next": "Describe Session Host Zone"
+        }
+      ],
+      "Default": "Start Accepted V1"
+    },
+    "Describe Session Host Zone": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.placed.hostId)"
+      },
+      "ResultSelector": {
+        "zone.$": "$.Reservations[0].Instances[0].Placement.AvailabilityZone"
+      },
+      "ResultPath": "$.sessionVolume.host",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.startFailure",
+          "Next": "Begin Compensating Stop"
+        }
+      ],
+      "Next": "Create Session Volume"
+    },
+    "Create Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:createVolume",
+      "Comment": "Tagged at creation, so the IAM tag condition and the sweeper see it from its first second.",
+      "Parameters": {
+        "AvailabilityZone.$": "$.sessionVolume.host.zone",
+        "Size.$": "States.StringToJson('${session_volume_size_gib}')",
+        "VolumeType": "gp3",
+        "Encrypted": true,
+        "TagSpecifications": [
+          {
+            "ResourceType": "volume",
+            "Tags": [
+              {
+                "Key": "ManagedBy",
+                "Value": "${session_volume_managed_by}"
+              },
+              {
+                "Key": "${session_volume_session_tag}",
+                "Value.$": "$.request.sessionId"
+              },
+              {
+                "Key": "WorldId",
+                "Value.$": "$.request.worldId"
+              }
+            ]
+          }
+        ]
+      },
+      "ResultSelector": {
+        "volumeId.$": "$.VolumeId"
+      },
+      "ResultPath": "$.sessionVolume.created",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.startFailure",
+          "Next": "Begin Compensating Stop"
+        }
+      ],
+      "Next": "Wait Before Created Volume Poll"
+    },
+    "Wait Before Created Volume Poll": {
+      "Type": "Wait",
+      "Seconds": 2,
+      "Next": "Describe Created Session Volume"
+    },
+    "Describe Created Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeVolumes",
+      "Parameters": {
+        "VolumeIds.$": "States.Array($.sessionVolume.created.volumeId)"
+      },
+      "ResultSelector": {
+        "state.$": "$.Volumes[0].State"
+      },
+      "ResultPath": "$.sessionVolume.observed",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.startFailure",
+          "Next": "Begin Compensating Stop"
+        }
+      ],
+      "Next": "Session Volume Available"
+    },
+    "Session Volume Available": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.observed.state",
+          "StringEquals": "available",
+          "Next": "Attach Session Volume"
+        },
+        {
+          "Variable": "$.sessionVolume.observed.state",
+          "StringEquals": "creating",
+          "Next": "Count Created Volume Poll"
+        }
+      ],
+      "Default": "Session Volume Unavailable"
+    },
+    "Count Created Volume Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "count.$": "States.MathAdd($.sessionVolume.createPolls.count, 1)"
+      },
+      "ResultPath": "$.sessionVolume.createPolls",
+      "Next": "Created Volume Poll Limit Reached"
+    },
+    "Created Volume Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.createPolls.count",
+          "NumericGreaterThanEquals": 30,
+          "Next": "Session Volume Unavailable"
+        }
+      ],
+      "Default": "Wait Before Created Volume Poll"
+    },
+    "Attach Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:attachVolume",
+      "Comment": "The device name comes from the session's slot, so two sessions on one host never ask for the same one. The host finds the volume by its id, not by this name.",
+      "Parameters": {
+        "Device.$": "States.ArrayGetItem(States.Array('/dev/sdf', '/dev/sdg', '/dev/sdh', '/dev/sdi', '/dev/sdj', '/dev/sdk', '/dev/sdl', '/dev/sdm', '/dev/sdn', '/dev/sdo', '/dev/sdp', '/dev/sdq', '/dev/sdr', '/dev/sds', '/dev/sdt', '/dev/sdu', '/dev/sdv', '/dev/sdw', '/dev/sdx', '/dev/sdy', '/dev/sdz'), $.request.placed.slot)",
+        "InstanceId.$": "$.request.placed.hostId",
+        "VolumeId.$": "$.sessionVolume.created.volumeId"
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.startFailure",
+          "Next": "Begin Compensating Stop"
+        }
+      ],
+      "Next": "Wait Before Attached Volume Poll"
+    },
+    "Wait Before Attached Volume Poll": {
+      "Type": "Wait",
+      "Seconds": 2,
+      "Next": "Describe Attached Session Volume"
+    },
+    "Describe Attached Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeVolumes",
+      "Parameters": {
+        "VolumeIds.$": "States.Array($.sessionVolume.created.volumeId)"
+      },
+      "ResultSelector": {
+        "attachments.$": "$.Volumes[0].Attachments"
+      },
+      "ResultPath": "$.sessionVolume.observed",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.startFailure",
+          "Next": "Begin Compensating Stop"
+        }
+      ],
+      "Next": "Session Volume Attached"
+    },
+    "Session Volume Attached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.sessionVolume.observed.attachments[0].State",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.sessionVolume.observed.attachments[0].State",
+              "StringEquals": "attached"
+            }
+          ],
+          "Next": "Adopt Session Volume"
+        }
+      ],
+      "Default": "Count Attached Volume Poll"
+    },
+    "Count Attached Volume Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "count.$": "States.MathAdd($.sessionVolume.attachPolls.count, 1)"
+      },
+      "ResultPath": "$.sessionVolume.attachPolls",
+      "Next": "Attached Volume Poll Limit Reached"
+    },
+    "Attached Volume Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.attachPolls.count",
+          "NumericGreaterThanEquals": 30,
+          "Next": "Session Volume Unavailable"
+        }
+      ],
+      "Default": "Wait Before Attached Volume Poll"
+    },
+    "Adopt Session Volume": {
+      "Type": "Pass",
+      "InputPath": "$.sessionVolume.created.volumeId",
+      "ResultPath": "$.sessionVolume.volumeId",
       "Next": "Start Accepted V1"
+    },
+    "Session Volume Unavailable": {
+      "Type": "Pass",
+      "Comment": "The volume did not become available or attached in time. The start is compensated like a failed host start; the release after the verified stop, or the sweeper, deletes the volume.",
+      "Result": {
+        "Error": "Spawnpoint.SessionVolumeUnavailable",
+        "Cause": "The session volume did not become available and attached before the poll limit."
+      },
+      "ResultPath": "$.startFailure",
+      "Next": "Begin Compensating Stop"
     },
     "No Host Has Room": {
       "Type": "Pass",
@@ -656,6 +971,7 @@
           "placement.$": "$.request.placement",
           "slot.$": "$.request.placed.slot",
           "worldId.$": "$.request.worldId",
+          "sessionVolumeId.$": "$.sessionVolume.volumeId",
           "timing.$": "$.request.startTiming"
         }
       },
@@ -1095,7 +1411,7 @@
           "Next": "Force Stop Failed Start Host"
         }
       ],
-      "Next": "Mark Compensated Session Stopped"
+      "Next": "Route Session Volume Release After Failed Start"
     },
     "Force Stop Failed Start Host": {
       "Type": "Task",
@@ -1337,6 +1653,340 @@
       "Type": "Fail",
       "Error": "Spawnpoint.V2StartFailedHostForcedStopped",
       "Cause": "The host start and verified stop both failed; EC2 was forcibly stopped and its persistent volume was retained for recovery."
+    },
+    "Route Session Volume Release After Failed Start": {
+      "Type": "Choice",
+      "Comment": "ADR-0102: the archive is verified, so the session volume is let go. Every failure below leaves the volume to the session volume sweeper and the stop goes on.",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.mode",
+          "StringEquals": "enabled",
+          "Next": "Find Session Volume After Failed Start"
+        }
+      ],
+      "Default": "Mark Compensated Session Stopped"
+    },
+    "Find Session Volume After Failed Start": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeVolumes",
+      "Parameters": {
+        "Filters": [
+          {
+            "Name": "tag:ManagedBy",
+            "Values": [
+              "${session_volume_managed_by}"
+            ]
+          },
+          {
+            "Name": "tag:${session_volume_session_tag}",
+            "Values.$": "States.Array($.request.sessionId)"
+          }
+        ]
+      },
+      "ResultSelector": {
+        "volumes.$": "$.Volumes"
+      },
+      "ResultPath": "$.sessionVolume.found",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Compensated Session Stopped"
+        }
+      ],
+      "Next": "Route Found Session Volume After Failed Start"
+    },
+    "Route Found Session Volume After Failed Start": {
+      "Type": "Choice",
+      "Comment": "A volume that is already available was detached by an earlier try. A host that keeps running for another session still has it mounted; a stopped host unmounted it when it shut down.",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.found.volumes[0]",
+          "IsPresent": false,
+          "Next": "Mark Compensated Session Stopped"
+        },
+        {
+          "Variable": "$.sessionVolume.found.volumes[0].State",
+          "StringEquals": "available",
+          "Next": "Delete Session Volume After Failed Start"
+        },
+        {
+          "Variable": "$.hostStop.Output.status",
+          "StringEquals": "session_stopped_host_busy",
+          "Next": "Unmount Session Volume After Failed Start"
+        }
+      ],
+      "Default": "Detach Session Volume After Failed Start"
+    },
+    "Unmount Session Volume After Failed Start": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "spawnpoint-unmount-session-volume",
+        "InstanceIds.$": "States.Array($.request.placed.hostId)",
+        "Parameters": {
+          "worldId.$": "States.Array($.request.worldId)"
+        },
+        "TimeoutSeconds": 300,
+        "CloudWatchOutputConfig": {
+          "CloudWatchLogGroupName": "/spawnpoint/session-commands",
+          "CloudWatchOutputEnabled": true
+        }
+      },
+      "ResultSelector": {
+        "commandId.$": "$.Command.CommandId"
+      },
+      "ResultPath": "$.sessionVolume.unmount",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ssm.ThrottlingException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Compensated Session Stopped"
+        }
+      ],
+      "Next": "Wait Before Unmount Poll After Failed Start"
+    },
+    "Wait Before Unmount Poll After Failed Start": {
+      "Type": "Wait",
+      "Seconds": 2,
+      "Next": "Get Unmount Command After Failed Start"
+    },
+    "Get Unmount Command After Failed Start": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:getCommandInvocation",
+      "Parameters": {
+        "CommandId.$": "$.sessionVolume.unmount.commandId",
+        "InstanceId.$": "$.request.placed.hostId"
+      },
+      "ResultSelector": {
+        "status.$": "$.Status"
+      },
+      "ResultPath": "$.sessionVolume.observed",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ssm.ThrottlingException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Ssm.InvocationDoesNotExistException"
+          ],
+          "ResultPath": "$.sessionVolume.lookupError",
+          "Next": "Count Unmount Poll After Failed Start"
+        },
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Compensated Session Stopped"
+        }
+      ],
+      "Next": "Unmount Complete After Failed Start"
+    },
+    "Unmount Complete After Failed Start": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.observed.status",
+          "StringEquals": "Success",
+          "Next": "Detach Session Volume After Failed Start"
+        },
+        {
+          "Or": [
+            {
+              "Variable": "$.sessionVolume.observed.status",
+              "StringEquals": "Pending"
+            },
+            {
+              "Variable": "$.sessionVolume.observed.status",
+              "StringEquals": "InProgress"
+            },
+            {
+              "Variable": "$.sessionVolume.observed.status",
+              "StringEquals": "Delayed"
+            }
+          ],
+          "Next": "Count Unmount Poll After Failed Start"
+        }
+      ],
+      "Default": "Mark Compensated Session Stopped"
+    },
+    "Count Unmount Poll After Failed Start": {
+      "Type": "Pass",
+      "Parameters": {
+        "count.$": "States.MathAdd($.sessionVolume.unmountPolls.count, 1)"
+      },
+      "ResultPath": "$.sessionVolume.unmountPolls",
+      "Next": "Unmount Poll Limit Reached After Failed Start"
+    },
+    "Unmount Poll Limit Reached After Failed Start": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.unmountPolls.count",
+          "NumericGreaterThanEquals": 30,
+          "Next": "Mark Compensated Session Stopped"
+        }
+      ],
+      "Default": "Wait Before Unmount Poll After Failed Start"
+    },
+    "Detach Session Volume After Failed Start": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:detachVolume",
+      "Parameters": {
+        "VolumeId.$": "$.sessionVolume.found.volumes[0].VolumeId",
+        "InstanceId.$": "$.request.placed.hostId"
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Compensated Session Stopped"
+        }
+      ],
+      "Next": "Wait Before Detach Poll After Failed Start"
+    },
+    "Wait Before Detach Poll After Failed Start": {
+      "Type": "Wait",
+      "Seconds": 2,
+      "Next": "Describe Detached Session Volume After Failed Start"
+    },
+    "Describe Detached Session Volume After Failed Start": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeVolumes",
+      "Parameters": {
+        "VolumeIds.$": "States.Array($.sessionVolume.found.volumes[0].VolumeId)"
+      },
+      "ResultSelector": {
+        "state.$": "$.Volumes[0].State"
+      },
+      "ResultPath": "$.sessionVolume.observed",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Compensated Session Stopped"
+        }
+      ],
+      "Next": "Session Volume Detached After Failed Start"
+    },
+    "Session Volume Detached After Failed Start": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.observed.state",
+          "StringEquals": "available",
+          "Next": "Delete Session Volume After Failed Start"
+        }
+      ],
+      "Default": "Count Detach Poll After Failed Start"
+    },
+    "Count Detach Poll After Failed Start": {
+      "Type": "Pass",
+      "Parameters": {
+        "count.$": "States.MathAdd($.sessionVolume.detachPolls.count, 1)"
+      },
+      "ResultPath": "$.sessionVolume.detachPolls",
+      "Next": "Detach Poll Limit Reached After Failed Start"
+    },
+    "Detach Poll Limit Reached After Failed Start": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.detachPolls.count",
+          "NumericGreaterThanEquals": 30,
+          "Next": "Mark Compensated Session Stopped"
+        }
+      ],
+      "Default": "Wait Before Detach Poll After Failed Start"
+    },
+    "Delete Session Volume After Failed Start": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:deleteVolume",
+      "Parameters": {
+        "VolumeId.$": "$.sessionVolume.found.volumes[0].VolumeId"
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Compensated Session Stopped"
+        }
+      ],
+      "Next": "Mark Compensated Session Stopped"
     },
     "Mark Compensated Session Stopped": {
       "Type": "Task",

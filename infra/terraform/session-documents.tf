@@ -7,6 +7,7 @@
 locals {
   session_world_id_pattern = "^[a-z0-9][a-z0-9-]{0,31}$"
   session_slot_pattern     = "^([0-9]{1,3})?$"
+  session_volume_pattern   = "^(vol-[0-9a-f]{8,17})?$"
   session_update_checkout  = "update=/srv/spawnpoint/app/server/scripts/update-checkout.sh; if [ -x \"$update\" ]; then \"$update\" >&2 || true; fi"
 
   # ADR-0085: the deployment's DNS settings travel with the host step, so a
@@ -46,6 +47,12 @@ resource "aws_ssm_document" "start_session" {
         default       = "false"
         allowedValues = ["true", "false"]
       }
+      sessionVolumeId = {
+        type           = "String"
+        description    = "The session volume to run the world from (ADR-0102); empty for a world on the host's own disk."
+        default        = ""
+        allowedPattern = local.session_volume_pattern
+      }
     }
     mainSteps = [{
       action = "aws:runShellScript"
@@ -58,6 +65,7 @@ resource "aws_ssm_document" "start_session" {
           "if [ '{{ waitForFleet }}' = true ]; then attempt=0; until test -f /etc/spawnpoint-fleet-ready && test -x /srv/spawnpoint/app/server/scripts/start-session.sh; do attempt=$((attempt + 1)); if [ \"$attempt\" -ge 60 ]; then echo 'fleet bootstrap not ready after 300 seconds' >&2; exit 70; fi; sleep 5; done; fi",
           local.session_update_checkout,
           "if [ -n '{{ slot }}' ]; then export SPAWNPOINT_SLOT='{{ slot }}'; fi",
+          "if [ -n '{{ sessionVolumeId }}' ]; then export SPAWNPOINT_SESSION_VOLUME_ID='{{ sessionVolumeId }}'; fi",
           ], local.session_dns_environment, [
           "WORLD_ID='{{ worldId }}' SESSION_FORMAT=json /srv/spawnpoint/app/server/scripts/start-session.sh",
         ])
@@ -115,6 +123,42 @@ resource "aws_ssm_document" "stop_session" {
 
   tags = {
     Name    = "spawnpoint-stop-session"
+    Purpose = "session-host-step"
+  }
+}
+
+# ADR-0102: after a session's archive is verified, the stop unmounts its session
+# volume so the control plane can detach and delete it.
+resource "aws_ssm_document" "unmount_session_volume" {
+  name            = "spawnpoint-unmount-session-volume"
+  document_type   = "Command"
+  document_format = "JSON"
+
+  content = jsonencode({
+    schemaVersion = "2.2"
+    description   = "Unmount one world's session volume on this host (ADR-0102)."
+    parameters = {
+      worldId = {
+        type           = "String"
+        description    = "The world whose session volume to unmount."
+        allowedPattern = local.session_world_id_pattern
+      }
+    }
+    mainSteps = [{
+      action = "aws:runShellScript"
+      name   = "unmountSessionVolume"
+      inputs = {
+        timeoutSeconds = "300"
+        runCommand = [
+          "set -euo pipefail",
+          "/srv/spawnpoint/app/server/scripts/unmount-session-volume.sh '{{ worldId }}'",
+        ]
+      }
+    }]
+  })
+
+  tags = {
+    Name    = "spawnpoint-unmount-session-volume"
     Purpose = "session-host-step"
   }
 }

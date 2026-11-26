@@ -519,3 +519,26 @@ run "persistent_host_is_admitted_by_tag_never_by_id" {
     error_message = "A host command reaches the persistent host only by its Name tag."
   }
 }
+
+run "session_volume_reaches_the_host_only_through_checked_parameters" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      jsondecode(aws_ssm_document.start_session.content).parameters.sessionVolumeId.allowedPattern == "^(vol-[0-9a-f]{8,17})?$",
+      jsondecode(aws_ssm_document.start_session.content).parameters.sessionVolumeId.default == "",
+      anytrue([for line in jsondecode(aws_ssm_document.start_session.content).mainSteps[0].inputs.runCommand : strcontains(line, "export SPAWNPOINT_SESSION_VOLUME_ID='{{ sessionVolumeId }}'")]),
+      jsondecode(aws_sfn_state_machine.start_server.definition).States["Start Fleet Session Command On Volume"].Parameters.DocumentName == aws_ssm_document.start_session.name,
+    ])
+    error_message = "A session volume id reaches the host only as a checked document parameter, and an empty one changes nothing (ADR-0102)."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_ssm_document.unmount_session_volume.name == "spawnpoint-unmount-session-volume",
+      jsondecode(aws_ssm_document.unmount_session_volume.content).parameters.worldId.allowedPattern == "^[a-z0-9][a-z0-9-]{0,31}$",
+      length(keys(jsondecode(aws_ssm_document.unmount_session_volume.content).parameters)) == 1,
+    ])
+    error_message = "The unmount document takes only a checked world id."
+  }
+}

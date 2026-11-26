@@ -100,7 +100,9 @@ test("a failed V1 start is durably stopped before lifecycle is cleared", async (
     (state(definition, "Stop Accepted V1").Parameters?.Input as Record<string, unknown>)["worldId.$"],
     "$.request.worldId",
   );
-  assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Compensated Session Stopped");
+  // ADR-0102: the session volume is released after the verified stop, and the release only ever goes on to the mark.
+  assert.equal(state(definition, "Stop Accepted V1").Next, "Route Session Volume Release After Failed Start");
+  assert.equal(state(definition, "Route Session Volume Release After Failed Start").Default, "Mark Compensated Session Stopped");
   assert.equal(state(definition, "Mark Compensated Session Stopped").Next, "Close Compensated Session History");
   assert.equal(state(definition, "Close Compensated Session History").Next, "Release Compensated Placement", "a failed start must not free its host before the game is stopped");
   assert.equal(state(definition, "Release Compensated Placement").Next, "Release Compensating Lease");
@@ -276,7 +278,8 @@ test("the placement mode routes the start: single uses the configured host, shar
   assert.match(JSON.stringify(state(definition, "Route Placement").Choices?.[1]), /\$\.request\.launch/, "launching is a setting, off by default");
   assert.equal(state(definition, "Route Placement").Default, "No Host Has Room");
   assert.deepEqual(state(definition, "Adopt Placement").Parameters, { "hostId.$": "$.placement.placement.hostId", "slot.$": "$.placement.placement.slot" });
-  assert.equal(state(definition, "Adopt Placement").Next, "Start Accepted V1");
+  assert.equal(state(definition, "Adopt Placement").Next, "Route Session Volume");
+  assert.equal(state(definition, "Route Session Volume").Default, "Start Accepted V1", "without a session volume the start goes on as before");
   assert.equal(state(definition, "Route Bookkeeping").Choices?.[0]?.Next, "Mark Session Ready", "a shared session already holds its reservation");
   assert.equal(state(definition, "Route Bookkeeping").Choices?.[1]?.Next, "Mark Session Ready", "a Fleet session already holds its reservation on the launched host");
 

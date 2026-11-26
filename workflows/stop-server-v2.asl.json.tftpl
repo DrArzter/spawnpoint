@@ -8,7 +8,15 @@
       "Parameters": {
         "request.$": "$",
         "defaults": { "players": "refuse" },
-        "coordination": {}
+        "coordination": {},
+        "sessionVolume": {
+          "mode": "${session_volume}",
+          "volumeId": "",
+          "createPolls": { "count": 0 },
+          "attachPolls": { "count": 0 },
+          "unmountPolls": { "count": 0 },
+          "detachPolls": { "count": 0 }
+        }
       },
       "Next": "Apply Request Defaults"
     },
@@ -17,7 +25,8 @@
       "Comment": "A stop refuses while players are online unless its caller asks to disconnect them; the watchdog never does.",
       "Parameters": {
         "request.$": "States.JsonMerge($.defaults, $.request, false)",
-        "coordination.$": "$.coordination"
+        "coordination.$": "$.coordination",
+        "sessionVolume.$": "$.sessionVolume"
       },
       "Next": "Read Lifecycle"
     },
@@ -226,6 +235,340 @@
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.stopFailure",
           "Next": "Route Stop Failure"
+        }
+      ],
+      "Next": "Route Session Volume Release"
+    },
+    "Route Session Volume Release": {
+      "Type": "Choice",
+      "Comment": "ADR-0102: the archive is verified, so the session volume is let go. Every failure below leaves the volume to the session volume sweeper and the stop goes on.",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.mode",
+          "StringEquals": "enabled",
+          "Next": "Find Session Volume"
+        }
+      ],
+      "Default": "Mark Session Stopped"
+    },
+    "Find Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeVolumes",
+      "Parameters": {
+        "Filters": [
+          {
+            "Name": "tag:ManagedBy",
+            "Values": [
+              "${session_volume_managed_by}"
+            ]
+          },
+          {
+            "Name": "tag:${session_volume_session_tag}",
+            "Values.$": "States.Array($.request.sessionId)"
+          }
+        ]
+      },
+      "ResultSelector": {
+        "volumes.$": "$.Volumes"
+      },
+      "ResultPath": "$.sessionVolume.found",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Session Stopped"
+        }
+      ],
+      "Next": "Route Found Session Volume"
+    },
+    "Route Found Session Volume": {
+      "Type": "Choice",
+      "Comment": "A volume that is already available was detached by an earlier try. A host that keeps running for another session still has it mounted; a stopped host unmounted it when it shut down.",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.found.volumes[0]",
+          "IsPresent": false,
+          "Next": "Mark Session Stopped"
+        },
+        {
+          "Variable": "$.sessionVolume.found.volumes[0].State",
+          "StringEquals": "available",
+          "Next": "Delete Session Volume"
+        },
+        {
+          "Variable": "$.hostStop.Output.status",
+          "StringEquals": "session_stopped_host_busy",
+          "Next": "Unmount Session Volume"
+        }
+      ],
+      "Default": "Detach Session Volume"
+    },
+    "Unmount Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "spawnpoint-unmount-session-volume",
+        "InstanceIds.$": "States.Array($.request.placed.hostId)",
+        "Parameters": {
+          "worldId.$": "States.Array($.request.worldId)"
+        },
+        "TimeoutSeconds": 300,
+        "CloudWatchOutputConfig": {
+          "CloudWatchLogGroupName": "/spawnpoint/session-commands",
+          "CloudWatchOutputEnabled": true
+        }
+      },
+      "ResultSelector": {
+        "commandId.$": "$.Command.CommandId"
+      },
+      "ResultPath": "$.sessionVolume.unmount",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ssm.ThrottlingException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Session Stopped"
+        }
+      ],
+      "Next": "Wait Before Unmount Poll"
+    },
+    "Wait Before Unmount Poll": {
+      "Type": "Wait",
+      "Seconds": 2,
+      "Next": "Get Unmount Command"
+    },
+    "Get Unmount Command": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:getCommandInvocation",
+      "Parameters": {
+        "CommandId.$": "$.sessionVolume.unmount.commandId",
+        "InstanceId.$": "$.request.placed.hostId"
+      },
+      "ResultSelector": {
+        "status.$": "$.Status"
+      },
+      "ResultPath": "$.sessionVolume.observed",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ssm.ThrottlingException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Ssm.InvocationDoesNotExistException"
+          ],
+          "ResultPath": "$.sessionVolume.lookupError",
+          "Next": "Count Unmount Poll"
+        },
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Session Stopped"
+        }
+      ],
+      "Next": "Unmount Complete"
+    },
+    "Unmount Complete": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.observed.status",
+          "StringEquals": "Success",
+          "Next": "Detach Session Volume"
+        },
+        {
+          "Or": [
+            {
+              "Variable": "$.sessionVolume.observed.status",
+              "StringEquals": "Pending"
+            },
+            {
+              "Variable": "$.sessionVolume.observed.status",
+              "StringEquals": "InProgress"
+            },
+            {
+              "Variable": "$.sessionVolume.observed.status",
+              "StringEquals": "Delayed"
+            }
+          ],
+          "Next": "Count Unmount Poll"
+        }
+      ],
+      "Default": "Mark Session Stopped"
+    },
+    "Count Unmount Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "count.$": "States.MathAdd($.sessionVolume.unmountPolls.count, 1)"
+      },
+      "ResultPath": "$.sessionVolume.unmountPolls",
+      "Next": "Unmount Poll Limit Reached"
+    },
+    "Unmount Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.unmountPolls.count",
+          "NumericGreaterThanEquals": 30,
+          "Next": "Mark Session Stopped"
+        }
+      ],
+      "Default": "Wait Before Unmount Poll"
+    },
+    "Detach Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:detachVolume",
+      "Parameters": {
+        "VolumeId.$": "$.sessionVolume.found.volumes[0].VolumeId",
+        "InstanceId.$": "$.request.placed.hostId"
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Session Stopped"
+        }
+      ],
+      "Next": "Wait Before Detach Poll"
+    },
+    "Wait Before Detach Poll": {
+      "Type": "Wait",
+      "Seconds": 2,
+      "Next": "Describe Detached Session Volume"
+    },
+    "Describe Detached Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeVolumes",
+      "Parameters": {
+        "VolumeIds.$": "States.Array($.sessionVolume.found.volumes[0].VolumeId)"
+      },
+      "ResultSelector": {
+        "state.$": "$.Volumes[0].State"
+      },
+      "ResultPath": "$.sessionVolume.observed",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Session Stopped"
+        }
+      ],
+      "Next": "Session Volume Detached"
+    },
+    "Session Volume Detached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.observed.state",
+          "StringEquals": "available",
+          "Next": "Delete Session Volume"
+        }
+      ],
+      "Default": "Count Detach Poll"
+    },
+    "Count Detach Poll": {
+      "Type": "Pass",
+      "Parameters": {
+        "count.$": "States.MathAdd($.sessionVolume.detachPolls.count, 1)"
+      },
+      "ResultPath": "$.sessionVolume.detachPolls",
+      "Next": "Detach Poll Limit Reached"
+    },
+    "Detach Poll Limit Reached": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.sessionVolume.detachPolls.count",
+          "NumericGreaterThanEquals": 30,
+          "Next": "Mark Session Stopped"
+        }
+      ],
+      "Default": "Wait Before Detach Poll"
+    },
+    "Delete Session Volume": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:deleteVolume",
+      "Parameters": {
+        "VolumeId.$": "$.sessionVolume.found.volumes[0].VolumeId"
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.sessionVolumeFailure",
+          "Next": "Mark Session Stopped"
         }
       ],
       "Next": "Mark Session Stopped"

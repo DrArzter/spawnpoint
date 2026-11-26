@@ -176,7 +176,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
   name     = "spawnpoint-start-server-v2"
   role_arn = aws_iam_role.lifecycle_v2_start.arn
   type     = "STANDARD"
-  definition = templatefile("${path.module}/../../workflows/start-server-v2.asl.json.tftpl", {
+  definition = templatefile("${path.module}/../../workflows/start-server-v2.asl.json.tftpl", merge(local.session_volume_template_vars, {
     coordinator_function_arn   = local.lifecycle_v2_coordinator_arn
     release_state_function_arn = local.release_state_function_arn
     start_v1_state_machine_arn = local.start_state_machine_arn
@@ -185,7 +185,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
     drain_state_machine_arn    = local.lifecycle_v2_drain_arn
     fleet_launch_template_name = "spawnpoint-fleet-host"
     allowed_instance_types     = jsonencode(var.launch_families)
-  })
+  }))
 
   tags = {
     Name    = "spawnpoint-start-server-v2"
@@ -269,11 +269,11 @@ resource "aws_sfn_state_machine" "lifecycle_v2_stop" {
   name     = "spawnpoint-stop-server-v2"
   role_arn = aws_iam_role.lifecycle_v2_stop.arn
   type     = "STANDARD"
-  definition = templatefile("${path.module}/../../workflows/stop-server-v2.asl.json.tftpl", {
+  definition = templatefile("${path.module}/../../workflows/stop-server-v2.asl.json.tftpl", merge(local.session_volume_template_vars, {
     coordinator_function_arn  = local.lifecycle_v2_coordinator_arn
     stop_v1_state_machine_arn = local.stop_state_machine_arn
     drain_state_machine_arn   = local.lifecycle_v2_drain_arn
-  })
+  }))
 
   tags = {
     Name    = "spawnpoint-stop-server-v2"

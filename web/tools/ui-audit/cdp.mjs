@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { randomInt } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants, tmpdir } from "node:os";
 import { join } from "node:path";
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -12,8 +12,11 @@ function chromePath() {
   return process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "/usr/bin/chromium";
 }
 
-/** Starts Chrome and returns { open, close }: `open()` gives a tab in its own browser context. */
-export async function launch() {
+/**
+ * Starts Chrome and returns { open, close, gone, kill }: `open()` gives a tab in its own browser context.
+ * A call fails, never waits, when Chrome has gone or stays silent for `callTimeoutMs`.
+ */
+export async function launch({ callTimeoutMs = 60_000 } = {}) {
   const profile = mkdtempSync(join(process.env.SCRATCH ?? tmpdir(), "audit-"));
   const port = randomInt(9600, 9900);
   const proc = spawn(chromePath(), [
@@ -29,6 +32,15 @@ export async function launch() {
   proc.stderr.on("data", (chunk) => { complaints = (complaints + chunk).slice(-2000); });
   const state = { exit: null };
   proc.on("exit", (code, signal) => { state.exit = signal ?? code; });
+  // A killed gate takes its Chrome with it; only SIGKILL leaves one behind.
+  const stopChrome = () => { if (state.exit === null) proc.kill(); };
+  process.once("exit", stopChrome);
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.once(signal, () => {
+      stopChrome();
+      process.exit(128 + constants.signals[signal]);
+    });
+  }
 
   // A minute: a cold CI runner can take that long to open the debugging port.
   let endpoint = null;
@@ -52,18 +64,41 @@ export async function launch() {
   let nextId = 0;
   const pending = new Map();
   const listeners = new Map();
+  // Why Chrome can no longer answer; every waiting and later call fails with it.
+  let gone = null;
+  const fail = (reason) => {
+    if (gone !== null) return;
+    gone = complaints ? `${reason}\n${complaints.trimEnd()}` : reason;
+    for (const call of pending.values()) {
+      clearTimeout(call.timer);
+      call.reject(new Error(gone));
+    }
+    pending.clear();
+  };
+  proc.on("exit", () => fail(`chrome exited with ${state.exit}`));
+  ws.onclose = () => fail("chrome closed its debugging socket");
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    if (message.id && pending.has(message.id)) {
-      pending.get(message.id)(message);
+    const call = message.id ? pending.get(message.id) : undefined;
+    if (call) {
+      clearTimeout(call.timer);
       pending.delete(message.id);
+      call.resolve(message);
     } else if (message.method && message.sessionId) {
       listeners.get(message.sessionId)?.(message);
     }
   };
-  const send = (method, params = {}, sessionId = undefined) => new Promise((resolve) => {
+  const send = (method, params = {}, sessionId = undefined) => new Promise((resolve, reject) => {
+    if (gone !== null) {
+      reject(new Error(gone));
+      return;
+    }
     const id = ++nextId;
-    pending.set(id, resolve);
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`chrome did not answer ${method} within ${callTimeoutMs / 1000}s`));
+    }, callTimeoutMs);
+    pending.set(id, { resolve, reject, timer });
     ws.send(JSON.stringify({ id, method, params, sessionId }));
   });
 
@@ -100,9 +135,17 @@ export async function launch() {
   }
 
   function close() {
+    gone ??= "chrome was closed";
     try { ws.close(); } catch { /* closing */ }
     proc.kill();
     try { rmSync(profile, { recursive: true, force: true }); } catch { /* Chrome may still hold it */ }
   }
-  return { open, close };
+  return {
+    open,
+    close,
+    /** Why Chrome can no longer answer, or null while it can. */
+    gone: () => gone,
+    /** Ends Chrome as a crash would; the self-test proves that calls then fail. */
+    kill: () => proc.kill("SIGKILL"),
+  };
 }

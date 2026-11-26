@@ -2,6 +2,8 @@
 
 The UI gate drives the demo build in headless Chrome and probes the live DOM. It replaces a person who looks at every
 page, state and width. It uses raw Chrome DevTools Protocol (`cdp.mjs`) and has no dependency of its own.
+A call to Chrome fails when Chrome has died or does not answer within 60 seconds, so a run never waits on a lost
+browser; the self-test proves both. A gate stopped by a signal stops its Chrome too.
 
 | File | Content |
 |---|---|

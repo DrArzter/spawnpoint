@@ -84,6 +84,10 @@ FIS role and the experiment template `spawnpoint-spot-interruption`, which sends
 running host tagged both `ManagedBy=spawnpoint-fleet` and `SpawnpointFaultTarget=armed`, and stops when that alarm
 fires. Only `scripts/spot-fault-test.sh` arms a host.
 
+Production values: `SPAWNPOINT_SESSION_VOLUME`, `SPAWNPOINT_SPOT` and `SPAWNPOINT_SPOT_FAULT_TEST` are `enabled` since
+2026-11-26. The deploy applies only the roots that a commit changes, so a change to one of these variables takes effect
+at the next commit that changes this root.
+
 ## Local verification
 
 ```bash

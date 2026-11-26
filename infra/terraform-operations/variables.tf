@@ -109,6 +109,8 @@ variable "session_volume_size_gib" {
   }
 }
 
+# Production sets session_volume, spot and spot_fault_test to enabled from the repository variables (2026-11-26).
+# The deploy applies only roots whose .tf files a commit changes, so a new variable value waits for such a commit.
 variable "spot" {
   description = "Whether a launched host whose sessions are all cold, of games that declare capabilities.spot, is asked for on Spot (ADR-0102, step 3). It takes effect only while session_volume is enabled. `disabled` launches exactly as before. CI sets it from the repository variable SPAWNPOINT_SPOT; an unset variable means disabled."
   type        = string

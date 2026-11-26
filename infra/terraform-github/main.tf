@@ -201,6 +201,8 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "ec2:Describe*",
       "events:Describe*",
       "events:List*",
+      "fis:Get*",
+      "fis:List*",
       "iam:Get*",
       "iam:List*",
       "lambda:Get*",
@@ -460,6 +462,23 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot"]
   }
 
+  # ADR-0102, step 7: the Spot fault-test template, which may hold only the
+  # Spot interruption action. Running an experiment stays with a person.
+  statement {
+    sid    = "ManageOnlySpotInterruptionExperimentTemplates"
+    effect = "Allow"
+    actions = [
+      "fis:CreateExperimentTemplate",
+      "fis:TagResource",
+      "fis:UntagResource",
+      "fis:UpdateExperimentTemplate",
+    ]
+    resources = [
+      "arn:aws:fis:${var.aws_region}:${data.aws_caller_identity.current.account_id}:experiment-template/*",
+      "arn:aws:fis:${var.aws_region}:${data.aws_caller_identity.current.account_id}:action/aws:ec2:send-spot-instance-interruptions",
+    ]
+  }
+
   statement {
     sid       = "AttachOnlyLambdaLoggingPolicy"
     effect    = "Allow"
@@ -643,6 +662,8 @@ data "aws_iam_policy_document" "github_plan_iam" {
       "ec2:Describe*",
       "events:Describe*",
       "events:List*",
+      "fis:Get*",
+      "fis:List*",
       "iam:Get*",
       "iam:List*",
       "lambda:Get*",

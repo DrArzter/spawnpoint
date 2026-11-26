@@ -295,6 +295,20 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "ManageOnlySpotInterruptionExperimentTemplates" &&
+      contains(statement.actions, "fis:CreateExperimentTemplate") &&
+      !contains(statement.actions, "fis:StartExperiment") && !contains(statement.actions, "fis:DeleteExperimentTemplate") &&
+      toset(statement.resources) == toset([
+        "arn:aws:fis:eu-central-1:123456789012:experiment-template/*",
+        "arn:aws:fis:eu-central-1:123456789012:action/aws:ec2:send-spot-instance-interruptions",
+      ])
+    ])
+    error_message = "The deploy identity may manage only Spot interruption experiment templates, and may neither run nor delete one (ADR-0102)."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       statement.sid == "TagOnlyReleaseBuilderSources" &&
       toset(statement.actions) == toset(["s3:PutObjectTagging"]) &&
       toset(statement.resources) == toset([

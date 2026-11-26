@@ -4,6 +4,7 @@
 - Date: 2026-08-11
 - Deferred: 2026-08-12
 - Milestone: M2, then later
+- Amended by: [ADR-0102](0102-spot-for-cold-launched-hosts-with-a-session-volume.md) — Spot for cold launched hosts, with a session volume
 
 > **Deferred, not rejected.** Real prices settled it: on-demand `r8i.large` is $0.16758 an hour, so 75 hours a month is
 > about **$15.55 all in** against roughly **$7.70** on Spot. The gap is about **$8 a month**, and what that $8 buys is

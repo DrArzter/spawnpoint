@@ -91,7 +91,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0024](0024-connectivity-modes.md) | Connectivity is pluggable: raw address, DNS, or overlay | Accepted — **ZeroTier** | M2 |
 | [0025](0025-step-functions-for-long-operations.md) | Step Functions for long operations; Lambda for the rest | Accepted | M2 |
 | [0026](0026-tiered-backups.md) | Tiered backups: incremental snapshots, infrequent archives | **Rejected** on measurement; kept for its threshold | M1 |
-| [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | **Proposed, deferred** — on-demand first | later |
+| [0027](0027-spot-request-shape.md) | Diversified Spot fleet per session; stop-on-interruption | **Proposed, deferred** — on-demand first; amended by [0102](0102-spot-for-cold-launched-hosts-with-a-session-volume.md) | later |
 | [0028](0028-update-proposals.md) | Mod updates as proposals: resolve, diff, approve, promote | Proposed | M3 |
 | [0029](0029-preview-environments.md) | Every proposal is tested in a throwaway preview environment | Proposed | M3 |
 | [0030](0030-desired-and-active-release.md) | Separate desired release from confirmed active release | Accepted — amended 2026-11-22 | M3 |
@@ -166,6 +166,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0099](0099-agpl-licence-with-a-contributor-agreement.md) | AGPL-3.0, with a contributor licence agreement | Accepted | M6 |
 | [0100](0100-delete-a-persistent-host-from-the-panel.md) | Delete a persistent host from the panel | Accepted | M6 |
 | [0101](0101-dynamodb-tables-use-the-aws-owned-key.md) | DynamoDB tables use the AWS owned key | Accepted | M6 |
+| [0102](0102-spot-for-cold-launched-hosts-with-a-session-volume.md) | Spot for cold launched hosts, with a session volume | Proposed | M6 |
 
 ## Decisions still to record
 

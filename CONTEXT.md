@@ -50,6 +50,8 @@ One word per thing. If a word here disagrees with a word in the product, the pro
 
 **Session volume**: The EBS volume a session on a Spot host runs its world from, created for the session in its host's Availability Zone and deleted when the session stops. It survives an interruption, so a replacement host attaches it instead of restoring from S3 ([ADR-0102](docs/adr/0102-spot-for-cold-launched-hosts-with-a-session-volume.md)). _Avoid_: Data volume, which is the configured host's permanent disk.
 
+**Moving**: The state of a session whose Spot host is being reclaimed. It keeps its id, its world and its session volume, and starts again on a new host at the same address. Nothing stops it while it moves, and the idle watchdog does not count it ([ADR-0102](docs/adr/0102-spot-for-cold-launched-hosts-with-a-session-volume.md)). _Avoid_: Migrating, restarting.
+
 **Session address**: What a player types to reach a running session — the host part from the world's connectivity strategy, the port from the session's slot — as the host composed it when the session became ready. It is recorded on the lifecycle record for the session's lifetime and never configured. _Avoid_: Connection address as a stored setting.
 
 **Connectivity strategy**: An independently selected adapter that makes a session reachable and supplies the host part of its address. An overlay can gate access; a public IP or DNS record cannot, so a public strategy requires declared player authentication. Host placement does not itself choose the strategy, although a disposable fleet host may support only public strategies. _Avoid_: Treating ZeroTier or DNS as an intrinsic property of a game or host.

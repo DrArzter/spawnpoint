@@ -107,6 +107,9 @@ export function buildLifecycleStartInput(args: Readonly<{
   appCommit?: string;
   // The world's warm choice (ADR-0048). Left out, the machine places it cold.
   policy?: SessionPolicy;
+  // ADR-0102: the same session again after its Spot host was reclaimed, on the
+  // volume that holds its world ("" when none is left and S3 restores it).
+  moveVolumeId?: string;
 }>) {
   return {
     serverId: args.serverId,
@@ -124,6 +127,7 @@ export function buildLifecycleStartInput(args: Readonly<{
     appCommit: args.appCommit ?? "main",
     ...(args.policy === undefined ? {} : { policy: args.policy }),
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
+    ...(args.moveVolumeId === undefined ? {} : { move: true, moveVolumeId: args.moveVolumeId }),
     startTiming: POLL_TIMING,
     stopTiming: POLL_TIMING,
     watchdogTiming: WATCHDOG_TIMING,
@@ -212,6 +216,8 @@ export function worldSessionStatus(record: LifecycleRecord | null, worldId: stri
   switch (record.observedState) {
     case "ready": return { state: "running", address: record.activeSessionAddress ?? null };
     case "starting": case "stopping": case "stopped": case "unknown": return { state: record.observedState, address: null };
+    // A moving session (ADR-0102) is on its way back to the same address.
+    case "moving": return { state: "starting", address: null };
   }
 }
 

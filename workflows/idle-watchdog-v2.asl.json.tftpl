@@ -190,7 +190,77 @@
           "Next": "Route Probe Command"
         }
       ],
-      "Default": "Reconcile Externally Stopped Host"
+      "Default": "Read Session Before Reconcile"
+    },
+    "Read Session Before Reconcile": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Comment": "ADR-0102: a reclaimed Spot host is gone, but its session moves rather than stops. Only a watchdog that still owns a session that is not moving reconciles it.",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "get",
+          "serverId.$": "$.request.serverId"
+        }
+      },
+      "ResultSelector": {
+        "observedState.$": "$.Payload.record.observedState",
+        "activeSessionId.$": "$.Payload.record.activeSessionId",
+        "idle.$": "$.Payload.record.idle",
+        "self.$": "$$.Execution.Id"
+      },
+      "ResultPath": "$.observed.session",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Session Moving"
+    },
+    "Session Moving": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.session.observedState",
+          "StringEquals": "moving",
+          "Next": "Session Moved"
+        },
+        {
+          "Variable": "$.observed.session.idle.watchdogExecutionId",
+          "IsPresent": true,
+          "Next": "Watchdog Still Owns Session"
+        }
+      ],
+      "Default": "Session Moved"
+    },
+    "Watchdog Still Owns Session": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.observed.session.idle.watchdogExecutionId",
+          "StringEqualsPath": "$.observed.session.self",
+          "Next": "Reconcile Externally Stopped Host"
+        }
+      ],
+      "Default": "Session Moved"
+    },
+    "Session Moved": {
+      "Type": "Pass",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "status": "session_moved",
+        "checksTotal.$": "$.counters.total"
+      },
+      "End": true
     },
     "Route Probe Command": {
       "Type": "Choice",

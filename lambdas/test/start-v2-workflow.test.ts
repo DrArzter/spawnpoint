@@ -212,6 +212,7 @@ test("a start fills what its caller left out: the game from the server id, no wo
   assert.equal(initialize.Next, "Apply Request Defaults");
   assert.deepEqual(initialize.Parameters?.defaults, {
     "gameId.$": "$.serverId", worldName: "", placement: "single", launch: "disabled", appCommit: "main", policy: "cold",
+    move: false, moveVolumeId: "",
   });
   const apply = state(definition, "Apply Request Defaults");
   // The request comes second, so whatever the caller sent wins.

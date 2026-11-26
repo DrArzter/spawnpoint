@@ -13,7 +13,9 @@
           "placement": "single",
           "launch": "disabled",
           "appCommit": "main",
-          "policy": "cold"
+          "policy": "cold",
+          "move": false,
+          "moveVolumeId": ""
         },
         "coordination": {
           "forcedStopPolls": 0
@@ -733,7 +735,37 @@
           "Next": "Begin Compensating Stop"
         }
       ],
-      "Next": "Create Session Volume"
+      "Next": "Route Moved Session Volume"
+    },
+    "Route Moved Session Volume": {
+      "Type": "Choice",
+      "Comment": "ADR-0102, step 5: a session moving off a reclaimed Spot host brings its volume, which holds the world it saved there. A move without one restores from S3 onto a new volume, as any start does.",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.request.move",
+              "BooleanEquals": true
+            },
+            {
+              "Not": {
+                "Variable": "$.request.moveVolumeId",
+                "StringEquals": ""
+              }
+            }
+          ],
+          "Next": "Adopt Moved Session Volume"
+        }
+      ],
+      "Default": "Create Session Volume"
+    },
+    "Adopt Moved Session Volume": {
+      "Type": "Pass",
+      "Parameters": {
+        "volumeId.$": "$.request.moveVolumeId"
+      },
+      "ResultPath": "$.sessionVolume.created",
+      "Next": "Describe Created Session Volume"
     },
     "Create Session Volume": {
       "Type": "Task",
@@ -802,7 +834,8 @@
         "VolumeIds.$": "States.Array($.sessionVolume.created.volumeId)"
       },
       "ResultSelector": {
-        "state.$": "$.Volumes[0].State"
+        "state.$": "$.Volumes[0].State",
+        "zone.$": "$.Volumes[0].AvailabilityZone"
       },
       "ResultPath": "$.sessionVolume.observed",
       "Retry": [
@@ -829,11 +862,32 @@
     },
     "Session Volume Available": {
       "Type": "Choice",
+      "Comment": "A moved volume must be in the new host's zone; every launched host shares one subnet, so this guards a change to that. It is still in use while the reclaimed host lets it go.",
       "Choices": [
+        {
+          "Not": {
+            "Variable": "$.sessionVolume.observed.zone",
+            "StringEqualsPath": "$.sessionVolume.host.zone"
+          },
+          "Next": "Session Volume Unavailable"
+        },
         {
           "Variable": "$.sessionVolume.observed.state",
           "StringEquals": "available",
           "Next": "Attach Session Volume"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.request.move",
+              "BooleanEquals": true
+            },
+            {
+              "Variable": "$.sessionVolume.observed.state",
+              "StringEquals": "in-use"
+            }
+          ],
+          "Next": "Count Created Volume Poll"
         },
         {
           "Variable": "$.sessionVolume.observed.state",

@@ -98,8 +98,20 @@ export function notificationSubscriptionKey(event: ExecutionEvent, games: KnownG
 type RenderContext = Readonly<{ requester: string | null; world: string | null; failed: boolean }>;
 type Renderer = (event: ExecutionEvent, context: RenderContext) => string | null;
 
+// A session moving off a reclaimed Spot host (ADR-0102) starts again under its own id.
+function renderMove(event: ExecutionEvent, world: string | null): string {
+  const name = world ?? "The server";
+  if (event.status === "RUNNING") return `[MOVING] ${name}: its machine was reclaimed. It moves to a new one at the same address.`;
+  if (event.status === "SUCCEEDED") {
+    const address = str(event.output, "connectionAddress") ?? str(event.output, "address");
+    return address === null ? `[BACK] ${name} is back.` : `[BACK] ${name} is back: ${address}`;
+  }
+  return `[FAILED] ${name} could not move (${event.name}). Its next start restores the last backup.`;
+}
+
 function renderStart(event: ExecutionEvent, { requester, world }: RenderContext): string | null {
   if (CHILD_NAME.test(event.name)) return null;
+  if (event.input?.move === true) return renderMove(event, world);
   if (event.status === "RUNNING") {
     return `[STARTING] ${requester ?? "the owner"} requested ${world ?? "the server"}. Mods take a few minutes.`;
   }

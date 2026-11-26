@@ -189,6 +189,15 @@
         {
           "And": [
             { "Variable": "$.request.placement", "StringEquals": "fleet" },
+            { "Variable": "$.request.slot", "IsPresent": true },
+            { "Variable": "$.request.sessionVolumeId", "IsPresent": true },
+            { "Not": { "Variable": "$.request.sessionVolumeId", "StringEquals": "" } }
+          ],
+          "Next": "Start Fleet Session Command On Volume"
+        },
+        {
+          "And": [
+            { "Variable": "$.request.placement", "StringEquals": "fleet" },
             { "Variable": "$.request.slot", "IsPresent": true }
           ],
           "Next": "Start Fleet Session Command"
@@ -211,6 +220,28 @@
           "worldId.$": "States.Array($.request.worldId)",
           "slot.$": "States.Array(States.Format('{}', $.request.slot))",
           "waitForFleet": ["true"]
+        },
+        "TimeoutSeconds": 900,
+        "CloudWatchOutputConfig": {
+          "CloudWatchLogGroupName": "/spawnpoint/session-commands",
+          "CloudWatchOutputEnabled": true
+        }
+      },
+      "ResultPath": "$.observed.command",
+      "Next": "Wait Before Command Poll"
+    },
+    "Start Fleet Session Command On Volume": {
+      "Type": "Task",
+      "Comment": "ADR-0102: the session runs its world from the volume Start server V2 attached. The document checks the id's shape before the host reads it.",
+      "Resource": "arn:aws:states:::aws-sdk:ssm:sendCommand",
+      "Parameters": {
+        "DocumentName": "spawnpoint-start-session",
+        "InstanceIds.$": "States.Array($.request.instanceId)",
+        "Parameters": {
+          "worldId.$": "States.Array($.request.worldId)",
+          "slot.$": "States.Array(States.Format('{}', $.request.slot))",
+          "waitForFleet": ["true"],
+          "sessionVolumeId.$": "States.Array($.request.sessionVolumeId)"
         },
         "TimeoutSeconds": 900,
         "CloudWatchOutputConfig": {

@@ -80,6 +80,27 @@ failure leaves the truthful `stopping` state in place so a later operation can r
 into a false success. The one non-fault outcome is `Spawnpoint.PlayersOnline`: V2 cancels that stop, restores `ready`,
 resets the session's empty streak and releases the lease before returning a distinct refusal.
 
+## Session volume
+
+[ADR-0102](../docs/adr/0102-spot-for-cold-launched-hosts-with-a-session-volume.md), step 2. The Terraform variable
+`session_volume` (repository variable `SPAWNPOINT_SESSION_VOLUME`, unset means `disabled`) is rendered into Start
+server V2 and Stop server V2. A caller cannot set it. When it is `disabled`, both run the path they ran before.
+
+When it is `enabled`, a `cold` session placed in `fleet` mode gets its own volume after `Adopt Placement`: the start
+reads the host's Availability Zone, creates an encrypted gp3 volume of `session_volume_size_gib`, tagged
+`ManagedBy=spawnpoint-session-volume`, `SessionId` and `WorldId`, waits until it is available, attaches it with the
+device name of the session's slot (`/dev/sdf` to `/dev/sdz`), waits until it is attached, and passes
+`sessionVolumeId` to Start server. Start server sends it to the `spawnpoint-start-session` document, which checks its
+shape and exports it as `SPAWNPOINT_SESSION_VOLUME_ID`; `start-session.sh` mounts it. A volume that cannot be made
+ready fails the start into its compensation.
+
+After the accepted V1 stop has verified the archive, Stop server V2 and the start's compensation release the volume:
+they find it by its `SessionId` tag, unmount it through the `spawnpoint-unmount-session-volume` document when the host
+keeps running for another session, detach it, wait until it is available and delete it. A host that stopped unmounted
+it when it shut down. Every failure in the release goes on to mark the session stopped: the archive is already
+verified, and a volume left behind is the sweeper's to delete. The forced-stop path of a failed start does not release
+the volume either; it becomes available when the drain terminates the host.
+
 ## Stop server
 
 `stop-server.asl.json` is the host step of a session stop, under Stop server V2. It sends the `spawnpoint-stop-session`

@@ -144,9 +144,11 @@ test("a placed session's command carries its slot, and a request with no slot ru
   const definition = await loadDefinition();
   const route = definition.States["Route Session Command"];
   assert.ok(route);
-  assert.equal(route.Choices?.[0]?.Next, "Start Fleet Session Command");
-  assert.equal(route.Choices?.[1]?.Variable, "$.request.slot");
-  assert.equal(route.Choices?.[1]?.Next, "Start Placed Session Command");
+  // ADR-0102: a fleet session with a session volume comes first; session-volume-workflow.test.ts covers it.
+  assert.equal(route.Choices?.[0]?.Next, "Start Fleet Session Command On Volume");
+  assert.equal(route.Choices?.[1]?.Next, "Start Fleet Session Command");
+  assert.equal(route.Choices?.[2]?.Variable, "$.request.slot");
+  assert.equal(route.Choices?.[2]?.Next, "Start Placed Session Command");
   assert.equal(route.Default, "Start Session Command");
   const placed = { "worldId.$": "States.Array($.request.worldId)", "slot.$": "States.Array(States.Format('{}', $.request.slot))" };
   assert.deepEqual(hostParameters(definition, "Start Placed Session Command"), placed);

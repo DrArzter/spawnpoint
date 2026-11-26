@@ -102,7 +102,14 @@ const START: Table = {
     "Register Configured Host", "Place Session", "Route Placement", "Adopt Placement",
   ],
   "start.launching_host": ["Launch Host", "Describe Launched Host Shape", "Register Launched Host", "Reserve On Launched Host"],
-  "start.starting_server": ["Start Accepted V1"],
+  // ADR-0102: the session volume is part of getting the server ready to start.
+  "start.starting_server": [
+    "Route Session Volume", "Describe Session Host Zone", "Create Session Volume", "Wait Before Created Volume Poll",
+    "Describe Created Session Volume", "Session Volume Available", "Count Created Volume Poll",
+    "Created Volume Poll Limit Reached", "Attach Session Volume", "Wait Before Attached Volume Poll",
+    "Describe Attached Session Volume", "Session Volume Attached", "Count Attached Volume Poll",
+    "Attached Volume Poll Limit Reached", "Adopt Session Volume", "Session Volume Unavailable", "Start Accepted V1",
+  ],
   "start.recording": [
     "Route Bookkeeping", "Describe Host", "Describe Host Shape", "Register Host", "Reserve Slot Zero", "Mark Session Ready",
     "Record Session Host", "Route Release Commit", "Commit Active Release", "Release Start Lease",
@@ -116,6 +123,14 @@ const START: Table = {
     "Acquire Watchdog Compensation Lease", "Begin Compensating Stop", "Stop Accepted V1", "Mark Compensated Session Stopped",
     "Close Compensated Session History", "Release Compensated Placement", "Release Compensating Lease", "Route Compensated Fleet Drain",
     "Start Compensated Host Drain",
+    "Route Session Volume Release After Failed Start", "Find Session Volume After Failed Start",
+    "Route Found Session Volume After Failed Start", "Unmount Session Volume After Failed Start",
+    "Wait Before Unmount Poll After Failed Start", "Get Unmount Command After Failed Start",
+    "Unmount Complete After Failed Start", "Count Unmount Poll After Failed Start",
+    "Unmount Poll Limit Reached After Failed Start", "Detach Session Volume After Failed Start",
+    "Wait Before Detach Poll After Failed Start", "Describe Detached Session Volume After Failed Start",
+    "Session Volume Detached After Failed Start", "Count Detach Poll After Failed Start",
+    "Detach Poll Limit Reached After Failed Start", "Delete Session Volume After Failed Start",
   ],
   "start.forcing_stop": [
     "Force Stop Failed Start Host", "Wait Before Forced Stop Poll", "Describe Forced Stop Host", "Forced Stop Host Stopped",
@@ -134,7 +149,13 @@ const STOP: Table = {
   "stop.finding_host": ["Find Placement", "Route Found Placement", "Route Unplaced Session", "Adopt Found Placement", "Adopt Requested Host"],
   "stop.saving": ["Stop Accepted V1"],
   "stop.recording": ["Mark Session Stopped", "Close Session History", "Release Placement", "Release Stop Lease"],
-  "stop.releasing_host": ["Route Emptied Host", "Route Emptied Host State", "Start Drain"],
+  "stop.releasing_host": [
+    "Route Emptied Host", "Route Emptied Host State", "Start Drain",
+    "Route Session Volume Release", "Find Session Volume", "Route Found Session Volume", "Unmount Session Volume",
+    "Wait Before Unmount Poll", "Get Unmount Command", "Unmount Complete", "Count Unmount Poll", "Unmount Poll Limit Reached",
+    "Detach Session Volume", "Wait Before Detach Poll", "Describe Detached Session Volume", "Session Volume Detached",
+    "Count Detach Poll", "Detach Poll Limit Reached", "Delete Session Volume",
+  ],
   "stop.cancelling": ["Route Stop Failure", "Cancel Refused Stop", "Release Refused Stop Lease"],
   [ENDED]: [
     "Stopped", "Already Stopped", "Stop Refused Players Online", "Stale Session", "Placement Lookup Failed", "Fleet Session Unplaced",
@@ -151,7 +172,7 @@ const START_HOST: Table = {
     "Wait Before SSM Poll", "Describe SSM Agent", "SSM Record Present", "SSM Agent Online", "Increment SSM Poll", "SSM Poll Limit Reached",
   ],
   "start.running_command": [
-    "Route Session Command", "Start Fleet Session Command", "Start Placed Session Command", "Start Session Command",
+    "Route Session Command", "Start Fleet Session Command On Volume", "Start Fleet Session Command", "Start Placed Session Command", "Start Session Command",
     "Wait Before Command Poll", "Get Session Command", "Session Command Complete", "Increment Command Poll", "Command Poll Limit Reached",
     "Read Session Summary",
   ],

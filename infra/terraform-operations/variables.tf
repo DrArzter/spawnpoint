@@ -86,3 +86,25 @@ variable "release_sweep_dry_run" {
   type        = bool
   default     = true
 }
+
+variable "session_volume" {
+  description = "Whether a cold session on a launched host runs its world from its own EBS volume (ADR-0102, step 2). `disabled` starts and stops exactly as before. CI sets it from the repository variable SPAWNPOINT_SESSION_VOLUME; an unset variable means disabled."
+  type        = string
+  default     = "disabled"
+
+  validation {
+    condition     = contains(["disabled", "enabled"], var.session_volume)
+    error_message = "session_volume must be disabled or enabled."
+  }
+}
+
+variable "session_volume_size_gib" {
+  description = "The size of a session volume in GiB (ADR-0102). A gp3 volume of this size is created for each cold session on a launched host while session_volume is enabled."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.session_volume_size_gib >= 1 && var.session_volume_size_gib <= 1024 && floor(var.session_volume_size_gib) == var.session_volume_size_gib
+    error_message = "session_volume_size_gib must be a whole number from 1 to 1024."
+  }
+}

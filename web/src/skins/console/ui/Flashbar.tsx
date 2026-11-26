@@ -69,7 +69,7 @@ export function Flashbar({ items }: Readonly<{ items: readonly FlashItem[] }>) {
   return (
     <div aria-label={t("common.notifications")} aria-live="polite" className="c-flashbar" role="status">
       {stack.map(({ item, leaving }) => (
-        <div aria-hidden={leaving || undefined} className={cx("c-flash", `c-flash-${item.kind}`, leaving && "c-leaving")} key={item.id} ref={leaving ? holdHeight : undefined}>
+        <div inert={leaving || undefined} className={cx("c-flash", `c-flash-${item.kind}`, leaving && "c-leaving")} key={item.id} ref={leaving ? holdHeight : undefined}>
           {item.kind === "busy" ? <ProgressRing className="c-spin" size={20} /> : <Icon name={icons[item.kind]} size={20} />}
           <span className="c-flash-message">
             <span>{item.message}</span>

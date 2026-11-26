@@ -2,6 +2,7 @@ import type { AddressFacts } from "../../../core/models";
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { Copy } from "./Copy";
+import { t } from "../../../i18n";
 
 const glyphs: Readonly<Record<AddressFacts["connectivity"], IconName>> = { raw: "public", route53: "language", zerotier: "hub" };
 
@@ -13,7 +14,7 @@ export function Address({ address, copy = false, className }: Readonly<{ address
         <Icon name={glyphs[address.connectivity]} size={17} />
       </span>
       <span className="c-mono c-address-value" title={address.value}>{address.value}</span>
-      {copy && <Copy value={address.value} what="address" />}
+      {copy && <Copy value={address.value} what={t("ui.copyAddress")} />}
     </span>
   );
 }

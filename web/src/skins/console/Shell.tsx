@@ -109,6 +109,8 @@ function usePageTransition(key: string) {
   }, []);
 }
 
+const ARRIVAL = new Set(["c-rise", "c-reveal"]);
+
 // A4 runs once, on the first view of a page in this session, and never inside
 // a view change (the page already moves); it ends with its own motion, so a
 // tab switch or another world on the same page does not run it again. The h1
@@ -125,11 +127,17 @@ function useArrival(key: string, main: RefObject<HTMLElement | null>): boolean {
     if (initial.current) initial.current = false;
     else main.current?.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
   }, [key, main]);
+  // The flag stays while an arrival motion still runs (the cards' rise, the
+  // Home bar's reveal), so none is cut short, and goes as soon as they end.
   useEffect(() => {
-    if (first === null) return;
-    const end = window.setTimeout(() => setFirst(null), MOTION["--c-d3"]);
-    return () => window.clearTimeout(end);
-  }, [first]);
+    const root = main.current;
+    if (first === null || !root) return;
+    const arriving = () => root.getAnimations({ subtree: true }).some((motion) => motion instanceof CSSAnimation && ARRIVAL.has(motion.animationName) && motion.playState === "running");
+    const done = () => { if (!arriving()) setFirst(null); };
+    const timer = window.setTimeout(done, MOTION["--c-d2"]);
+    root.addEventListener("animationend", done);
+    return () => { window.clearTimeout(timer); root.removeEventListener("animationend", done); };
+  }, [first, main]);
   return first === key;
 }
 

@@ -5,6 +5,7 @@ import test from "node:test";
 
 import type { HostMetricSeries } from "../src/api/contract.ts";
 import { setLocale } from "../src/i18n/index.ts";
+import { formatBytes } from "../src/lib/format.ts";
 import { ru } from "../src/i18n/ru.ts";
 import { binaryCeiling, byteReading, isAbsolute, metricScale, seriesLabel } from "../src/lib/metrics.ts";
 import { chartMax } from "../src/skins/console/ui/TimeSeriesChart.tsx";
@@ -88,6 +89,14 @@ test("a series is named from the catalogue by its id, and an unknown one keeps t
     assert.equal(seriesLabel({ id: "memory", label: "Memory" }), "Память");
     assert.equal(seriesLabel({ id: "cpu", label: "CPU" }), "ЦП");
     assert.deepEqual(metricScale(cpu([{ at: at(0), value: 65, capacity: 2 }])).reading(1.3, 2), { value: "1,3", unit: "из 2 ядер" });
+    // The plural follows the number as shown: a shown fraction takes the fractional form.
+    const cores = metricScale(cpu([{ at: at(0), value: 65, capacity: 2 }]));
+    assert.equal(cores.text(1), "1,0 ядра");
+    assert.equal(cores.tick(1), "1 ядро");
+    assert.equal(cores.tick(5), "5 ядер");
+    assert.equal(cores.reading(1, 1).unit, "из 1 ядра");
+    // One set of byte units for sizes and rates, in the locale's numbers.
+    assert.equal(formatBytes(1.5 * 1024 ** 3), "1,50 ГиБ");
   } finally {
     setLocale("en");
   }

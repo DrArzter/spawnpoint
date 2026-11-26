@@ -48,7 +48,7 @@ function Body({ model }: Readonly<{ model: BackupsModel }>) {
     { id: "checksum", header: t("backups.checksum"), kind: "wide", render: (entry) => (
       <span className="c-sum">
         <span className="c-mono" title={entry.checksum}>{entry.checksum.slice(0, 12)}</span>
-        <Copy value={entry.checksum} what="checksum" />
+        <Copy value={entry.checksum} what={t("backups.checksum2")} />
       </span>
     ) },
     { id: "actions", header: t("common.actions"), kind: "act", render: (entry) => (

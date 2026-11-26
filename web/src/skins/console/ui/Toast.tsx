@@ -48,7 +48,7 @@ function ToastItem({ toast, leaving, onDone }: Readonly<{ toast: Toast; leaving:
     return () => window.clearTimeout(timer);
   }, [leaving, onDone]);
   return (
-    <div aria-hidden={leaving || undefined} className={cx("c-toast", `c-toast-${toast.kind}`, leaving && "c-leaving")} ref={leaving ? holdHeight : undefined}>
+    <div inert={leaving || undefined} className={cx("c-toast", `c-toast-${toast.kind}`, leaving && "c-leaving")} ref={leaving ? holdHeight : undefined}>
       <Icon name={toastIcons[toast.kind]} size={18} />
       <span>{toast.message}</span>
     </div>

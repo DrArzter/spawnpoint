@@ -231,10 +231,3 @@ html[data-skin="console"] .c-avatar-trigger:is(:focus-visible, [aria-expanded="t
 html[data-skin="console"] .c-btn-caret {
   margin-right: -6px;
 }
-
-/* Decision: Approve and the Dismiss icon side by side in a request row's action column. */
-html[data-skin="console"] .c-decide {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}

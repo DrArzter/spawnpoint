@@ -194,7 +194,7 @@ function Digest({ value }: Readonly<{ value: string }>) {
 function ReleasesTab({ releases, worldName }: Readonly<{ releases: WorldModel["releases"]; worldName: string }>) {
   const columns: readonly Col<ReleaseRow>[] = [
     { id: "release", label: t("common.release"), render: (row) => <span className="t-release-line">
-      {row.sourceHref ? <a className="t-source" href={row.sourceHref} rel="noreferrer" target="_blank" title={t("world.openPresetRepository")}><code>{row.name}</code><Icon name="open_in_new" size={14} /></a> : <code>{row.name}</code>}
+      {row.sourceRepository ? <a className="t-source" href={row.sourceRepository} rel="noreferrer" target="_blank" title={t("world.openPresetRepository")}><code>{row.name}</code><Icon name="open_in_new" size={14} /></a> : <code>{row.name}</code>}
       <Indicator kind={row.downloadable ? "ok" : "pending"} label={row.downloadable ? row.status : t("world.desiredNotYetActive")} />
       {row.downloads.length > 0 && <Verbs align="end">{row.downloads.map((pack) => <Verb action={pack} key={pack.id} size="small" />)}</Verbs>}
     </span> },

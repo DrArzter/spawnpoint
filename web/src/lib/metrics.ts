@@ -1,5 +1,6 @@
 import type { HostMetricSeries } from "../api/contract";
 import { intlLocale, t } from "../i18n";
+import { BYTE_DECIMALS, bytePower, byteUnit } from "./format";
 
 // How both skins read a metric series: its name in the catalogue, the unit it
 // is drawn in, and its numbers as words. A percentage of a host whose every
@@ -60,24 +61,10 @@ function number(value: number, fixed: number, trim = false): string {
   return format.format(value);
 }
 
-const BYTE_UNITS = [
-  () => t("metrics.unitB"),
-  () => t("metrics.unitKiB"),
-  () => t("metrics.unitMiB"),
-  () => t("metrics.unitGiB"),
-] as const;
-// formatBytes' decimals: none for bytes and KiB, one for MiB, two for GiB, so a value keeps its width.
-const BYTE_DECIMALS = [0, 0, 1, 2] as const;
-
-function bytePower(bytes: number): number {
-  if (bytes < KIB) return 0;
-  return Math.min(BYTE_UNITS.length - 1, Math.floor(Math.log(bytes) / Math.log(KIB)));
-}
-
 /** Bytes in binary units, the unit chosen by the value (or by `power` when given). */
 export function byteReading(bytes: number, options: Readonly<{ rate?: boolean; trim?: boolean; power?: number; decimals?: number }> = {}): MetricReading {
   const power = options.power ?? bytePower(bytes);
-  const unit = BYTE_UNITS[power]!();
+  const unit = byteUnit(power);
   return {
     value: number(bytes / KIB ** power, options.decimals ?? BYTE_DECIMALS[power]!, options.trim),
     unit: options.rate ? t("metrics.perSecond", { unit }) : unit,
@@ -101,6 +88,16 @@ export function decimalCeiling(peak: number): number {
   if (peak <= 0) return 1;
   const power = 10 ** Math.floor(Math.log10(peak));
   return ([1, 2, 5, 10].find((factor) => factor * power >= peak) ?? 10) * power;
+}
+
+/**
+ * The plural count for a number as it is shown. A shown fraction ("1,0",
+ * "2.5") takes the fractional form in every language ("1,0 ядра", "1.0
+ * cores"), so it is counted as a fraction; a whole number counts as itself.
+ */
+function shownCount(value: string): Readonly<{ count: number; value: string }> {
+  const fraction = /\d[.,]\d/.test(value);
+  return { count: fraction ? 0.5 : Number(value.replace(/\D/g, "")), value };
 }
 
 const percentText = (value: number) => `${number(value, 0)} %`;
@@ -131,12 +128,12 @@ export function metricScale(series: HostMetricSeries): MetricScale {
 
   if (unit === "cores") {
     const ceiling = absolute ? Math.max(...capacities) : decimalCeiling(peakOf(points));
-    const text = (value: number) => t("metrics.cores", { count: value, value: number(value, 1) });
+    const text = (value: number) => t("metrics.cores", shownCount(number(value, 1)));
     return {
       absolute, points, ceiling, share,
       text,
-      tick: (value) => t("metrics.cores", { count: value, value: number(value, 1, true) }),
-      reading: (value, capacity = latestCapacity ?? 0) => ({ value: number(value, 1), unit: t("metrics.ofCores", { count: capacity, value: number(capacity, 1, true) }) }),
+      tick: (value) => t("metrics.cores", shownCount(number(value, 1, true))),
+      reading: (value, capacity = latestCapacity ?? 0) => ({ value: number(value, 1), unit: t("metrics.ofCores", shownCount(number(capacity, 1, true))) }),
     };
   }
 

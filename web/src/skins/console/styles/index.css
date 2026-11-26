@@ -27,6 +27,8 @@
 @import "./terminal.css";
 @import "./host-log.css";
 @import "./identity.css";
+@import "./source.css";
+@import "./decision.css";
 @import "./dialog.css";
 @import "./panel.css";
 @import "./notify.css";

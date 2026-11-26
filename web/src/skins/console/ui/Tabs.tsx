@@ -102,12 +102,14 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
     return () => { row.removeEventListener("scroll", measure); resized?.disconnect(); };
   }, [value, tabs]);
 
-  // Icons coming or going move every tab; the ink takes its new place at once.
+  // Icons coming or going move every tab; the ink takes its new place at once,
+  // and the end fade is judged again on the new widths.
   useLayoutEffect(() => {
     const row = strip.current;
     const active = row?.querySelector<HTMLElement>('[aria-selected="true"]');
     const line = ink.current;
-    if (!active || !line) return;
+    if (!row || !active || !line) return;
+    setMore(row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
     line.style.transition = "none";
     line.style.left = `${active.offsetLeft}px`;
     line.style.width = `${active.offsetWidth}px`;

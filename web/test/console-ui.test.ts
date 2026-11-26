@@ -24,7 +24,11 @@ import { elapsed } from "../src/skins/console/ui/Flashbar.tsx";
 import { frameItems } from "../src/skins/console/ui/Frame.tsx";
 import { Grid } from "../src/skins/console/ui/Grid.tsx";
 import { Indicator } from "../src/skins/console/ui/Indicator.tsx";
+import { menuStep, openFocus } from "../src/skins/console/ui/Menu.tsx";
 import { MenuButton } from "../src/skins/console/ui/MenuButton.tsx";
+import { nextLeaving, stackOf } from "../src/skins/console/ui/leaving.ts";
+import { restoredTracks } from "../src/skins/console/ui/rows.ts";
+import { SourceRef } from "../src/skins/console/ui/SourceRef.tsx";
 import { ListColumn, ListItemIcon, ListItemPerson, ListItemWorld, ListItemWorldSkeleton } from "../src/skins/console/ui/ListColumn.tsx";
 import { Notice } from "../src/skins/console/ui/Notice.tsx";
 import { PageHeader } from "../src/skins/console/ui/PageHeader.tsx";
@@ -343,7 +347,7 @@ test("Loading lists keep their rows' shape: a one-line stack holds the compact l
     ],
   }));
   // With no earlier visit, the action column holds one block as wide as two small controls.
-  assert.equal(table.match(/<td class="c-col-act"[^>]*><span aria-hidden="true" class="c-skeleton" style="width:calc\(2 \* var\(--c-ctl-sm\)\);height:var\(--c-ctl-sm\)"><\/span><\/td>/g)?.length, 3);
+  assert.equal(table.match(/<td class="c-col-act"[^>]*><span aria-hidden="true" class="c-skeleton" style="width:var\(--c-act-w, calc\(2 \* var\(--c-ctl-sm\)\)\);height:var\(--c-ctl-sm\)"><\/span><\/td>/g)?.length, 3);
 });
 
 test("ListColumn: a filter field, chips with counts, the current row marked", () => {
@@ -592,4 +596,49 @@ test("GameGlyph: the tint and glyph its game names, hidden from assistive techno
   assert.match(unknown, /class="c-glyph c-glyph-md"/, "a tint this skin does not know stays neutral");
   assert.match(unknown, /<span class="c-glyph-letter">G<\/span>/);
   assert.doesNotMatch(unknown, /<svg/);
+});
+
+test("Menu: a pointer open focuses the menu, a keyboard open the chosen or first enabled item, and arrows wrap from either", () => {
+  const item = (checked?: boolean, disabled?: boolean) => ({ getAttribute: (name: string) => (name === "aria-checked" ? (checked === undefined ? null : String(checked)) : name === "aria-disabled" && disabled ? "true" : null) });
+  assert.equal(openFocus(false, [item(), item()]), null, "a pointer or touch open leaves no item looking chosen");
+  assert.equal(openFocus(true, [item(false), item(true), item(false)]), 1, "the chosen radio item");
+  assert.equal(openFocus(true, [item(undefined, true), item(), item()]), 1, "the first enabled item");
+  assert.equal(openFocus(true, []), 0);
+  // From the menu itself (index -1): Down to the first item, Up to the last.
+  assert.equal(menuStep(-1, 5, 1), 0);
+  assert.equal(menuStep(-1, 5, -1), 4);
+  assert.equal(menuStep(0, 5, -1), 4);
+  assert.equal(menuStep(4, 5, 1), 0);
+});
+
+test("A leaving stack keeps a departed item in its place until its collapse ends, and lets a returning one stay", () => {
+  const key = (item: string) => item;
+  const first = nextLeaving(new Map(), ["a", "b", "c"], ["a", "c"], key);
+  assert.equal(first.added, true);
+  assert.deepEqual(stackOf(["a", "c"], first.leaving), [{ item: "a", leaving: false }, { item: "b", leaving: true }, { item: "c", leaving: false }]);
+  // "b" comes back while "c" leaves in the same change: "c" is a new departure, "b" no longer leaves.
+  const second = nextLeaving(first.leaving, ["a", "c"], ["a", "b"], key);
+  assert.equal(second.added, true, "a new departure starts its own collapse time");
+  assert.deepEqual([...second.leaving.keys()], ["c"]);
+  assert.equal(nextLeaving(second.leaving, ["a", "b"], ["a", "b"], key).added, false);
+});
+
+test("A table's remembered widths come back only for the same columns at the same width", () => {
+  const known = { table: 980, columns: [204, 85, 140, 230, 322], act: 300 };
+  assert.equal(restoredTracks(known, 5, 980.6), known);
+  assert.equal(restoredTracks(known, 5, 360), null, "a desktop width never reaches a phone's placeholder");
+  assert.equal(restoredTracks(known, 4, 980), null, "another column set starts afresh");
+  assert.equal(restoredTracks(undefined, 5, 980), null);
+});
+
+test("SourceRef: the repository and short commit in mono, a link only when given one, cut to its cell", () => {
+  const plain = html(createElement(SourceRef, { repository: "https://github.com/DrArzter/presets", commit: "7f3c19ab4d0e52b8916cfa07d5e483126bd90af5" }));
+  assert.match(plain, /^<span class="c-mono c-faint c-source" title="https:\/\/github.com\/DrArzter\/presets@7f3c19ab4d0e52b8916cfa07d5e483126bd90af5">DrArzter\/presets@7f3c19a<\/span>$/);
+  const linked = html(createElement(SourceRef, { commit: "7f3c19ab4d0e52b8", href: "https://github.com/DrArzter/presets/commit/7f3c19ab4d0e52b8" }));
+  assert.match(linked, /^<a class="c-mono c-source" href="https:\/\/github.com\/DrArzter\/presets\/commit\/7f3c19ab4d0e52b8" rel="noreferrer" target="_blank"[^>]*>@7f3c19a<\/a>$/);
+  const sheet = readFileSync(new URL("../src/skins/console/styles/source.css", import.meta.url), "utf8");
+  assert.match(sheet, /\.c-source \{[^}]*max-width: 100%;[^}]*text-overflow: ellipsis;/);
+  for (const screen of ["Releases.tsx", "tabs/Releases.tsx", "ui/DetailList.tsx"]) {
+    assert.match(readFileSync(new URL(`../src/skins/console/${screen}`, import.meta.url), "utf8"), /<SourceRef /, `${screen} draws a preset's source with SourceRef`);
+  }
 });

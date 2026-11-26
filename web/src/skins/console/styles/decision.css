@@ -1,0 +1,7 @@
+/* Decision: a request row's Approve and Dismiss, two named icon buttons side by side in its action column. */
+
+html[data-skin="console"] .c-decide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

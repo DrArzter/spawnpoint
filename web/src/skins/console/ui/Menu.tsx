@@ -9,6 +9,31 @@ import { actionTip } from "./ActionButton";
 import { useToast } from "./Toast";
 import { t } from "../../../i18n";
 
+/**
+ * The item an arrow moves to from item `at`, wrapping at both ends. With focus
+ * on the menu itself (`at` is -1, after a pointer open), Down goes to the
+ * first item and Up to the last.
+ */
+export function menuStep(at: number, length: number, step: 1 | -1): number {
+  if (at < 0) return step === 1 ? 0 : length - 1;
+  return (at + step + length) % length;
+}
+
+type Item = Readonly<{ getAttribute: (name: string) => string | null }>;
+
+/**
+ * Where focus goes when a menu opens: null for the menu itself (a pointer or
+ * touch open, so no item looks chosen), else the index of the chosen radio
+ * item, the first enabled item, or the first item.
+ */
+export function openFocus(keyboard: boolean, items: readonly Item[]): number | null {
+  if (!keyboard) return null;
+  const checked = items.findIndex((item) => item.getAttribute("aria-checked") === "true");
+  if (checked >= 0) return checked;
+  const enabled = items.findIndex((item) => item.getAttribute("aria-disabled") !== "true");
+  return enabled >= 0 ? enabled : 0;
+}
+
 /** `checked` makes the group one choice: its items are radio items and the Action with that id is the chosen one. */
 export type MenuGroup = Readonly<{ label?: string; actions: readonly Action[]; checked?: string }>;
 
@@ -56,12 +81,9 @@ export function Menu({ id, label, groups, open, anchor, onClose, side = "bottom"
     }
     showLayer(element);
     positionPopover(element, target, side, align);
-    if (!keyboardInput) {
-      element.focus();
-      return;
-    }
     const list = items();
-    (list.find((item) => item.getAttribute("aria-checked") === "true") ?? list.find((item) => item.getAttribute("aria-disabled") !== "true") ?? list[0])?.focus();
+    const first = openFocus(keyboardInput, list);
+    (first === null ? element : list[first])?.focus();
   }, [open, anchor, side, align]);
 
   useLightDismiss(open, [menu, anchor], onClose);
@@ -72,7 +94,7 @@ export function Menu({ id, label, groups, open, anchor, onClose, side = "bottom"
     const at = list.indexOf(document.activeElement as HTMLElement);
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      list[(at + (event.key === "ArrowDown" ? 1 : list.length - 1)) % list.length]?.focus();
+      list[menuStep(at, list.length, event.key === "ArrowDown" ? 1 : -1)]?.focus();
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
       (event.key === "Home" ? list[0] : list.at(-1))?.focus();

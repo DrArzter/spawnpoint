@@ -1,12 +1,16 @@
+import { repositoryName, shortCommit } from "../../../lib/format";
+
 /**
  * Where a preset's files come from: the repository and the commit, short, in
- * mono, with the full reference in the title. `link` opens the repository.
+ * mono, with the full reference in the title. Without a repository it is the
+ * commit alone ("@abc1234"). With `href` it is a link, cut with an ellipsis
+ * when its cell is narrow.
  */
-export function SourceRef({ repository, commit, link = false }: Readonly<{ repository: string; commit: string | null; link?: boolean }>) {
-  const name = repository.replace(/^https?:\/\/(www\.)?github\.com\//, "");
-  const text = commit ? `${name}@${commit.slice(0, 7)}` : name;
-  const title = commit ? `${repository}@${commit}` : repository;
-  return link
-    ? <a className="c-mono c-source" href={repository} rel="noreferrer" target="_blank" title={title}>{text}</a>
+export function SourceRef({ repository = null, commit, href }: Readonly<{ repository?: string | null; commit: string | null; href?: string }>) {
+  const name = repository ? repositoryName(repository) : "";
+  const text = commit ? `${name}@${shortCommit(commit)}` : name;
+  const title = [repository, commit].filter(Boolean).join("@");
+  return href
+    ? <a className="c-mono c-source" href={href} rel="noreferrer" target="_blank" title={title}>{text}</a>
     : <span className="c-mono c-faint c-source" title={title}>{text}</span>;
 }

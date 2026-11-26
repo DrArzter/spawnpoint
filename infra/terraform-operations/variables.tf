@@ -119,3 +119,14 @@ variable "spot" {
     error_message = "spot must be disabled or enabled."
   }
 }
+
+variable "spot_fault_test" {
+  description = "Whether the AWS FIS experiment that sends one Spot interruption to an armed launched host exists (ADR-0102, step 7). It takes effect only while spot is enabled. CI sets it from the repository variable SPAWNPOINT_SPOT_FAULT_TEST; an unset variable means disabled."
+  type        = string
+  default     = "disabled"
+
+  validation {
+    condition     = contains(["disabled", "enabled"], var.spot_fault_test)
+    error_message = "spot_fault_test must be disabled or enabled."
+  }
+}

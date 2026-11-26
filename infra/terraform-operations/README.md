@@ -75,6 +75,15 @@ effect only while `session_volume` is also `enabled`. When it is `enabled`, `spo
 have yet (checked 2026-11-26). The start role keeps `ec2:CreateFleet` and gains no IAM rights. To switch Spot off again,
 first let every Spot host end: AWS refuses to delete the role while an instance uses it.
 
+### Interruption and fault test
+
+ADR-0102, steps 5 and 7. While `spot` is `enabled`, `spot.tf` also creates the `spawnpoint-spot-interruption` Lambda,
+its three EventBridge rules and the `spawnpoint-spot-interruption-failed` alarm (see `workflows/README.md`). The
+repository variable `SPAWNPOINT_SPOT_FAULT_TEST` (`spot_fault_test`, default `disabled`) adds `spot-fault-test.tf`: an
+FIS role and the experiment template `spawnpoint-spot-interruption`, which sends a two-minute Spot notice to one
+running host tagged both `ManagedBy=spawnpoint-fleet` and `SpawnpointFaultTarget=armed`, and stops when that alarm
+fires. Only `scripts/spot-fault-test.sh` arms a host.
+
 ## Local verification
 
 ```bash

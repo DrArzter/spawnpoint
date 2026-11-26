@@ -8,6 +8,7 @@ Available:
 | Script | Purpose |
 | --- | --- |
 | `audit-aws-bootstrap.sh` | Read-only verification of browser credentials, IAM MFA and keys, budget alerts, recipients and SNS subscriptions. See [the command reference](../docs/aws-cli-checks.md) |
+| `spot-fault-test.sh` | Interrupt the Spot host of one test world through AWS FIS (ADR-0102, step 7). Read-only by default; `--run` asks for `yes`, arms that one host and starts the experiment |
 | `backups.sh` | List recent immutable world backups from S3: every world, or one with `--world <id>` |
 | `logs.sh` | Fetch a bounded Minecraft log snapshot through SSM without SSH |
 | `operations.sh` | Show recent start/stop Step Functions executions |

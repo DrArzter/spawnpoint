@@ -62,6 +62,11 @@ detach and delete only volumes tagged `ManagedBy=spawnpoint-session-volume`, and
 tagged `ManagedBy=spawnpoint-fleet` (`session-volume.tf`). The host stack (`infra/terraform`) deploys first and owns the
 `spawnpoint-start-session` parameter and the `spawnpoint-unmount-session-volume` document the workflows use.
 
+The `spawnpoint-session-volume-sweeper` Lambda runs every 15 minutes, whether or not the switch is on. It deletes an
+`available` session volume older than one hour whose world's record (`world#<id>`) has another or no active session.
+A volume it cannot delete, one still attached four hours after its session ended, or one with no `SessionId` tag fails
+the run, and the `spawnpoint-session-volume-survived` alarm reports it.
+
 ## Local verification
 
 ```bash

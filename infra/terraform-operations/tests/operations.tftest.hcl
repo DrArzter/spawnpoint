@@ -168,6 +168,16 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.session_volume_sweeper
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.session_volume_sweeper_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_watchdog_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
@@ -1003,4 +1013,35 @@ run "session_volume_size_is_bounded" {
   }
 
   expect_failures = [var.session_volume_size_gib]
+}
+
+run "session_volume_sweeper_deletes_only_tagged_volumes_and_alarms_on_a_survivor" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_event_rule.session_volume_sweep.schedule_expression == "rate(15 minutes)",
+      aws_lambda_function.session_volume_sweeper.environment[0].variables["LIFECYCLE_TABLE_NAME"] == "spawnpoint-lifecycle-v2",
+    ])
+    error_message = "The sweeper runs on a schedule and reads the lifecycle table."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.session_volume_sweeper.statement : statement.actions if statement.sid == "DeleteOnlySessionVolumes"]) == toset(["ec2:DeleteVolume"]),
+      anytrue([for statement in data.aws_iam_policy_document.session_volume_sweeper.statement : statement.sid == "DeleteOnlySessionVolumes" && anytrue([for condition in statement.condition : condition.variable == "ec2:ResourceTag/ManagedBy" && contains(condition.values, "spawnpoint-session-volume")])]),
+      one([for statement in data.aws_iam_policy_document.session_volume_sweeper.statement : statement.actions if statement.sid == "ReadWorldLifecycle"]) == toset(["dynamodb:GetItem"]),
+      length([for statement in data.aws_iam_policy_document.session_volume_sweeper.statement : statement if contains(tolist(statement.actions), "ec2:DetachVolume") || contains(tolist(statement.actions), "ec2:CreateVolume")]) == 0,
+    ])
+    error_message = "The sweeper may only read the lifecycle and delete volumes tagged as session volumes; it never detaches or creates one."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_cloudwatch_metric_alarm.session_volume_survived.metric_name == "Errors",
+      aws_cloudwatch_metric_alarm.session_volume_survived.threshold == 0,
+      aws_cloudwatch_metric_alarm.session_volume_survived.evaluation_periods == 1,
+    ])
+    error_message = "A volume that survives one sweep alarms."
+  }
 }

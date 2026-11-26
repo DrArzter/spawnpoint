@@ -168,6 +168,16 @@ mock_provider "aws" {
   }
 
   override_data {
+    target = data.aws_iam_policy_document.session_volume_sweeper
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
+    target = data.aws_iam_policy_document.session_volume_sweeper_assume
+    values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
+
+  override_data {
     target = data.aws_iam_policy_document.lifecycle_v2_watchdog_assume
     values = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }

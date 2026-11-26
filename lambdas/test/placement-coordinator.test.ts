@@ -296,6 +296,15 @@ test("a host with no market is on demand and takes any session; an unknown marke
   );
 });
 
+// ADR-0054: a preset's footprint sizes the launch; null from a workflow means the game's.
+test("a placed session asks for its own footprint, and null asks for the game's", async () => {
+  const coordinate = coordinator(new MemoryFleet());
+  const heavy = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world", serverId: "minecraft", footprint: { memoryMiB: 14336, cores: 2 } });
+  assert.deepEqual(heavy.placement, { kind: "launch", requirements: { memoryMiB: 14336 + SYSTEM_RESERVE_MIB, vcpu: 3 }, spot: true });
+  const game = await coordinate({ action: "placeSession", sessionId: "s2", worldId: "other", serverId: "minecraft", footprint: null });
+  assert.deepEqual(game.placement, { kind: "launch", requirements: { memoryMiB: 7 * 1024 + SYSTEM_RESERVE_MIB, vcpu: 2 }, spot: true });
+});
+
 // ADR-0102: a world that chose On-Demand never asks for Spot and never lands on a Spot host.
 test("an On-Demand world launches On-Demand and skips a Spot host with room", async () => {
   const fleet = new MemoryFleet();

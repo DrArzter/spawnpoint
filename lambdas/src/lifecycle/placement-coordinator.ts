@@ -49,7 +49,7 @@ type SessionRequest = Readonly<{
    * of their own (ADR-0062); a start begun before then still sends only this.
    */
   serverId?: string;
-  footprint?: Footprint;
+  footprint?: Footprint | null;
   policy?: SessionPolicy;
   /** `on-demand`: the world chose never to run on Spot (ADR-0102). */
   market?: HostMarket;
@@ -122,6 +122,7 @@ function requestGame(request: SessionRequest): string | undefined {
 }
 
 export function resolveFootprint(request: SessionRequest): Footprint {
+  // A workflow sends null for "the game's"; placement checks whichever it gets.
   if (request.footprint) return request.footprint;
   const gameId = requestGame(request);
   const byGame = gameId === undefined ? undefined : gameFootprints[gameId];

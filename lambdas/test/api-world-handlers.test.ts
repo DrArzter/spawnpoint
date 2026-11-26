@@ -1,3 +1,4 @@
+import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -34,6 +35,7 @@ function scenario(t: TestContext, options: Readonly<{
   world?: WorldRecord; state?: HostObservation["state"]; game?: LifecycleRecord | null; own?: LifecycleRecord | null;
   /** False: the deployment's persistent host was deleted (ADR-0100). */
   persistentHost?: boolean;
+  presets?: readonly PresetObservation[];
 }> = {}) {
   const sources = awsControlPlaneSources as Required<ControlPlaneSources>;
   const inputs: Record<string, unknown>[] = [];
@@ -41,7 +43,7 @@ function scenario(t: TestContext, options: Readonly<{
     id: "host", name: "Host", state: options.state ?? "stopped", providerRef: "i-12345678", instanceType: null,
     availabilityZone: null, launchedAt: null, publicIp: null, provenance: "configured" as const,
   }]);
-  t.mock.method(sources, "listPresets", async () => []);
+  t.mock.method(sources, "listPresets", async () => options.presets ?? []);
   t.mock.method(sources, "listRunningOperations", async () => []);
   t.mock.method(sources, "listWorldRecords", async () => [options.world ?? record]);
   t.mock.method(sources, "readLifecycle", async (key: string) => key.startsWith("world#") ? options.own ?? null : options.game ?? null);
@@ -264,6 +266,18 @@ function storedWorld(t: TestContext, stored: WorldRecord) {
   });
   return written;
 }
+
+test("a fleet world's start carries its preset's footprint; without one it sends none", async (t) => {
+  const fleet = { ...record, placement: "fleet" as const, connectivity: "raw" as const, auth: "game" as const };
+  const preset = { id: record.preset.id, displayName: "Heavy", gameId: record.gameId, repository: record.preset.repository, commit: record.preset.commit, profileDigest: record.preset.profileDigest, releases: ["1.0"], latestRelease: "1.0", buildStatus: "ready" as const };
+  const heavy = scenario(t, { world: fleet, presets: [{ ...preset, footprint: { memoryMiB: 14336, cores: 2 } }] });
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
+  assert.deepEqual(heavy[0]?.footprint, { memoryMiB: 14336, cores: 2 });
+  t.mock.restoreAll();
+  const plain = scenario(t, { world: fleet, presets: [preset] });
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202);
+  assert.equal("footprint" in (plain[0] ?? {}), false);
+});
 
 test("an On-Demand fleet world asks for On-Demand at start; a Spot one sends nothing new", async (t) => {
   const fleet = { ...record, placement: "fleet" as const, connectivity: "raw" as const, auth: "game" as const };

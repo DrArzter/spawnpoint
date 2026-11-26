@@ -14,7 +14,8 @@ config="${fixture}/config"
 mkdir -p -- "${config}/profiles/factorio-vanilla" "${config}/profiles/space-age" "${fixture}/bin"
 git -C "${config}" init --quiet
 jq -n '{schema_version: 1, game: "factorio", id: "factorio-vanilla", display_name: "Factorio vanilla"}' >"${config}/profiles/factorio-vanilla/profile.json"
-jq -n '{schema_version: 1, game: "factorio", id: "space-age", display_name: "Factorio Space Age"}' >"${config}/profiles/space-age/profile.json"
+# Space Age names its own footprint (ADR-0054); vanilla takes the game's.
+jq -n '{schema_version: 1, game: "factorio", id: "space-age", display_name: "Factorio Space Age", footprint: {memory_mib: 14336, cores: 2}}' >"${config}/profiles/space-age/profile.json"
 git -C "${config}" add profiles
 git -C "${config}" -c user.name=Test -c user.email=test@example.invalid commit --quiet -m profiles
 commit="$(git -C "${config}" rev-parse HEAD)"
@@ -65,6 +66,10 @@ jq -e --arg commit "${commit}" '
   and .source.revision == $commit and .source.commit == $commit
   and ([.presets[].id] | sort) == ["factorio-vanilla", "space-age"]
   and all(.presets[]; .build_status == "unbuilt" and .releases == [] and .latest_release == null and (.profile_digest | length == 64))
+' "${catalog}" >/dev/null
+jq -e '
+  (.presets[] | select(.id == "space-age") | .footprint == {memory_mib: 14336, cores: 2})
+  and (.presets[] | select(.id == "factorio-vanilla") | has("footprint") | not)
 ' "${catalog}" >/dev/null
 
 jq '(.presets[] | select(.id == "factorio-vanilla")) |= (.build_status = "ready" | .releases = ["1.0"] | .latest_release = "1.0")' \

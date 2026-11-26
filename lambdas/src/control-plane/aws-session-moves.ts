@@ -24,7 +24,7 @@ export function awsSessionMoves(sfn: Pick<SFNClient, "send">, startMachineArn: s
         input: JSON.stringify(buildLifecycleStartInput({
           serverId: move.serverId, gameId: move.gameId, worldName: move.worldName, operationId: move.operationId,
           sessionId: move.sessionId, instanceId: "", worldId: move.worldId, requestedBy: "spot-interruption",
-          placement: "fleet", launch: "enabled", appCommit, policy: "cold", moveVolumeId: move.volumeId,
+          placement: "fleet", launch: "enabled", appCommit, policy: "cold", footprint: move.footprint, moveVolumeId: move.volumeId,
         })),
       }));
       if (!started.executionArn) throw new Error("move execution did not return an ARN");

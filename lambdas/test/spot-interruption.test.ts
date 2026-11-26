@@ -136,7 +136,8 @@ test("termination releases each moving session and starts it again with its volu
   assert.deepEqual(started, [{
     operationId: `move-${NOW}-s1`, serverId: "world#alpha", sessionId: "s1", worldId: "alpha",
     gameId: "minecraft", worldName: "Alpha", volumeId: "vol-0123456789abcdef0",
-  }]);
+    footprint: { memoryMiB: 4096, cores: 1 },
+  }], "the move asks for the footprint the session was placed with");
   assert.deepEqual(current()?.record.reservations.map((reservation) => reservation.sessionId), ["s9"]);
 });
 

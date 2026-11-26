@@ -54,6 +54,11 @@ for profile in "${profiles[@]}"; do
     and (.id | test("^[a-z0-9][a-z0-9-]{0,31}$"))
     and (.display_name | type == "string" and length > 0 and length <= 80)
     and ((.game // $legacy_game) | test("^[a-z0-9][a-z0-9-]{0,31}$"))
+    and ((has("footprint") | not) or (
+      (.footprint | type == "object" and (keys - ["memory_mib", "cores"] | length == 0)) and
+      (.footprint.memory_mib | type == "number" and . == floor and . > 0) and
+      (.footprint.cores | type == "number" and . > 0)
+    ))
   ' "${profile}" >/dev/null || {
     printf 'error: invalid profile metadata: %s\n' "${directory_id}" >&2
     exit 1
@@ -75,12 +80,15 @@ for profile in "${profiles[@]}"; do
   if [[ -f "${checkout}/profiles/.source-revisions.json" ]]; then
     profile_revision="$(jq -er --arg id "${directory_id}" '.[$id] // error("missing profile source revision")' "${checkout}/profiles/.source-revisions.json")"
   fi
+  # ADR-0054: a preset may need more than its game's footprint (a heavy modpack).
   jq -cn \
     --arg id "${directory_id}" \
     --arg display_name "$(jq -r '.display_name' "${profile}")" \
+    --argjson footprint "$(jq -c '.footprint // null' "${profile}")" \
     --arg profile_digest "${digest}" \
     --arg source_commit "${profile_revision}" \
-    '{id: $id, display_name: $display_name, profile_digest: $profile_digest, source_commit: $source_commit, build_status: "unbuilt", releases: [], latest_release: null}' \
+    '{id: $id, display_name: $display_name, profile_digest: $profile_digest, source_commit: $source_commit, build_status: "unbuilt", releases: [], latest_release: null}
+      + (if $footprint == null then {} else {footprint: $footprint} end)' \
     >>"${entries}"
 done
 

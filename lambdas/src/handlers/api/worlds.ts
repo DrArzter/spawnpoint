@@ -5,6 +5,7 @@ import { type SessionAction, planFleetSessionOperation, planSessionOperation, st
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
 import { usableByNewWipe } from "../../control-plane/preset-catalog.ts";
 import { checkReleaseUsable, noReleaseState, type ReleaseStateReader, type ReleaseUsability } from "../../control-plane/release-usable.ts";
+import type { Footprint } from "../../domain/placement.ts";
 import { blockingOperations, sessionLifecycleKey, holdsWorld, type WorldHost, type WorldPlacement } from "../../control-plane/world-session.ts";
 import { randomUUID } from "node:crypto";
 import { type WorldRecord, worldIdForName } from "../../control-plane/world-registry.ts";
@@ -43,6 +44,7 @@ type SessionExecution = Readonly<{
   fleet: boolean;
   warm: boolean;
   onDemand: boolean;
+  footprint: Footprint | undefined;
   plan: SessionPlan | FleetSessionPlan;
   configuredHosts: readonly Readonly<{ providerRef: string }>[];
   located: Awaited<ReturnType<typeof readWorldSession>>;
@@ -206,11 +208,12 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     const own = worldRecords.find((record) => record.worldId === worldId);
     const warm = fleet && own?.warm === true;
     const onDemand = fleet && own?.onDemand === true;
-    return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, warm, onDemand, plan, configuredHosts, located, recoverySessionId, players });
+    const footprint = fleet ? presets.find((preset) => preset.gameId === gameId && preset.id === own?.preset.id)?.footprint : undefined;
+    return executeSessionOperation({ identity, action, gameId, worldId, worldName: world?.displayName ?? worldId, fleet, warm, onDemand, footprint, plan, configuredHosts, located, recoverySessionId, players });
   }
 
   async function executeSessionOperation(request: SessionExecution): Promise<Response> {
-    const { identity, action, gameId, worldId, worldName, fleet, warm, onDemand, located, recoverySessionId, players } = request;
+    const { identity, action, gameId, worldId, worldName, fleet, warm, onDemand, footprint, located, recoverySessionId, players } = request;
     const operationId = `panel-${action}-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
     const requestedBy = `identity:${identity.id}`;
     const hostId = plannedSessionHost(request);
@@ -226,6 +229,7 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
         placement: fleet ? "fleet" : "single",
         ...(fleet ? { policy: warm ? "warm" as const : "cold" as const } : {}),
         ...(onDemand ? { market: "on-demand" as const } : {}),
+        ...(footprint === undefined ? {} : { footprint }),
       });
     }
     else {

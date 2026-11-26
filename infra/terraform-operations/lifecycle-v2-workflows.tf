@@ -193,7 +193,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
   }
 
   # A Spot request needs the service-linked role to exist first.
-  depends_on = [aws_iam_service_linked_role.spot]
+  depends_on = [aws_iam_service_linked_role.ec2_spot]
 }
 
 data "aws_iam_policy_document" "lifecycle_v2_stop_assume" {

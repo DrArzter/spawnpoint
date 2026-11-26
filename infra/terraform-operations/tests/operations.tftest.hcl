@@ -1069,7 +1069,7 @@ run "spot_is_off_by_default_and_creates_nothing" {
     condition = alltrue([
       var.spot == "disabled",
       jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Initialize"].Parameters.spot.mode == "disabled",
-      length(aws_iam_service_linked_role.spot) == 0,
+      length(aws_iam_service_linked_role.ec2_spot) == 0,
       length(aws_lambda_function.spot_interruption) == 0,
       length(aws_cloudwatch_event_rule.spot_interruption) == 0,
     ])
@@ -1095,7 +1095,7 @@ run "spot_can_be_switched_on" {
       jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Initialize"].Parameters.spot.mode == "enabled",
       jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Launch Spot Host"].Parameters.TargetCapacitySpecification.DefaultTargetCapacityType == "spot",
       jsondecode(aws_sfn_state_machine.lifecycle_v2_start.definition).States["Launch Spot Host"].Parameters.SpotOptions.AllocationStrategy == "price-capacity-optimized",
-      one(aws_iam_service_linked_role.spot[*].aws_service_name) == "spot.amazonaws.com",
+      one(aws_iam_service_linked_role.ec2_spot[*].aws_service_name) == "spot.amazonaws.com",
       length(aws_lambda_function.spot_interruption) == 1,
       toset(keys(aws_cloudwatch_event_rule.spot_interruption)) == toset(["warning", "terminated", "saved"]),
       jsondecode(aws_cloudwatch_event_rule.spot_interruption["terminated"].event_pattern).detail.state == ["terminated"],
@@ -1152,5 +1152,35 @@ run "spot_fault_test_reaches_only_the_armed_fleet_host" {
       ] if statement.sid == "InterruptOnlyTheArmedFleetHost"
     ])) == toset(["ec2:ResourceTag/ManagedBy=spawnpoint-fleet", "ec2:ResourceTag/SpawnpointFaultTarget=armed"])
     error_message = "FIS may interrupt only an armed fleet host."
+  }
+}
+
+run "spot_adopts_a_service_linked_role_the_account_already_has" {
+  command = plan
+
+  variables {
+    spot           = "enabled"
+    session_volume = "enabled"
+  }
+
+  override_data {
+    target = data.aws_iam_roles.spot_service_linked[0]
+    values = {
+      arns = ["arn:aws:iam::123456789012:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot"]
+    }
+  }
+
+  # A mock provider cannot import; the override stands for the adopted role.
+  override_resource {
+    target = aws_iam_service_linked_role.ec2_spot[0]
+    values = {
+      arn              = "arn:aws:iam::123456789012:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot"
+      aws_service_name = "spot.amazonaws.com"
+    }
+  }
+
+  assert {
+    condition     = one(aws_iam_service_linked_role.ec2_spot[*].aws_service_name) == "spot.amazonaws.com"
+    error_message = "An existing Spot service-linked role is adopted, not created a second time (ADR-0102)."
   }
 }

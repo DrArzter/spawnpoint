@@ -9,14 +9,37 @@ locals {
   }
 }
 
-# EC2 launches Spot capacity through this service-linked role. The account has
-# none until the first Spot request, and the start role may not create IAM
-# roles, so Terraform creates it with the switch. Turning the switch off again
+# EC2 launches Spot capacity through this service-linked role. The start role
+# may not create IAM roles, so Terraform creates it with the switch. An account
+# can already have it (from the console, or an earlier Spot request), so an
+# existing one is adopted, never created twice. Turning the switch off again
 # deletes it; AWS refuses that while Spot instances still use it.
-resource "aws_iam_service_linked_role" "spot" {
+data "aws_iam_roles" "spot_service_linked" {
+  count       = var.spot == "enabled" ? 1 : 0
+  path_prefix = "/aws-service-role/spot.amazonaws.com/"
+}
+
+import {
+  for_each = toset(try(data.aws_iam_roles.spot_service_linked[0].arns, []))
+  to       = aws_iam_service_linked_role.ec2_spot[0]
+  id       = each.value
+}
+
+resource "aws_iam_service_linked_role" "ec2_spot" {
   count            = var.spot == "enabled" ? 1 : 0
   aws_service_name = "spot.amazonaws.com"
   description      = "EC2 Spot capacity for Spawnpoint launched hosts (ADR-0102)."
+}
+
+# The first deploy created the role but could not tag it, which left this
+# address tainted. Forget it without deleting the role; the import above
+# adopts the same role under ec2_spot.
+removed {
+  from = aws_iam_service_linked_role.spot
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 # ADR-0102, step 5: what an interruption does in the control plane. The

@@ -72,9 +72,15 @@ Contents:
   `scripts/ensure-host-observability.sh` brings up before the first placed session and whose Prometheus finds each
   session's exporter through the Docker socket by label (`prometheus.host.yml`).
 
-Planned later: fetch the desired release from S3, and invoke backup/retention from orchestration. The Spot interruption
-notice is handled only if [ADR-0027](../docs/adr/0027-spot-request-shape.md) is un-deferred; the server runs on-demand
-today.
+Planned later: fetch the desired release from S3, and invoke backup/retention from orchestration.
+
+A launched Spot host ([ADR-0102](../docs/adr/0102-spot-for-cold-launched-hosts-with-a-session-volume.md)) runs
+`scripts/spot-watcher.sh` as the `spawnpoint-spot-watcher` service; `user-data-fleet.sh.tftpl` installs it only when
+the instance's market is Spot. Each session started on a session volume leaves a record (`_session-records.sh`) that
+the unmount removes. On a rebalance recommendation the watcher saves every recorded session. On the two-minute notice
+`save-for-interruption.sh` announces a countdown where the game has `game_announce`, saves to the session volume,
+flushes it, announces that the world is saved and puts one `spawnpoint.host` event on the default bus. Nothing goes to
+S3 on this path.
 
 The world, the mod directory and the configs are mounted from the persistent EBS volume. Nothing that matters
 is inside the image or on the root volume. See [ADR-0010](../docs/adr/0010-world-persistence-and-backups.md).

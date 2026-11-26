@@ -59,6 +59,12 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+  override_data {
+    target = data.aws_iam_policy_document.game_host_interruption_report
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
 
   override_data {
     target = data.aws_iam_policy_document.step_functions_assume_role
@@ -540,5 +546,19 @@ run "session_volume_reaches_the_host_only_through_checked_parameters" {
       length(keys(jsondecode(aws_ssm_document.unmount_session_volume.content).parameters)) == 1,
     ])
     error_message = "The unmount document takes only a checked world id."
+  }
+}
+
+run "a_host_reports_interruption_saves_under_its_own_source_only" {
+  command = plan
+
+  assert {
+    condition     = toset(one([for statement in data.aws_iam_policy_document.game_host_interruption_report.statement : statement.actions])) == toset(["events:PutEvents"])
+    error_message = "A game host may only put events."
+  }
+
+  assert {
+    condition     = toset(one(one([for statement in data.aws_iam_policy_document.game_host_interruption_report.statement : statement.condition])).values) == toset(["spawnpoint.host"])
+    error_message = "A game host may only put events under the spawnpoint.host source."
   }
 }

@@ -19,6 +19,11 @@ world_id="$1"
   exit 2
 }
 
+# shellcheck source=_session-records.sh
+source "${SCRIPT_DIR}/_session-records.sh"
+
+# The session has left: nothing is left for the Spot watcher to save.
+remove_session_record "${world_id}"
 mount_point="${WORLDS_DIRECTORY}/${world_id}"
 if ! findmnt -nro TARGET --mountpoint "${mount_point}" >/dev/null 2>&1; then
   printf 'unmounted=false\nmount=%s\n' "${mount_point}"

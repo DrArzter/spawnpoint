@@ -1,11 +1,11 @@
 import type { SettingDefinition, SettingValue } from "../../contract/settings";
 import type { AccessPermission, AccessRole } from "../../contract/access";
-import type { ControlPlaneSnapshot, Deployment, Game, Host, Operation, Preset, ReleasePointer, Wipe, World, WorldGameSettings, WorldSession } from "../../contract/control-plane";
+import type { ControlPlaneSnapshot, Deployment, Game, GamePresentation, Host, Operation, Preset, ReleasePointer, Wipe, World, WorldGameSettings, WorldSession } from "../../contract/control-plane";
 
 /** One setting a world of this game may set, as its game module defines it (contract/settings.ts). */
 export type { SettingDefinition, SettingValue };
 /** What GET /control-plane sends (contract/control-plane.ts). */
-export type { ControlPlaneSnapshot, Deployment, Game, Host, Operation, Preset, ReleasePointer, Wipe, World, WorldGameSettings, WorldSession };
+export type { ControlPlaneSnapshot, Deployment, Game, GamePresentation, Host, Operation, Preset, ReleasePointer, Wipe, World, WorldGameSettings, WorldSession };
 export type Page = "worlds" | "releases" | "access" | "profile";
 export type AccessTab = "users" | "roles" | "notifications";
 export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unknown";
@@ -17,7 +17,7 @@ export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist
 export type Role = AccessRole;
 /** One permission of the served catalogue: the words every skin shows for it. */
 export type PermissionInfo = AccessPermission;
-export type LinkKind = "telegram" | "email" | "google" | "discord" | "minecraft" | "factorio" | "steam" | "zerotier";
+export type LinkKind = "telegram" | "email" | "google" | "discord" | "steam" | "zerotier";
 export type LinkedAccount = { id: string; kind: LinkKind; value: string; verified: boolean };
 /** `canDelete` is the backend's answer for this caller, not a rule the web works out. */
 export type Member = { id: string; name: string; roleId: string; links: LinkedAccount[]; canDelete: boolean; photoUrl?: string | null };

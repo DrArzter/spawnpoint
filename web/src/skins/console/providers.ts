@@ -8,8 +8,6 @@ const icons: Readonly<Record<string, IconName>> = {
   password: "mail",
   google: "account_circle",
   discord: "group",
-  minecraft: "sports_esports",
-  factorio: "sports_esports",
   steam: "sports_esports",
   zerotier: "hub",
 };
@@ -20,8 +18,6 @@ const names: Readonly<Record<string, string>> = {
   password: t("common.email"),
   google: "Google",
   discord: "Discord",
-  minecraft: "Minecraft",
-  factorio: "Factorio",
   steam: "Steam",
   zerotier: "ZeroTier",
 };

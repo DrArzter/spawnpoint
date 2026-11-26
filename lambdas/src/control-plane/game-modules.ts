@@ -6,6 +6,7 @@ import palworldSettings from "../../../server/games/palworld/settings.json" with
 import valheim from "../../../server/games/valheim/game.json" with { type: "json" };
 import valheimSettings from "../../../server/games/valheim/settings.json" with { type: "json" };
 import zomboid from "../../../server/games/zomboid/game.json" with { type: "json" };
+import type { GamePresentation } from "../../../contract/control-plane.ts";
 import type { Footprint } from "../domain/placement.ts";
 import type { WhitelistRules } from "./whitelist.ts";
 import type { ConfigFileRules } from "./world-config.ts";
@@ -42,6 +43,8 @@ export type GameModule = Readonly<{
   whitelistRules: WhitelistRules | null;
   /** Presets of this game build releases: its manifest has release facts (ADR-0034). */
   buildsReleases: boolean;
+  /** How the skins draw it: a tint, a glyph and a scene, by name (ADR-0090). */
+  presentation: GamePresentation;
   /** The game settings a world may carry (ADR-0064), as the module's settings.json states them. */
   settings: readonly Readonly<Record<string, unknown>>[];
 }>;
@@ -86,6 +89,17 @@ function whitelistRules(manifest: Manifest, id: string): WhitelistRules | null {
   };
 }
 
+const PRESENTATION_NAME = /^[a-z][a-z-]{0,31}$/;
+
+// Names only: the skins own the pictures. A name a skin does not know draws its default.
+function presentationOf(manifest: Manifest, id: string): GamePresentation {
+  if (manifest.presentation === undefined) return { tint: null, glyph: null, scene: null };
+  const raw = object(manifest.presentation, `${id} presentation`);
+  const name = (value: unknown, what: string): string | null =>
+    value === undefined ? null : field(value, (item): item is string => typeof item === "string" && PRESENTATION_NAME.test(item), `${id}.presentation.${what}`);
+  return { tint: name(raw.tint, "tint"), glyph: name(raw.glyph, "glyph"), scene: name(raw.scene, "scene") };
+}
+
 function configFileRules(manifest: Manifest, id: string): ConfigFileRules | null {
   if (manifest.config_files === undefined) return null;
   const rules = object(manifest.config_files, `${id} config_files`);
@@ -117,6 +131,7 @@ function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
     whitelist: field(capabilities.whitelist, isBoolean, `${id}.capabilities.whitelist`),
     spot: capabilities.spot === undefined ? false : field(capabilities.spot, isBoolean, `${id}.capabilities.spot`),
     legacyDefault: manifest.legacy_default === true,
+    presentation: presentationOf(manifest, id),
     console: consoleRules(manifest, id),
     whitelistRules: whitelistRules(manifest, id),
     configFileRules: configFileRules(manifest, id),

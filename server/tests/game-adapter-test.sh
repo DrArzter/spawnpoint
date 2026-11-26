@@ -970,6 +970,9 @@ for module in "${GAMES}"/*/game.sh; do
     (.footprint.memory_mib | type == "number" and . > 0) and
     (.footprint.cores | type == "number" and . > 0) and
     (.capabilities.whitelist | type == "boolean") and
+    # A skin draws a game by these names; it owns the pictures (ADR-0090).
+    (.presentation == null or ((.presentation | keys - ["tint", "glyph", "scene"] | length == 0) and
+      all(.presentation[]; type == "string" and test("^[a-z][a-z-]{0,31}$")))) and
     (.console.lifecycle_commands | type == "array" and all(.[]; type == "string")) and
     (.console.suggestions | type == "array" and all(.[]; type == "string")) and
     # Whitelist rules exist exactly when the game keeps a whitelist (ADR-0090).

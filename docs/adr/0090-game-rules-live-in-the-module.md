@@ -31,3 +31,11 @@ metadata that names `minecraft` as a dependency); stored field names such as `mi
 - A new game, or a change to how one behaves, is a change to its folder.
 - The host test checks the shape of every manifest's release facts and that a game that builds releases has install
   notes; the release bundle carries the manifests, the notes and the manifest helper.
+
+## Amendment — the skins' look (2026-11-24)
+
+The web skins chose a game's glyph, tint and host scene by its id. A manifest now names them in `presentation`
+(`tint`, `glyph`, `scene`), the control-plane snapshot carries the names, and each skin owns the picture for a name:
+the console's tints are neutral tokens (`--c-tint-teal`, `--c-tint-amber`, `--c-tint-rose`, `--c-tint-neutral`) and its
+glyphs are named shapes; the terminal's painters are named scenes. A name a skin does not know draws that skin's
+default. The `minecraft` and `factorio` link kinds, which no API ever sent, are gone.

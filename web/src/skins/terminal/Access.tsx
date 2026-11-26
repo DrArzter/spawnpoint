@@ -114,8 +114,6 @@ const linkProviders: Readonly<Record<LinkKind, { label: string; icon: IconName; 
   email: { label: t("common.email"), icon: "mail", purpose: t("access.signIn") },
   google: { label: "Google", icon: "account_circle", purpose: t("access.signIn") },
   discord: { label: "Discord", icon: "group", purpose: t("access.signIn") },
-  minecraft: { label: "Minecraft", icon: "sports_esports", purpose: t("access.gameIdentity") },
-  factorio: { label: "Factorio", icon: "sports_esports", purpose: t("access.gameIdentity") },
   steam: { label: "Steam", icon: "sports_esports", purpose: t("access.gameIdentity") },
   zerotier: { label: "ZeroTier", icon: "hub", purpose: t("access.network") },
 };

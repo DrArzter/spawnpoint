@@ -47,8 +47,8 @@ html[data-skin="console"] .c-glyph {
   height: var(--c-glyph);
   vertical-align: middle;
   border-radius: 7px;
-  background: var(--c-g-other);
-  color: var(--c-g-ink);
+  background: var(--c-tint-neutral);
+  color: var(--c-tint-ink);
 }
 
 html[data-skin="console"] .c-glyph svg {
@@ -67,16 +67,16 @@ html[data-skin="console"] .c-glyph-lg {
   border-radius: var(--c-r);
 }
 
-html[data-skin="console"] .c-glyph-minecraft {
-  background: var(--c-g-minecraft);
+html[data-skin="console"] .c-glyph-tint-teal {
+  background: var(--c-tint-teal);
 }
 
-html[data-skin="console"] .c-glyph-factorio {
-  background: var(--c-g-factorio);
+html[data-skin="console"] .c-glyph-tint-amber {
+  background: var(--c-tint-amber);
 }
 
-html[data-skin="console"] .c-glyph-zomboid {
-  background: var(--c-g-zomboid);
+html[data-skin="console"] .c-glyph-tint-rose {
+  background: var(--c-tint-rose);
 }
 
 html[data-skin="console"] .c-glyph-letter {

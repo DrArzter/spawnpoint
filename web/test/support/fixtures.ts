@@ -47,7 +47,10 @@ export function aWorld(over: Partial<World> = {}): World {
 
 /** The Minecraft game, with the worlds and presets a test gives it. */
 export function aGame(over: Partial<Game> = {}): Game {
-  return { id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: null, presets: [], worlds: [], ...over };
+  return {
+    id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: null, settings: [], whitelist: false, playerName: null,
+    consoleSuggestions: [], presentation: { tint: "teal", glyph: "cube", scene: "creeper" }, presets: [], worlds: [], ...over,
+  };
 }
 
 /** A shell model for a game that is open on the Worlds page. */

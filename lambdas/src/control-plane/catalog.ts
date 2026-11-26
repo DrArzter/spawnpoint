@@ -2,6 +2,7 @@ import type { Footprint } from "../domain/placement.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
 import { gameModules } from "./game-modules.ts";
+import type { GamePresentation } from "../../../contract/control-plane.ts";
 
 export type CatalogPreset = PresetObservation;
 
@@ -72,6 +73,8 @@ export type CatalogGame = Readonly<{
   playerName?: Readonly<{ pattern: string; hint: string }>;
   /** Commands its console offers to type. */
   consoleSuggestions?: readonly string[];
+  /** How the skins draw it (ADR-0090). */
+  presentation?: GamePresentation;
   presets?: readonly CatalogPreset[];
   worlds: readonly CatalogWorld[];
 }>;
@@ -88,6 +91,7 @@ export const gameCatalog: readonly CatalogGame[] = gameModules.map((module) => (
   ...(module.whitelist ? { whitelist: true } : {}),
   ...(module.whitelist && module.whitelistRules !== null ? { playerName: { pattern: module.whitelistRules.namePattern.source, hint: module.whitelistRules.nameHint } } : {}),
   consoleSuggestions: module.console.suggestions,
+  presentation: module.presentation,
   worlds: [],
 }));
 

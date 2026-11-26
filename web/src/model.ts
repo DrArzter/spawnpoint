@@ -8,7 +8,7 @@ export type { SettingDefinition, SettingValue };
 export type { ControlPlaneSnapshot, Deployment, Game, GamePresentation, Host, Operation, Preset, ReleasePointer, Wipe, World, WorldGameSettings, WorldSession };
 export type Page = "worlds" | "releases" | "access" | "profile";
 export type AccessTab = "users" | "roles" | "notifications";
-export type ServerState = "stopped" | "starting" | "running" | "stopping" | "unknown";
+export type ServerState = "stopped" | "starting" | "running" | "stopping" | "moving" | "unknown";
 
 /** A world's console and metrics are its own: several worlds of a game can run at once (ADR-0062). */
 export type WorldTab = "details" | "wipes" | "backups" | "releases" | "whitelist" | "config" | "console" | "log" | "metrics";

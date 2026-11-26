@@ -17,7 +17,7 @@ const TICK_MS = 150;
 
 export type Painter = Readonly<{ cols: number; rows: number; paint: (phase: number) => Grid }>;
 
-const exposure: Record<ServerState, number> = { running: 1, starting: 0.7, stopping: 0.7, stopped: 0.34, unknown: 0.5 };
+const exposure: Record<ServerState, number> = { running: 1, starting: 0.7, stopping: 0.7, moving: 0.7, stopped: 0.34, unknown: 0.5 };
 
 function glyph(value: number): string {
   const index = Math.max(0, Math.min(RAMP.length - 1, Math.floor(value * (RAMP.length - 0.01))));
@@ -26,21 +26,21 @@ function glyph(value: number): string {
 
 export function HostScene({ painter, state, className }: Readonly<{ painter: Painter; state: ServerState; className?: string }>) {
   const [tick, setTick] = useState(0);
-  const moving = state === "running" || state === "starting" || state === "stopping";
+  const animated = state === "running" || state === "starting" || state === "stopping" || state === "moving";
 
   useEffect(() => {
-    if (!moving) return;
+    if (!animated) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = window.setInterval(() => setTick((value) => value + 1), TICK_MS);
     return () => window.clearInterval(timer);
-  }, [moving]);
+  }, [animated]);
 
   // Only an online host moves the picture itself; a transition shows it at
   // rest under the sweep, so the sweep is the one thing that changes.
   const grid = painter.paint(state === "running" ? tick : 0);
   const rows = grid.length;
   const breath = state === "running" ? 0.08 * Math.sin(tick / 6) : 0;
-  const sweep = state === "starting" || state === "stopping" ? tick % (rows + 4) : -1;
+  const sweep = state === "starting" || state === "stopping" || state === "moving" ? tick % (rows + 4) : -1;
   const lines = grid.map((row, r) => row.map((value) => glyph(value * (exposure[state] + breath) + (r === sweep ? 0.35 : 0))).join(""));
 
   return (

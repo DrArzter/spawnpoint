@@ -20,6 +20,7 @@ export type HostObservation = Readonly<{
   providerRef: string;
   instanceType: string | null;
   availabilityZone: string | null;
+  market?: "spot" | "on-demand" | null;
   launchedAt: string | null;
   // Ephemeral by design: a stopped host has none, and a started one usually has
   // a different address than last time. Which is why nothing stores it.
@@ -84,8 +85,7 @@ function sessionView(serverId: string, record: LifecycleRecord | null): WorldSes
   return {
     serverId,
     desiredState: record.desiredState,
-    // The panel learns `moving` in ADR-0102 step 6; until then a move reads as the start it ends in.
-    observedState: record.observedState === "moving" ? "starting" : record.observedState,
+    observedState: record.observedState,
     activeSessionId: record.activeSessionId,
     activeWorldId: record.activeWorldId ?? null,
     // Named field by field: the watchdog's execution and command ids are its own.
@@ -234,6 +234,7 @@ export async function readControlPlaneSnapshot(
         providerRef: host.providerRef,
         instanceType: host.instanceType,
         availabilityZone: host.availabilityZone,
+        market: host.market ?? null,
         launchedAt: host.launchedAt,
       } : {}),
     })),

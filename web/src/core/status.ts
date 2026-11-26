@@ -17,6 +17,7 @@ export function sessionStatus(state: ServerState): StatusDescriptor {
     case "running": return { kind: "ok", label: t("world.online") };
     case "starting": return { kind: "progress", label: t("world.starting") };
     case "stopping": return { kind: "progress", label: t("world.stopping") };
+    case "moving": return { kind: "progress", label: t("world.moving") };
     case "stopped": return { kind: "off", label: t("world.statusStopped") };
     default: return { kind: "unknown", label: t("common.unknown") };
   }

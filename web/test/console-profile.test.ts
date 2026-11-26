@@ -94,7 +94,7 @@ test("confirmation: the typed field is named by the model and its placeholder is
 });
 
 test("connection fields: a fleet world cannot pick ZeroTier; a persistent one may pick any connection (ADR-0085)", () => {
-  const settings = (connection: ConnectionFieldsModel): WorldSettingsModel => ({ game, world, stopped: true, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") });
+  const settings = (connection: ConnectionFieldsModel): WorldSettingsModel => ({ game, world, stopped: true, connection, market: null, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") });
   const onFleet = renderToStaticMarkup(createElement(WorldSettingsSheet, { model: settings(fleet) }));
   assert.match(onFleet, /The game port is public\.<\/strong><span aria-label="Set the game[^"]*" class="c-notice-more"/, "the details live in a tooltip, not on the line");
   assert.match(onFleet, /aria-disabled="true"[^>]*value="zerotier"/);
@@ -103,6 +103,20 @@ test("connection fields: a fleet world cannot pick ZeroTier; a persistent one ma
   assert.doesNotMatch(onPersistent, /aria-disabled="true"/, "the persistent host offers every connection");
   const persistentPublic = renderToStaticMarkup(createElement(WorldSettingsSheet, { model: settings({ ...persistent, connectivity: "route53" }) }));
   assert.match(persistentPublic, /The game port is public\./, "a public world on the persistent host warns as a fleet one does");
+});
+
+test("pricing: Spot and On-Demand are radio cards beside hosting and connection, and choosing one sets it", () => {
+  const chosen: string[] = [];
+  const model: WorldSettingsModel = { game, world, stopped: true, connection: fleet, market: { value: "spot", set: (market) => chosen.push(market) }, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") };
+  const markup = renderToStaticMarkup(createElement(WorldSettingsSheet, { model }));
+  assert.equal(markup.match(/<fieldset class="c-radios">/g)?.length, 3, "hosting, connection and pricing share one primitive");
+  assert.match(markup, /<legend class="c-field-label">Pricing<\/legend>/);
+  assert.match(markup, /name="market" checked="" value="spot"/);
+  assert.match(markup, /Hosting<\/legend>.*Pricing<\/legend>.*Connection<\/legend>/, "pricing sits with the host, before the connection");
+  assert.match(markup, /name="market"[^>]*value="on-demand"/);
+  assert.doesNotMatch(markup, /name="market"[^>]*aria-disabled/, "neither market is refused");
+  model.market?.set("on-demand");
+  assert.deepEqual(chosen, ["on-demand"]);
 });
 
 test("create world: with no ready preset the preset row points to Releases", () => {

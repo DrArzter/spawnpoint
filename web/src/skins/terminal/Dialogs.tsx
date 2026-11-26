@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Timestamp } from "../../components/ui/Timestamp";
 import type { World } from "../../model";
-import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, ScopeModel, WorldSettingsModel } from "../../core/models";
+import type { ConfirmationModel, ConnectionFieldsModel, CreateWorldModel, GameSettingField, GameSettingsModel, InvitationModel, MarketFieldModel, ScopeModel, WorldMarket, WorldSettingsModel } from "../../core/models";
 import { startableLatest, startableReleases } from "../../core/presets";
 import { Drawer, Empty, Field, LoadError, Modal, NoMatches, Person, SelectInput, SkeletonRows, State, TextInput, Toggle, Verb } from "./ui";
 import { t } from "../../i18n";
@@ -71,7 +71,7 @@ export function ConfirmationDialog({ model }: Readonly<{ model: ConfirmationMode
   );
 }
 
-function ConnectionFields({ model, first = false }: Readonly<{ model: ConnectionFieldsModel; first?: boolean }>) {
+function ConnectionFields({ model, market = null, first = false }: Readonly<{ model: ConnectionFieldsModel; market?: MarketFieldModel | null; first?: boolean }>) {
   return <>
     <Field label={t("world.hosting")}>
       <SelectInput data-autofocus={first ? true : undefined} onChange={(event) => model.setPlacement(event.target.value as "configured" | "fleet")} value={model.placement}>
@@ -79,6 +79,14 @@ function ConnectionFields({ model, first = false }: Readonly<{ model: Connection
         <option disabled={!model.fleetAvailable} value="fleet">{t("world.onDemandFleet")}{model.fleetAvailable ? "" : t("world.notConfigured")}</option>
       </SelectInput>
     </Field>
+    {market && (
+      <Field label={t("world.pricing")}>
+        <SelectInput onChange={(event) => market.set(event.target.value as WorldMarket)} value={market.value}>
+          <option value="spot">{t("host.marketSpot")}</option>
+          <option value="on-demand">{t("world.marketOnDemand")}</option>
+        </SelectInput>
+      </Field>
+    )}
     <Field hint={model.connections.find((option) => option.disabled)?.hint} label={t("world.connection")}>
       <SelectInput onChange={(event) => model.setConnectivity(event.target.value as World["connectivity"])} value={model.connectivity}>
         {model.connections.map((option) => <option disabled={option.disabled} key={option.value} value={option.value}>{option.label}</option>)}
@@ -135,7 +143,7 @@ export function WorldSettingsSheet({ model }: Readonly<{ model: WorldSettingsMod
     >
       <div className="t-form">
         {!model.stopped && <p className="t-copy-line">{t("world.stopWorldsSessionBefore")}</p>}
-        <ConnectionFields first model={model.connection} />
+        <ConnectionFields first market={model.market} model={model.connection} />
       </div>
     </Drawer>
   );

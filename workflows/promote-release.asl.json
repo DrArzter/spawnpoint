@@ -18,6 +18,7 @@
           "launch": "disabled",
           "appCommit": "main",
           "policy": "cold",
+          "market": "spot",
           "startAfter": true
         }
       },
@@ -204,6 +205,7 @@
           "launch.$": "$.request.launch",
           "appCommit.$": "$.request.appCommit",
           "policy.$": "$.request.policy",
+          "market.$": "$.request.market",
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "watchdogRegistrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
           "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",
@@ -299,6 +301,7 @@
           "launch.$": "$.request.launch",
           "appCommit.$": "$.request.appCommit",
           "policy.$": "$.request.policy",
+          "market.$": "$.request.market",
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "watchdogRegistrationLeaseTtlSeconds.$": "$.request.watchdogRegistrationLeaseTtlSeconds",
           "watchdogStopLeaseTtlSeconds.$": "$.request.watchdogStopLeaseTtlSeconds",

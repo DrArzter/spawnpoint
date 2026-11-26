@@ -532,6 +532,7 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
     placement,
     session: null,
     auth: auth ?? null,
+    market: placement === "fleet" ? "spot" : null,
     materialization: "existing",
     preset: { id: preset.id, repository: preset.repository, commit: preset.commit, profileDigest: preset.profileDigest, releases: [...preset.releases], buildStatus: preset.buildStatus, latestRelease: preset.latestRelease, ...(preset.olderReleases ? { olderReleases: [...preset.olderReleases] } : {}) },
     wipes: [{ id: generationId, number: 1, state: "current", createdAt: iso(), closedAt: null, originRelease: release }],
@@ -544,7 +545,7 @@ export function createWorld(gameId: string, presetId: string, displayName: strin
   return { id, displayName: displayName.trim() };
 }
 
-export function updateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external"): void {
+export function updateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external", market?: "spot" | "on-demand"): void {
   settle();
   requireIdle(worldId);
   const owner = game(gameId);
@@ -555,6 +556,8 @@ export function updateWorldSettings(gameId: string, worldId: string, placement: 
   target.placement = placement;
   target.connectivity = connectivity;
   target.auth = auth ?? null;
+  // Only a fleet world has a market; leaving the fleet drops the choice (ADR-0102).
+  target.market = placement === "fleet" ? market ?? target.market ?? "spot" : null;
   target.connectionAddress = connectivity === "zerotier" ? owner.worlds.find((candidate) => candidate.connectivity === "zerotier" && candidate.id !== worldId)?.connectionAddress ?? null : null;
   state.snapshot.observedAt = iso();
 }

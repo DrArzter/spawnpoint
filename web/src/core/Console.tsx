@@ -470,7 +470,7 @@ function CreateWorldController({ console, skin, game, preset }: Controlled & Rea
 function WorldSettingsController({ console, skin, game, world }: Controlled & Readonly<{ game: Game; world: World }>) {
   const model = useWorldSettingsForm(game, world, console.snapshot?.deployment, {
     busy: console.savingWorldSettings,
-    onSave: (placement, connectivity, auth) => void console.saveWorldSettings(game, world, placement, connectivity, auth),
+    onSave: (placement, connectivity, auth, market) => void console.saveWorldSettings(game, world, placement, connectivity, auth, market),
     onClose: console.closeEditing,
   });
   return <skin.WorldSettingsSheet model={model} />;

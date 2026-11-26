@@ -41,6 +41,8 @@ export type WorldRecord = Readonly<{
   auth?: "game" | "external";
   /** Keep a launched host stopped for this world between sessions (ADR-0048). Absent: cold. */
   warm?: true;
+  /** Launch this world's host On-Demand even where Spot is allowed (ADR-0102). Absent: Spot where allowed. */
+  onDemand?: true;
   preset: Readonly<{
     id: string;
     repository: string;
@@ -220,7 +222,7 @@ export function archiveWorldRecord(record: WorldRecord): WorldRecord {
 
 export function withWorldAccess(
   record: WorldRecord,
-  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean }>,
+  access: Readonly<{ placement: WorldRecord["placement"]; connectivity: WorldRecord["connectivity"]; auth?: WorldRecord["auth"]; warm?: boolean; onDemand?: boolean }>,
 ): WorldRecord {
   if (
     (access.placement !== "configured" && access.placement !== "fleet") ||
@@ -232,11 +234,14 @@ export function withWorldAccess(
   if (access.warm === true && access.placement !== "fleet") throw new Error("invalid_world_warm");
   // Only a launched host can be kept for a world; leaving the fleet drops the choice.
   const warm = access.placement === "fleet" && (access.warm ?? record.warm === true);
-  const { auth: _previousAuth, warm: _previousWarm, ...rest } = record;
+  // The market matters only for a launched host; leaving the fleet drops the choice.
+  const onDemand = access.placement === "fleet" && (access.onDemand ?? record.onDemand === true);
+  const { auth: _previousAuth, warm: _previousWarm, onDemand: _previousOnDemand, ...rest } = record;
   return {
     ...rest, placement: access.placement, connectivity: access.connectivity,
     ...(access.auth === undefined ? {} : { auth: access.auth }),
     ...(warm ? { warm: true as const } : {}),
+    ...(onDemand ? { onDemand: true as const } : {}),
   };
 }
 
@@ -350,6 +355,7 @@ export function worldRecordDocument(record: WorldRecord): ObjectValue {
     connectivity: record.connectivity,
     ...(record.auth === undefined ? {} : { auth: record.auth }),
     ...(record.warm ? { warm: true } : {}),
+    ...(record.onDemand ? { on_demand: true } : {}),
     storage_layout: "generation",
     preset: {
       id: record.preset.id,
@@ -448,6 +454,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     (root.connectivity !== "zerotier" && root.auth === undefined) ||
     (root.placement !== "configured" && root.placement !== "fleet") ||
     (root.warm !== undefined && typeof root.warm !== "boolean") ||
+    (root.on_demand !== undefined && typeof root.on_demand !== "boolean") ||
     // ZeroTier never runs on a fleet host (ADR-0033); the configured host serves any connection (ADR-0085).
     (root.placement === "fleet" && root.connectivity === "zerotier") ||
     preset === null ||
@@ -472,6 +479,7 @@ export function parseWorldRecord(value: unknown): WorldRecord | null {
     connectivity: root.connectivity,
     ...(root.auth === undefined ? {} : { auth: root.auth }),
     ...(root.warm === true ? { warm: true as const } : {}),
+    ...(root.on_demand === true ? { onDemand: true as const } : {}),
     preset,
     currentGeneration: current,
     previousGenerations: history,

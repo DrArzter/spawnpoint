@@ -293,3 +293,29 @@ test("a player reading carries the contract's fields and not the watchdog's own 
   const snapshot = await readControlPlaneSnapshot(withRecords({ ...sources, readLifecycle: async (serverId) => serverId === "minecraft" ? record : null }, configuredCatalog), { includeInfrastructure: true, includeDesiredRelease: true });
   assert.deepEqual(Object.keys(snapshot.games[0]?.lifecycle?.idle ?? {}).sort(), ["consecutiveEmpty", "freshUntilEpochSeconds", "lastObservedAtEpochSeconds", "playersOnline"]);
 });
+
+// ADR-0102: each fleet world of a Spot game says how its host is bought; a world with no choice says null.
+test("a fleet world's market is its own choice while Spot is on, and null where it has none", async () => {
+  const catalog = [{
+    id: "minecraft", code: "MC", displayName: "Minecraft", connectPort: 25565,
+    worlds: [
+      { id: "rostik", displayName: "Rostik", profileId: "industrial", sessionControl: "v1" as const, connectivity: "raw" as const, placement: "fleet" as const },
+      { id: "magic", displayName: "Magic", profileId: "magic", sessionControl: "v1" as const, connectivity: "raw" as const, placement: "fleet" as const },
+      { id: "home", displayName: "Home", profileId: "vanilla", sessionControl: "v1" as const, connectivity: "zerotier" as const, placement: "configured" as const },
+    ],
+  }];
+  const base = withRecords({
+    listHosts: async () => [],
+    listRunningOperations: async () => [],
+    readLifecycle: async () => null,
+    readReleasePointer: async () => ({ state: "unconfigured", generationId: null, desiredRelease: null, activeRelease: null }),
+  }, catalog);
+  const chosen: ControlPlaneSources = {
+    ...base,
+    listWorldRecords: async () => (await base.listWorldRecords!()).map((record) => record.worldId === "magic" ? { ...record, onDemand: true as const } : record),
+  };
+  const markets = async (spotEnabled: boolean) => new Map((await readControlPlaneSnapshot(chosen, { includeInfrastructure: false, includeDesiredRelease: false, spotEnabled }, catalog))
+    .games[0]!.worlds.map((world) => [world.id, world.market]));
+  assert.deepEqual(Object.fromEntries(await markets(true)), { rostik: "spot", magic: "on-demand", home: null });
+  assert.deepEqual(Object.fromEntries(await markets(false)), { rostik: null, magic: null, home: null }, "with Spot off no world has a choice");
+});

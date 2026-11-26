@@ -18,7 +18,7 @@ import { action } from "./actions";
 import { releaseBuildExpectation } from "./release-builds";
 import type { Notify } from "./notify";
 import { openDownload } from "./download";
-import type { AppearanceModel, NavigationItem, ShellModel, WorldPlacement } from "./models";
+import type { AppearanceModel, NavigationItem, ShellModel, WorldMarket, WorldPlacement } from "./models";
 import { useAssistantChat } from "./assistant-chat";
 import { visibleNavigation } from "./navigation";
 import { presetOf, stopDisconnect, type WorldCallbacks } from "./worlds";
@@ -172,7 +172,7 @@ export type ConsoleController = Readonly<{
   createWorld: (game: Game, preset: Preset, name: string, release: string, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => Promise<void>;
   editing: { game: Game; world: World } | null;
   closeEditing: () => void;
-  saveWorldSettings: (game: Game, world: World, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") => Promise<void>;
+  saveWorldSettings: (game: Game, world: World, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game", market?: WorldMarket) => Promise<void>;
   savingWorldSettings: boolean;
   /** A world's game settings sheet (ADR-0064). */
   editingGameSettings: { game: Game; world: World } | null;
@@ -434,10 +434,10 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     }
   }
 
-  async function saveWorldSettings(target: Game, targetWorld: World, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game") {
+  async function saveWorldSettings(target: Game, targetWorld: World, placement: WorldPlacement, connectivity: World["connectivity"], auth?: "game", market?: WorldMarket) {
     setSavingWorldSettings(true);
     try {
-      await api.requestUpdateWorldSettings(target.id, targetWorld.id, placement, connectivity, auth);
+      await api.requestUpdateWorldSettings(target.id, targetWorld.id, placement, connectivity, auth, market);
       notify({ tone: "success", message: t("app.connectionSettingsTargetWorldDisplayNameSaved", { targetWorldDisplayName: targetWorld.displayName }) });
       setEditing(null);
       await refresh(true);

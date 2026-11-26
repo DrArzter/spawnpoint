@@ -93,6 +93,7 @@ export const API_ERROR_CODES = [
   "invalid_world_connectivity",
   "invalid_world_name",
   "invalid_world_warm",
+  "invalid_world_market",
   "invitation_publish_failed",
   "invitation_unavailable",
   "invited_email_mismatch",

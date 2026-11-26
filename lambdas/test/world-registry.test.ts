@@ -86,6 +86,19 @@ test("a fleet world can keep its host warm; the choice survives other hosting ch
   assert.throws(() => withWorldAccess(original, { placement: "configured", connectivity: "zerotier", warm: true }), /invalid_world_warm/);
 });
 
+test("a fleet world can choose On-Demand; the choice is kept until changed and leaves with the fleet", () => {
+  const original = newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z");
+  assert.equal("on_demand" in worldRecordDocument(original), false, "a record with no choice keeps its document unchanged");
+  const chosen = withWorldAccess(original, { placement: "fleet", connectivity: "raw", auth: "game", onDemand: true });
+  assert.equal(chosen.onDemand, true);
+  assert.equal(worldRecordDocument(chosen).on_demand, true);
+  assert.deepEqual(parseWorldRecord(worldRecordDocument(chosen)), chosen);
+  assert.equal(withWorldAccess(chosen, { placement: "fleet", connectivity: "route53", auth: "game" }).onDemand, true, "left out: kept");
+  assert.equal(withWorldAccess(chosen, { placement: "fleet", connectivity: "raw", auth: "game", onDemand: false }).onDemand, undefined);
+  assert.equal(withWorldAccess(chosen, { placement: "configured", connectivity: "zerotier" }).onDemand, undefined);
+  assert.equal(parseWorldRecord({ ...worldRecordDocument(chosen), on_demand: "yes" }), null);
+});
+
 test("the record parser reads warm as a boolean and nothing else", () => {
   const fleet = withWorldAccess(
     newWorldRecord(preset, identity, "12345678-1234-1234-1234-1234567890ab", "2026-09-07T18:00:00.000Z"),

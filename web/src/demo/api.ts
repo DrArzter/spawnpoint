@@ -233,9 +233,9 @@ export const demoApi: SpawnpointApi = {
     return store.createWorld(gameId, presetId, displayName, release, placement, connectivity, auth);
   },
 
-  async requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external") {
+  async requestUpdateWorldSettings(gameId: string, worldId: string, placement: "configured" | "fleet", connectivity: "zerotier" | "raw" | "route53", auth?: "game" | "external", market?: "spot" | "on-demand") {
     await demoLatency();
-    store.updateWorldSettings(gameId, worldId, placement, connectivity, auth);
+    store.updateWorldSettings(gameId, worldId, placement, connectivity, auth, market);
   },
 
   async requestPackDownload(gameId: string, worldId: string) {

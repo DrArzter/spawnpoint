@@ -211,7 +211,7 @@ test("a start fills what its caller left out: the game from the server id, no wo
   const initialize = state(definition, "Initialize");
   assert.equal(initialize.Next, "Apply Request Defaults");
   assert.deepEqual(initialize.Parameters?.defaults, {
-    "gameId.$": "$.serverId", worldName: "", placement: "single", launch: "disabled", appCommit: "main", policy: "cold",
+    "gameId.$": "$.serverId", worldName: "", placement: "single", launch: "disabled", appCommit: "main", policy: "cold", market: "spot",
     move: false, moveVolumeId: "",
   });
   const apply = state(definition, "Apply Request Defaults");
@@ -222,6 +222,7 @@ test("a start fills what its caller left out: the game from the server id, no wo
     const payload = state(definition, name).Parameters?.Payload as Record<string, unknown>;
     assert.equal(payload["gameId.$"], "$.request.gameId", name);
     assert.equal(payload["policy.$"], "$.request.policy", `${name} places the session with the world's warm choice`);
+    assert.equal(payload["market.$"], "$.request.market", `${name} keeps an On-Demand world off Spot`);
   }
   for (const name of ["Initialize Lifecycle", "Acquire Start Lease", "Begin Session", "Mark Session Ready", "Release Start Lease"]) {
     const payload = state(definition, name).Parameters?.Payload as Record<string, unknown>;

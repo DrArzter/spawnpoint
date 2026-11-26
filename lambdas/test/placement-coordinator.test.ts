@@ -295,3 +295,17 @@ test("a host with no market is on demand and takes any session; an unknown marke
     /market must be on-demand or spot/,
   );
 });
+
+// ADR-0102: a world that chose On-Demand never asks for Spot and never lands on a Spot host.
+test("an On-Demand world launches On-Demand and skips a Spot host with room", async () => {
+  const fleet = new MemoryFleet();
+  const coordinate = coordinator(fleet);
+  const launch = await coordinate({ action: "placeSession", sessionId: "s1", worldId: "world", serverId: "minecraft", market: "on-demand" });
+  assert.equal(launch.placement?.kind === "launch" && launch.placement.spot, false);
+  await coordinate({ action: "registerHost", hostId: "i-spot", shape: SMALL, ready: true, provenance: "launched", market: "spot" });
+  const skipped = await coordinate({ action: "placeSession", sessionId: "s2", worldId: "world", serverId: "minecraft", market: "on-demand" });
+  assert.equal(skipped.placement?.kind, "launch");
+  const spot = await coordinate({ action: "placeSession", sessionId: "s3", worldId: "other", serverId: "minecraft", market: "spot" });
+  assert.deepEqual(spot.placement, { kind: "reuse", hostId: "i-spot", slot: 0 });
+  await assert.rejects(coordinate({ action: "placeSession", sessionId: "s4", worldId: "world", serverId: "minecraft", market: "reserved" as never }));
+});

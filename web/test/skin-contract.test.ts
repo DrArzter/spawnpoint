@@ -186,7 +186,7 @@ const profile: ProfileModel = {
 const confirmation: ConfirmationModel = { title: "Permanently delete Rostik?", description: "Gone.", destructive: true, confirm: spy("confirm", "Delete forever", { danger: true }), cancel: spy("cancel", "Cancel"), releaseChoice: { label: "Release for the new wipe", value: "1.2", options: [{ version: "1.2", latest: true }], set: noop }, typedConfirmation: { label: "World ID", expected: world.id, value: "", set: noop } };
 const connection = { placement: "fleet" as const, setPlacement: noop, fleetAvailable: true, connectivity: "raw" as const, setConnectivity: noop, dnsAvailable: true, connections: connectionOptions("fleet", true) };
 const createWorld: CreateWorldModel = { game, presets: game.presets, presetId: "industrial", setPresetId: noop, preset: game.presets[0]!, name: "", setName: noop, release: "1.2", setRelease: noop, connection, valid: false, submit: spy("world.create", "Create world"), cancel: spy("sheet.close", "Close panel") };
-const worldSettings: WorldSettingsModel = { game, world, stopped: false, connection, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") };
+const worldSettings: WorldSettingsModel = { game, world, stopped: false, connection, market: { value: "on-demand", set: noop }, valid: true, save: spy("world.settings.save", "Save settings"), cancel: spy("sheet.close", "Cancel") };
 const whitelist: WhitelistModel = {
   world,
   list: { status: "ready", value: { managed: true, updatedAt: "2026-10-09T11:00:00Z", updatedBy: "DrArzter", rows: [
@@ -542,7 +542,14 @@ for (const skin of SKINS) {
     const refused = renderToStaticMarkup(createElement(skin.ConfirmationDialog, { model: { ...confirmation, error: "The last Owner cannot be deleted." } }));
     assert.match(refused, /role="alert"[^>]*>The last Owner cannot be deleted\./, "a refusal is read inside the open dialog");
     checkSurface("CreateWorld", renderToStaticMarkup(createElement(skin.CreateWorldSheet, { model: createWorld })), createWorld);
-    checkSurface("WorldSettings", renderToStaticMarkup(createElement(skin.WorldSettingsSheet, { model: worldSettings })), worldSettings);
+    const settings = renderToStaticMarkup(createElement(skin.WorldSettingsSheet, { model: worldSettings }));
+    checkSurface("WorldSettings", settings, worldSettings);
+    // ADR-0102: the pricing choice is one named control with both markets, the saved one chosen.
+    assert.equal(settings.match(/Pricing/g)?.length, 1, "the choice is named once");
+    assert.match(settings, /value="spot"/);
+    assert.match(settings, /name="market" checked="" value="on-demand"|value="on-demand" selected=""/, "the saved market is the chosen one");
+    const noChoice = renderToStaticMarkup(createElement(skin.WorldSettingsSheet, { model: { ...worldSettings, market: null } }));
+    assert.doesNotMatch(noChoice, /Pricing|value="on-demand"/, "a world with no choice shows none");
     checkSurface("Invitation", renderToStaticMarkup(createElement(skin.InvitationSheet, { model: invitation })), invitation);
   });
 }

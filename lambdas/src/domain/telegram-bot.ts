@@ -9,7 +9,7 @@
 // apart silently.
 
 import { WATCHDOG_TIMING } from "./watchdog-timing.ts";
-import type { SessionPolicy } from "./placement.ts";
+import type { HostMarket, SessionPolicy } from "./placement.ts";
 import type { LifecycleRecord } from "./lifecycle.ts";
 
 function escapeHtml(value: string): string {
@@ -107,6 +107,8 @@ export function buildLifecycleStartInput(args: Readonly<{
   appCommit?: string;
   // The world's warm choice (ADR-0048). Left out, the machine places it cold.
   policy?: SessionPolicy;
+  // ADR-0102: `on-demand` keeps the world off Spot. Left out, Spot where allowed.
+  market?: HostMarket;
   // ADR-0102: the same session again after its Spot host was reclaimed, on the
   // volume that holds its world ("" when none is left and S3 restores it).
   moveVolumeId?: string;
@@ -126,6 +128,7 @@ export function buildLifecycleStartInput(args: Readonly<{
     launch: args.launch ?? "disabled",
     appCommit: args.appCommit ?? "main",
     ...(args.policy === undefined ? {} : { policy: args.policy }),
+    ...(args.market === undefined ? {} : { market: args.market }),
     ...(args.requestedBy === undefined ? {} : { requestedBy: args.requestedBy }),
     ...(args.moveVolumeId === undefined ? {} : { move: true, moveVolumeId: args.moveVolumeId }),
     startTiming: POLL_TIMING,
@@ -177,6 +180,7 @@ export function buildPromotionInput(args: Readonly<{
   launch: LaunchMode;
   appCommit: string;
   policy: SessionPolicy;
+  market?: HostMarket;
   requestedBy: string;
   /** False stops a world that was stopped before its update again; by default it keeps running (ADR-0078). */
   startAfter?: boolean;
@@ -197,6 +201,7 @@ export function buildPromotionInput(args: Readonly<{
     launch: args.launch,
     appCommit: args.appCommit,
     policy: args.policy,
+    ...(args.market === undefined ? {} : { market: args.market }),
     requestedBy: args.requestedBy,
     startAfter: args.startAfter !== false,
     leaseTtlSeconds: 1800,

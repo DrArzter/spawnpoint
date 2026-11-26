@@ -109,8 +109,10 @@ function usePageTransition(key: string) {
   }, []);
 }
 
-// A4 runs on the first view of a page in this session only; the h1 takes
-// focus after a navigation, without a ring.
+// A4 runs once, on the first view of a page in this session, and never inside
+// a view change (the page already moves); it ends with its own motion, so a
+// tab switch or another world on the same page does not run it again. The h1
+// takes focus after a navigation, without a ring.
 function useArrival(key: string, main: RefObject<HTMLElement | null>): boolean {
   const seen = useRef(new Set<string>());
   const [first, setFirst] = useState<string | null>(null);
@@ -118,11 +120,16 @@ function useArrival(key: string, main: RefObject<HTMLElement | null>): boolean {
   useLayoutEffect(() => {
     if (!seen.current.has(key)) {
       seen.current.add(key);
-      setFirst(key);
+      if (document.documentElement.dataset.transition === undefined) setFirst(key);
     }
     if (initial.current) initial.current = false;
     else main.current?.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
   }, [key, main]);
+  useEffect(() => {
+    if (first === null) return;
+    const end = window.setTimeout(() => setFirst(null), MOTION["--c-d3"]);
+    return () => window.clearTimeout(end);
+  }, [first]);
   return first === key;
 }
 

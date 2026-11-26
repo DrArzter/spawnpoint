@@ -19,7 +19,12 @@ export function ConfigFileSheet({ editor }: Readonly<{ editor: ConfigEditorModel
       wide
     >
       {editor.reload && <Notice notice={{ id: "config.changed", tone: "warning", title: t("config.someoneChangedFile"), action: editor.reload }} />}
-      {content.status === "loading" && <SkeletonGroup><Skeleton height="320px" /></SkeletonGroup>}
+      {content.status === "loading" && (
+        <SkeletonGroup flow>
+          <Skeleton fill />
+          <p className="c-config-note"><Skeleton text width="60%" /></p>
+        </SkeletonGroup>
+      )}
       {content.status === "error" && <LoadError error={content.error} kind={content.kind} retry={content.retry} size="sm" title={t("config.fileCouldNotLoaded")} verb={t("config.editConfigFiles")} />}
       {content.status === "ready" && (
         <>

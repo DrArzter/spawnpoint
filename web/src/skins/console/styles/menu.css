@@ -1,6 +1,8 @@
-/* Menu: the Overflow's list of Actions. */
+/* Menu: the Overflow's list of Actions. The menu takes focus itself when it
+   opens by pointer, and shows no ring for it; its items carry the rings. */
 
 html[data-skin="console"] .c-menu {
+  outline: none;
   color: var(--c-ink);
   min-width: 240px;
   max-width: min(360px, calc(100vw - 16px));
@@ -46,13 +48,19 @@ html[data-skin="console"] .c-menu-item > svg {
   color: var(--c-ink-2);
 }
 
-html[data-skin="console"] .c-menu-item:hover,
-html[data-skin="console"] .c-menu-item:focus-visible {
-  background: var(--c-surface-2);
+html[data-skin="console"] .c-menu-item[aria-checked="true"] > svg {
+  color: var(--c-accent);
 }
 
 html[data-skin="console"] .c-menu-item:focus-visible {
   outline-offset: -2px;
+  background: var(--c-pop-hover);
+}
+
+@media (hover: hover) {
+  html[data-skin="console"] .c-menu-item:hover {
+    background: var(--c-pop-hover);
+  }
 }
 
 html[data-skin="console"] .c-menu-item-danger,

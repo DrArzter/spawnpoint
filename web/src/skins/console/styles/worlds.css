@@ -11,12 +11,6 @@ html[data-skin="console"] .c-players svg {
   color: var(--c-ink-3);
 }
 
-html[data-skin="console"] .c-home-decide {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 html[data-skin="console"] .c-bystate-bar {
   display: flex;
   gap: 2px;

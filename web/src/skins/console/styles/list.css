@@ -84,8 +84,10 @@ html[data-skin="console"] .c-lcol-chip {
   transition: background var(--c-d1), border-color var(--c-d1);
 }
 
-html[data-skin="console"] .c-lcol-chip:hover {
-  background: var(--c-surface-2);
+@media (hover: hover) {
+  html[data-skin="console"] .c-lcol-chip:hover {
+    background: var(--c-surface-2);
+  }
 }
 
 html[data-skin="console"] .c-lcol-chip[aria-pressed="true"] {
@@ -141,9 +143,11 @@ html[data-skin="console"] .c-listitem {
   transition: background var(--c-d1);
 }
 
-html[data-skin="console"] .c-listitem:hover {
-  background: var(--c-surface-2);
-  text-decoration: none;
+@media (hover: hover) {
+  html[data-skin="console"] .c-listitem:hover {
+    background: var(--c-surface-2);
+    text-decoration: none;
+  }
 }
 
 html[data-skin="console"] .c-listitem:focus-visible {

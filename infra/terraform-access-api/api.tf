@@ -121,6 +121,14 @@ data "aws_iam_policy_document" "access_api" {
     resources = ["*"]
   }
 
+  # A host's vCPUs and memory, so a metrics percentage can be shown as cores and
+  # bytes. The action takes no resource and reads only EC2's public type table.
+  statement {
+    sid       = "DescribeHostShape"
+    actions   = ["ec2:DescribeInstanceTypes"]
+    resources = ["*"]
+  }
+
   statement {
     sid     = "ReadWorldReleasePointersAndPacks"
     actions = ["s3:GetObject"]

@@ -15,6 +15,7 @@ import { Card } from "../src/skins/console/ui/Card.tsx";
 import { Copy } from "../src/skins/console/ui/Copy.tsx";
 import { GameGlyph } from "../src/skins/console/ui/GameGlyph.tsx";
 import { DetailList } from "../src/skins/console/ui/DetailList.tsx";
+import { Decision } from "../src/skins/console/ui/Decision.tsx";
 import { Dialog } from "../src/skins/console/ui/Dialog.tsx";
 import { Empty, LoadError } from "../src/skins/console/ui/Empty.tsx";
 import { Checkbox, Field, RadioCards, Select, TextArea, TextInput, Toggle } from "../src/skins/console/ui/Fields.tsx";
@@ -39,7 +40,7 @@ import { SplitPage } from "../src/skins/console/ui/SplitPage.tsx";
 import { StatCard, StatSkeleton } from "../src/skins/console/ui/StatCard.tsx";
 import { Status } from "../src/skins/console/ui/Status.tsx";
 import { nextSort, Table } from "../src/skins/console/ui/Table.tsx";
-import { TabPanel, Tabs } from "../src/skins/console/ui/Tabs.tsx";
+import { stripIsCompact, TabPanel, Tabs } from "../src/skins/console/ui/Tabs.tsx";
 import { Tick } from "../src/skins/console/ui/Tick.tsx";
 import { Tile, Tiles } from "../src/skins/console/ui/Tile.tsx";
 import { ChartSkeleton } from "../src/skins/console/ui/TimeSeriesChart.tsx";
@@ -152,6 +153,10 @@ test("Skeleton: one announced region, placeholders hidden from assistive technol
   const markup = html(createElement(SkeletonGroup, null, createElement(Skeleton, { height: 52 })));
   assert.match(markup, /<output aria-busy="true" aria-label="Loading" class="c-skeleton-group">/);
   assert.match(markup, /aria-hidden="true" class="c-skeleton" style="width:100%;height:52px"/);
+  // A flow group lays its placeholders in the parent's layout; a fill block takes the free height, so it sets none.
+  const flow = html(createElement(SkeletonGroup, { flow: true }, createElement(Skeleton, { fill: true })));
+  assert.match(flow, /<output aria-busy="true" aria-label="Loading" class="c-skeleton-group c-skeleton-flow">/);
+  assert.match(flow, /class="c-skeleton c-skeleton-fill" style="width:100%"/);
 });
 
 test("Dialog and SidePanel: labelled modal surfaces whose Cancel runs the model's Action", () => {
@@ -272,11 +277,11 @@ test("a row's primary link is a real anchor whose hit area is the row, and inner
   const table = readFileSync(new URL("../src/skins/console/styles/table.css", import.meta.url), "utf8");
   assert.match(table, /\.c-table \.c-col-lead a::after \{\s*position: absolute;\s*inset: 0;/, "the lead link covers the row at every width");
   assert.match(table, /\.c-table tr \{\s*position: relative;/, "the row is the containing block");
-  assert.match(table, /\.c-table :is\(button, select, label, input, \[data-tip\], \.c-copy, a\.c-btn\)[^{]*\{\s*position: relative;\s*z-index: 1;/, "controls stay above the row link");
+  assert.match(table, /\.c-table :is\(button, \.c-select, label, input, \[data-tip\], \.c-copy, a\.c-btn\)[^{]*\{\s*position: relative;\s*z-index: 1;/, "controls stay above the row link");
   const tracks = readFileSync(new URL("../src/skins/console/styles/tracklist.css", import.meta.url), "utf8");
   // A track title is the row's link or, opening its row in place, its button (ADR-0096).
   assert.match(tracks, /\.c-tracklist-row :is\(a, button\)\.c-track-title::after \{\s*position: absolute;\s*inset: 0;/);
-  assert.match(tracks, /\.c-tracklist-row :is\(button:not\(\.c-track-title\), select, label, input, \[data-tip\], \.c-copy, a\.c-btn, a:not\(\.c-track-title\)\) \{\s*position: relative;\s*z-index: 1;/);
+  assert.match(tracks, /\.c-tracklist-row :is\(button:not\(\.c-track-title\), \.c-select, label, input, \[data-tip\], \.c-copy, a\.c-btn, a:not\(\.c-track-title\)\) \{\s*position: relative;\s*z-index: 1;/);
 });
 
 test("TrackList: one grid of shared tracks, the header once, rows as table rows", () => {
@@ -296,6 +301,49 @@ test("TrackList: one grid of shared tracks, the header once, rows as table rows"
   assert.equal((markup.match(/role="row"/g) ?? []).length, 3);
   assert.match(markup, /c-track c-track-optional/);
   assert.match(markup, /<a class="c-track-title" href="#\/x">Rostik<\/a>/);
+});
+
+test("Decision: every request row decides the same way, two named icon buttons of one style", () => {
+  const markup = html(createElement(Decision, {
+    approve: action("access.approve", "Approve", noop, { icon: "check" }),
+    dismiss: action("access.dismiss", "Dismiss", noop, { icon: "close" }),
+  }));
+  assert.match(markup, /^<span class="c-decide">/);
+  for (const [id, name] of [["access.approve", "Approve"], ["access.dismiss", "Dismiss"]]) {
+    assert.match(markup, new RegExp(`<button[^>]*aria-label="${name}"[^>]*data-action="${id}"|<button[^>]*data-action="${id}"[^>]*aria-label="${name}"`), `${name} is a named icon button`);
+  }
+  for (const screen of ["Home.tsx", "Access.tsx"]) {
+    const source = readFileSync(new URL(`../src/skins/console/${screen}`, import.meta.url), "utf8");
+    assert.match(source, /<Decision approve=/, `${screen} draws its request rows' decision with Decision`);
+  }
+});
+
+test("Loading lists keep their rows' shape: a one-line stack holds the compact line, an action column holds its controls", () => {
+  const stack = (lines: 1 | 2) => html(createElement(TrackList<Row>, {
+    label: `Methods ${lines}`,
+    loading: true,
+    rows: [],
+    rowKey: (row) => row.id,
+    tracks: [
+      { id: "what", header: "Method", width: "minmax(0, 1fr)", kind: "stack", lines, render: () => "" },
+      { id: "when", header: "Added", width: "120px", kind: "optional", render: () => "" },
+    ],
+  }));
+  // The optional track moves to a compact second line under 1024px; the placeholder draws it too.
+  assert.match(stack(1), /<span class="c-track-line c-track-compact"><span aria-hidden="true" class="c-skeleton c-skeleton-text"/);
+  assert.doesNotMatch(stack(2), /c-track-compact/);
+  const table = html(createElement(Table<Row>, {
+    label: "Backups first visit",
+    loading: true,
+    rows: [],
+    rowKey: (row) => row.id,
+    columns: [
+      { id: "name", header: "Name", kind: "lead", render: (row) => row.name },
+      { id: "act", header: "Actions", kind: "act", render: () => "" },
+    ],
+  }));
+  // With no earlier visit, the action column holds one block as wide as two small controls.
+  assert.equal(table.match(/<td class="c-col-act"[^>]*><span aria-hidden="true" class="c-skeleton" style="width:calc\(2 \* var\(--c-ctl-sm\)\);height:var\(--c-ctl-sm\)"><\/span><\/td>/g)?.length, 3);
 });
 
 test("ListColumn: a filter field, chips with counts, the current row marked", () => {
@@ -378,6 +426,22 @@ test("Segmented and Tabs: one value chosen, tied to its panel", () => {
   assert.match(html(createElement(TabPanel, { prefix: "w", id: "wipes" }, "x")), /aria-labelledby="w-tab-wipes" class="c-tabpanel" id="w-panel-wipes" role="tabpanel"/);
 });
 
+test("Tabs: a strip drops its icons only when that makes every tab fit, and never flips back and forth", () => {
+  const strip = { icons: 8, iconSpace: 26 };
+  // Overflows by 17px with icons (999 in 982), fits without them: compact, and stays compact once drawn so.
+  assert.equal(stripIsCompact({ ...strip, tabsWidth: 999, clientWidth: 982, compact: false }), true);
+  assert.equal(stripIsCompact({ ...strip, tabsWidth: 999 - 8 * 26, clientWidth: 982, compact: true }), true);
+  // Fits with icons: keeps them. Overflows even without them (a phone): keeps them and scrolls.
+  assert.equal(stripIsCompact({ ...strip, tabsWidth: 900, clientWidth: 982, compact: false }), false);
+  assert.equal(stripIsCompact({ ...strip, tabsWidth: 999, clientWidth: 360, compact: false }), false);
+  assert.equal(stripIsCompact({ ...strip, icons: 0, tabsWidth: 999, clientWidth: 982, compact: false }), false);
+  // A drawn strip keeps every tab tied to its panel, with its icon until it is compact.
+  const tabs = html(createElement(Tabs<"details" | "metrics">, { label: "World sections", prefix: "w", tabs: [{ id: "details", label: "Details", icon: "info" }, { id: "metrics", label: "Metrics", icon: "monitoring" }], value: "details", onChange: noop }));
+  assert.equal(tabs.match(/aria-controls="w-panel-/g)?.length, 2);
+  assert.equal(tabs.match(/<svg/g)?.length, 2);
+  assert.doesNotMatch(tabs, /data-compact/);
+});
+
 test("TextArea: a monospaced block that never wraps, tied to its Field like any control", () => {
   const markup = html(createElement(Field, { label: "Contents", error: "Too long." }, createElement(TextArea, { value: "a = 1", onChange: noop })));
   const id = markup.match(/<label class="c-field-label" for="([^"]+)"/)?.[1];
@@ -430,6 +494,11 @@ test("Tiles, Pager, preferences, skeleton rows and the stat card", () => {
   const prefs = html(createElement(TablePreferences, { pageSize: { value: 25, set: noop } }));
   assert.match(prefs, /aria-haspopup="menu"/);
   assert.match(prefs, /role="menuitemradio"/);
+  // The preferences are the shared Menu (a top-layer popover), one checked radio per group.
+  assert.match(prefs, /class="c-menu c-popover" data-layer="menu"[^>]*popover="manual"/);
+  assert.equal(prefs.match(/aria-checked="true"/g)?.length, 2);
+  assert.match(prefs, /aria-checked="true"[^>]*data-action="table.page-size.25"/);
+  assert.doesNotMatch(prefs, /c-prefs/);
   const stat = html(createElement(StatCard, { label: "CPU", value: null }));
   assert.match(stat, /<section aria-label="CPU" class="c-card c-stat">/);
   assert.match(stat, /—/);

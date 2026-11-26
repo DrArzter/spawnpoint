@@ -81,8 +81,10 @@ html[data-skin="console"] .c-filter-token button {
   cursor: pointer;
 }
 
-html[data-skin="console"] .c-filter-token button:hover {
-  background: var(--c-surface);
+@media (hover: hover) {
+  html[data-skin="console"] .c-filter-token button:hover {
+    background: var(--c-surface);
+  }
 }
 
 html[data-skin="console"] .c-filter-menu {
@@ -149,9 +151,11 @@ html[data-skin="console"] .c-filter-matches {
   white-space: nowrap;
 }
 
+/* On a phone the field and the end group share a line; the group wraps under
+   the field only when a match count makes it too wide. */
 @media (max-width: 759px) {
   html[data-skin="console"] .c-filter {
-    flex-basis: 100%;
+    flex-basis: 160px;
   }
 
   html[data-skin="console"] .c-filter-box {
@@ -170,15 +174,6 @@ html[data-skin="console"] .c-filter-matches {
     width: 36px;
     height: 36px;
     margin: -3px -2px -3px 0;
-  }
-
-  html[data-skin="console"] .c-filterbar-end {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  html[data-skin="console"] .c-filter-matches {
-    margin-right: auto;
   }
 
   html[data-skin="console"] .c-filter-option {

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { Icon } from "../../../icons";
-import { cx } from "../../../lib/cx";
+import { action } from "../../../core/actions";
 import { IconButton } from "./IconButton";
+import { Menu, type MenuGroup } from "./Menu";
 import { PAGE_SIZES, type PageSize } from "./Pager";
 import { t } from "../../../i18n";
 
@@ -40,42 +40,30 @@ export function usePageSize(): [PageSize, (size: PageSize) => void] {
   return [size, choose];
 }
 
-/** The table preferences gear: density and, for a paged table, the page size, as radio items. */
+/** The table preferences gear: density and, for a paged table, the page size, as radio groups of the shared Menu. */
 export function TablePreferences({ pageSize }: Readonly<{ pageSize?: Readonly<{ value: PageSize; set: (size: PageSize) => void }> }>) {
   const [density, setDensity] = useDensity();
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
   const id = useId();
-  useEffect(() => {
-    if (!open) return;
-    menu.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
-    const away = (event: PointerEvent) => { if (event.target instanceof Node && !menu.current?.contains(event.target) && !anchor.current?.contains(event.target)) setOpen(false); };
-    document.addEventListener("pointerdown", away);
-    return () => document.removeEventListener("pointerdown", away);
-  }, [open]);
-  const item = (checked: boolean, label: string, choose: () => void) => (
-    <button aria-checked={checked} className="c-menu-item" key={label} onClick={() => { choose(); setOpen(false); anchor.current?.focus(); }} role="menuitemradio" type="button">
-      <Icon name={checked ? "check" : "radio_button_unchecked"} size={20} />
-      <span>{label}</span>
-    </button>
-  );
+  const close = useCallback(() => setOpen(false), []);
+  const groups: MenuGroup[] = [{
+    label: t("ui.density"),
+    checked: `table.density.${density}`,
+    actions: [
+      action("table.density.comfortable", t("ui.comfortable"), () => setDensity("comfortable")),
+      action("table.density.compact", t("ui.compact"), () => setDensity("compact")),
+    ],
+  }];
+  if (pageSize) groups.push({
+    label: t("ui.rowsPerPage"),
+    checked: `table.page-size.${pageSize.value}`,
+    actions: PAGE_SIZES.map((size) => action(`table.page-size.${size}`, String(size), () => pageSize.set(size))),
+  });
   return (
-    <span className="c-prefs">
+    <span className="c-overflow">
       <IconButton aria-controls={id} aria-expanded={open} aria-haspopup="menu" icon="settings" label={t("ui.preferences")} onClick={() => setOpen((value) => !value)} ref={anchor} />
-      <div aria-label={t("ui.preferences")} className={cx("c-menu", "c-prefs-menu")} hidden={!open} id={id} onKeyDown={(event) => { if (event.key === "Escape") { setOpen(false); anchor.current?.focus(); } }} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
-        <div aria-label={t("ui.density")} className="c-menu-group" role="group" /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
-          <div aria-hidden="true" className="c-menu-label">{t("ui.density")}</div>
-          {item(density === "comfortable", t("ui.comfortable"), () => setDensity("comfortable"))}
-          {item(density === "compact", t("ui.compact"), () => setDensity("compact"))}
-        </div>
-        {pageSize && (
-          <div aria-label={t("ui.rowsPerPage")} className="c-menu-group c-menu-group-split" role="group" /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
-            <div aria-hidden="true" className="c-menu-label">{t("ui.rowsPerPage")}</div>
-            {PAGE_SIZES.map((size) => item(pageSize.value === size, String(size), () => pageSize.set(size)))}
-          </div>
-        )}
-      </div>
+      <Menu anchor={anchor} groups={groups} id={id} label={t("ui.preferences")} onClose={close} open={open} />
     </span>
   );
 }

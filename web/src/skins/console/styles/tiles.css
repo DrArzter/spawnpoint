@@ -23,8 +23,10 @@ html[data-skin="console"] .c-tile {
   transition: border-color var(--c-d1), background var(--c-d1);
 }
 
-html[data-skin="console"] .c-tile:hover:not(:disabled) {
-  border-color: var(--c-accent-line);
+@media (hover: hover) {
+  html[data-skin="console"] .c-tile:hover:not(:disabled) {
+    border-color: var(--c-accent-line);
+  }
 }
 
 html[data-skin="console"] .c-tile:active:not(:disabled) {
@@ -71,8 +73,10 @@ html[data-skin="console"] .c-pager-page {
   cursor: pointer;
 }
 
-html[data-skin="console"] .c-pager-page:hover {
-  background: var(--c-surface-2);
+@media (hover: hover) {
+  html[data-skin="console"] .c-pager-page:hover {
+    background: var(--c-surface-2);
+  }
 }
 
 html[data-skin="console"] .c-pager-page[aria-current="page"] {
@@ -83,18 +87,6 @@ html[data-skin="console"] .c-pager-page[aria-current="page"] {
 html[data-skin="console"] .c-pager-gap {
   padding: 0 4px;
   color: var(--c-ink-3);
-}
-
-html[data-skin="console"] .c-prefs {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-}
-
-html[data-skin="console"] .c-prefs-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
 }
 
 @media (max-width: 759px) {

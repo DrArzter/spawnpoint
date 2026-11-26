@@ -237,7 +237,7 @@ export type BackupsModel = Readonly<{
 }>;
 
 /** `downloads`: the client pack, or with side lists (ADR-0069) the client, server and full packs. */
-export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; downloads: readonly Action[] }>;
+export type ReleaseRow = Readonly<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; sourceCommit: string | null; downloads: readonly Action[] }>;
 
 /** One player on a world's whitelist, and the way off it (ADR-0066). */
 export type WhitelistRow = Readonly<{ name: string; remove: Action }>;

@@ -69,18 +69,20 @@ function ownedSeries(
   slots: readonly string[],
   periodMs: number,
 ): Owned[] {
-  const valueOf = (hostId: string, index: number): number | null =>
-    perHost[hostId]?.series.find((series) => series.id === id)?.points[index]?.value ?? null;
+  const pointOf = (hostId: string, index: number): HostMetricPoint | undefined =>
+    perHost[hostId]?.series.find((series) => series.id === id)?.points[index];
   return slots.map((at, index) => {
     const slotStart = Date.parse(at);
     const candidates = runs
       .map((run) => ({ run, overlap: overlapMs(run, slotStart, slotStart + periodMs) }))
-      .filter(({ run, overlap }) => overlap > 0 && valueOf(run.hostId, index) !== null)
+      .filter(({ run, overlap }) => overlap > 0 && (pointOf(run.hostId, index)?.value ?? null) !== null)
       .sort((a, b) => b.overlap - a.overlap || b.run.startedAtMs - a.run.startedAtMs);
     const chosen = candidates[0]?.run;
-    return chosen === undefined
+    const reading = chosen === undefined ? undefined : pointOf(chosen.hostId, index);
+    // A slot keeps its own host's capacity: two hosts of a world may differ in size.
+    return chosen === undefined || reading === undefined
       ? { point: { at, value: null }, hostId: null }
-      : { point: { at, value: valueOf(chosen.hostId, index) }, hostId: chosen.hostId };
+      : { point: { at, value: reading.value, ...(reading.capacity === undefined ? {} : { capacity: reading.capacity }) }, hostId: chosen.hostId };
   });
 }
 
@@ -89,8 +91,8 @@ function ownedSeries(
  * on a 5-minute grid two of every three slots are empty although the host ran.
  * Two memory readings are joined with a straight line when they are one probe
  * (plus a margin) apart or closer, come from one host, and the host reported
- * CPU in every slot between. CPU and network are never joined: for them an
- * empty slot is a real gap.
+ * CPU in every slot between; a joined point carries that host's capacity. CPU
+ * and network are never joined: for them an empty slot is a real gap.
  */
 export function joinSampledSeries(
   owned: readonly Owned[],
@@ -110,7 +112,9 @@ export function joinSampledSeries(
     if (joinable && before?.point.value != null) {
       for (let slot = previous + 1; slot < index; slot += 1) {
         const share = (slot - previous) / span;
-        points[slot] = { at: owned[slot]!.point.at, value: Math.round((before.point.value + (entry.point.value - before.point.value) * share) * 100) / 100, interpolated: true };
+        const value = Math.round((before.point.value + (entry.point.value - before.point.value) * share) * 100) / 100;
+        const capacity = entry.point.capacity;
+        points[slot] = { at: owned[slot]!.point.at, value, interpolated: true, ...(capacity === undefined ? {} : { capacity }) };
       }
     }
     previous = index;
@@ -156,7 +160,11 @@ export function mergeWorldMetrics(perHost: Readonly<Record<string, HostMetricsWi
       ? joinSampledSeries(own, owned.get(HOST_ACTIVITY) ?? [], template.periodSeconds)
       : own.map(({ point }) => point);
     const pendingFrom = pendingSlot(points, liveRun, template.periodSeconds);
-    return { id: series.id, label: series.label, unit: series.unit, points, ...(pendingFrom ? { pendingFrom } : {}) };
+    return {
+      id: series.id, label: series.label, unit: series.unit,
+      ...(series.capacityUnit ? { capacityUnit: series.capacityUnit } : {}),
+      points, ...(pendingFrom ? { pendingFrom } : {}),
+    };
   });
   const pendingFrom = merged.find((series) => series.id === HOST_ACTIVITY)?.pendingFrom;
   return { startedAt: template.startedAt, endedAt: template.endedAt, periodSeconds: template.periodSeconds, series: merged, ...(pendingFrom ? { pendingFrom } : {}) };

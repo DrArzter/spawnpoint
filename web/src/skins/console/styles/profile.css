@@ -1,11 +1,20 @@
 /* Profile (S7): identity ID beside the name, sign-in method rows, the Appearance settings. */
 
+/* The id gives way before the name: it shrinks far faster and cuts with an
+   ellipsis, down to its Copy button, which keeps the whole value. */
 html[data-skin="console"] .c-profile-id {
   display: inline-flex;
+  flex: 0 100 auto;
   align-items: center;
   gap: 4px;
-  min-width: 0;
   font-size: var(--c-fs-s);
+}
+
+html[data-skin="console"] .c-profile-id > .c-mono {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 html[data-skin="console"] .c-profile-settings {
@@ -20,8 +29,10 @@ html[data-skin="console"] .c-profile-accent {
   gap: 12px;
 }
 
+/* Top-aligned, so the icon does not add a baseline gap and the title stays one line tall. */
 html[data-skin="console"] .c-profile-method {
   display: inline-flex;
+  vertical-align: top;
   align-items: center;
   gap: 8px;
   color: var(--c-ink);

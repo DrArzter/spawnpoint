@@ -34,7 +34,7 @@ html[data-skin="console"] .c-status-pill {
 }
 
 html[data-skin="console"] .c-status-changed {
-  animation: c-pop var(--c-d3) var(--c-ease-spring), c-unblur var(--c-d3) var(--c-ease);
+  animation: c-pop var(--c-d3) var(--c-ease-spring);
 }
 
 html[data-skin="console"] .c-status-changed > svg {

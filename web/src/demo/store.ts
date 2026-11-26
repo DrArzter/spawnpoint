@@ -578,7 +578,10 @@ type DemoSession = Readonly<{ from: number; to: number }>;
 // session on another. The server merges both hosts onto one grid, so the demo
 // draws the merged result. Memory is probed every 15 minutes, so on the 5-minute
 // grain its readings stand three slots apart and the server joins them with a
-// line; the newest slots of a running session are not reported yet.
+// line; the newest slots of a running session are not reported yet. Each
+// session's host has its own size, so CPU and memory read as cores and GiB.
+const DEMO_HOSTS = [{ cores: 2, memory: 8 * 1024 ** 3 }, { cores: 4, memory: 16 * 1024 ** 3 }] as const;
+
 function worldMetricsOf(range: MetricRange, sessions: readonly DemoSession[], live: boolean): HostMetrics {
   const { hours, period } = RANGE[range];
   const end = Date.now();
@@ -597,20 +600,21 @@ function worldMetricsOf(range: MetricRange, sessions: readonly DemoSession[], li
   const cpu = measured(62);
   // One reading per probe from the session's first slot; a joined slot lies between two readings of one host while CPU reported.
   const probes = Array.from({ length: count }, (_, index) => reported(index) && (index - firstOf(owner(index))) % stride === 0 ? Math.round(71 * ramp(index) * wave(index) * 100) / 100 : null);
-  const memory = probes.map((value, index): HostMetrics["series"][number]["points"][number] => ({ at: slotAt(index), value }));
+  const host = (index: number) => DEMO_HOSTS[Math.min(Math.max(0, owner(index)), DEMO_HOSTS.length - 1)]!;
+  const memory = probes.map((value, index): HostMetrics["series"][number]["points"][number] => ({ at: slotAt(index), value, ...(value === null ? {} : { capacity: host(index).memory }) }));
   let last = -1;
   probes.forEach((value, index) => {
     if (value === null) return;
     if (last >= 0 && index - last > 1 && index - last <= stride && owner(index) === owner(last) && cpu.slice(last + 1, index).every((item) => item !== null)) {
       for (let slot = last + 1; slot < index; slot += 1) {
-        memory[slot] = { at: slotAt(slot), value: Math.round((probes[last]! + (value - probes[last]!) * ((slot - last) / (index - last))) * 100) / 100, interpolated: true };
+        memory[slot] = { at: slotAt(slot), value: Math.round((probes[last]! + (value - probes[last]!) * ((slot - last) / (index - last))) * 100) / 100, interpolated: true, capacity: host(slot).memory };
       }
     }
     last = index;
   });
   const pendingFrom = live ? slotAt(count - pendingCount) : undefined;
   const memoryPending = live && last + 1 < count ? slotAt(last + 1) : undefined;
-  const plain = (id: string, label: string, unit: string, values: readonly (number | null)[], pending: string | undefined) => ({
+  const plain = (id: string, label: string, unit: HostMetrics["series"][number]["unit"], values: readonly (number | null)[], pending: string | undefined) => ({
     id, label, unit, points: values.map((value, index) => ({ at: slotAt(index), value })), ...(pending ? { pendingFrom: pending } : {}),
   });
   return {
@@ -619,10 +623,15 @@ function worldMetricsOf(range: MetricRange, sessions: readonly DemoSession[], li
     endedAt: new Date(end).toISOString(),
     periodSeconds: period,
     series: [
-      plain("cpu", "CPU", "percent", cpu, pendingFrom),
-      { id: "memory", label: "Memory", unit: "percent", points: memory, ...(memoryPending ? { pendingFrom: memoryPending } : {}) },
-      plain("networkIn", "Network in", "bytes", measured(4_800_000), pendingFrom),
-      plain("networkOut", "Network out", "bytes", measured(9_200_000), pendingFrom),
+      {
+        ...plain("cpu", "CPU", "percent", cpu, pendingFrom),
+        capacityUnit: "cores",
+        points: cpu.map((value, index) => ({ at: slotAt(index), value, ...(value === null ? {} : { capacity: host(index).cores }) })),
+      },
+      { id: "memory", label: "Memory", unit: "percent", capacityUnit: "bytes", points: memory, ...(memoryPending ? { pendingFrom: memoryPending } : {}) },
+      // A rate: a period's bytes (4.8 MB and 9.2 MB at the peak) over its seconds.
+      plain("networkIn", "Network in", "bytesPerSecond", measured(4_800_000 / period), pendingFrom),
+      plain("networkOut", "Network out", "bytesPerSecond", measured(9_200_000 / period), pendingFrom),
     ],
     ...(pendingFrom ? { pendingFrom } : {}),
   };
@@ -893,7 +902,9 @@ export function configFiles(gameId: string, worldId: string): ConfigFileList {
   const added = Object.entries(edits)
     .filter(([path]) => !rules.files.some((file) => file.path === path))
     .map(([path, edit]) => ({ path, source: "world_only" as const, bytes: edit.text.length, editable: true, releaseSha256: null, worldSha256: digest(edit.text), updatedAt: edit.updatedAt, updatedBy: edit.updatedBy, releaseChanged: false }));
-  return { release: rules.release, roots: rules.roots, maxBytes: rules.maxBytes, files: [...released, ...added] };
+  // The release the world's next start uses, as the API sends it (contract/config-files.ts).
+  const next = world(gameId, worldId).release?.desiredRelease ?? null;
+  return { release: next, roots: rules.roots, maxBytes: rules.maxBytes, files: [...released, ...added] };
 }
 
 export function configFile(gameId: string, worldId: string, path: string): ConfigFileContent {

@@ -30,9 +30,24 @@ function tabForKey<Id extends string>(tabs: readonly TabItem<Id>[], at: number, 
 }
 
 /**
+ * Whether a strip should drop its tab icons: it overflows with them and fits
+ * without them. `tabsWidth` (the tabs' extent) is measured as drawn, so a
+ * compact strip adds the icons back to judge; the answer does not flip
+ * between the two states.
+ */
+export function stripIsCompact({ tabsWidth, clientWidth, icons, iconSpace, compact }: Readonly<{
+  tabsWidth: number; clientWidth: number; icons: number; iconSpace: number; compact: boolean;
+}>): boolean {
+  const bare = tabsWidth - (compact ? 0 : icons * iconSpace);
+  return icons > 0 && bare <= clientWidth && bare + icons * iconSpace > clientWidth + 1;
+}
+
+/**
  * Tabs over one panel. The ink slides from the old tab to the new one (A3);
  * arrows, Home and End move between tabs; the active tab is kept in view and
- * the strip fades at its end edge while more tabs lie beyond it.
+ * the strip fades at its end edge while more tabs lie beyond it. A strip that
+ * fits only without its icons drops them (data-compact) rather than hide a tab
+ * under the fade; a strip that overflows anyway keeps them and scrolls.
  */
 export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, end }: Readonly<{
   label: string;
@@ -47,24 +62,37 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
   const strip = useRef<HTMLDivElement>(null);
   const ink = useRef<HTMLSpanElement>(null);
   const [more, setMore] = useState(false);
+  const [compact, setCompact] = useState(false);
+  // The width one tab's icon and its gap take, measured while the icons show.
+  const iconSpace = useRef(0);
   const select = useTabTransition(tabs, value, onChange, prefix);
 
   useLayoutEffect(() => {
     const row = strip.current;
     const active = row?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (!row || !active || !ink.current) return;
-    ink.current.style.left = `${active.offsetLeft}px`;
-    ink.current.style.width = `${active.offsetWidth}px`;
-    // The strip glides to a tab out of view rather than jumping to it.
-    if (active.offsetLeft < row.scrollLeft || active.offsetLeft + active.offsetWidth > row.scrollLeft + row.clientWidth) {
-      row.scrollTo({ left: active.offsetLeft - 16, behavior: reducedMotion() ? "auto" : "smooth" });
-    }
     const place = () => {
       if (!ink.current) return;
       ink.current.style.left = `${active.offsetLeft}px`;
       ink.current.style.width = `${active.offsetWidth}px`;
     };
-    const measure = () => setMore(row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
+    place();
+    // The strip glides only as far as the tab needs, and leaves the fade's
+    // width beyond it so the next tab still shows.
+    const fade = Number.parseFloat(getComputedStyle(row).getPropertyValue("--c-tab-fade")) || 0;
+    const start = active.offsetLeft;
+    const endEdge = start + active.offsetWidth;
+    const left = start < row.scrollLeft ? start - fade
+      : endEdge > row.scrollLeft + row.clientWidth - fade ? endEdge + fade - row.clientWidth
+      : null;
+    if (left !== null) row.scrollTo({ left, behavior: reducedMotion() ? "auto" : "smooth" });
+    const measure = () => {
+      setMore(row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
+      const icon = row.querySelector<SVGElement>(".c-tab > svg");
+      if (icon) iconSpace.current = icon.getBoundingClientRect().width + Number.parseFloat(getComputedStyle(active).columnGap || "0");
+      const last = row.querySelector<HTMLElement>(".c-tab:last-of-type");
+      setCompact(stripIsCompact({ tabsWidth: last ? last.offsetLeft + last.offsetWidth : 0, clientWidth: row.clientWidth, icons: tabs.filter((tab) => tab.icon).length, iconSpace: iconSpace.current, compact: row.dataset.compact !== undefined }));
+    };
     measure();
     // A font that loads late or a resize changes the tab widths; the ink follows.
     const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { place(); measure(); });
@@ -73,6 +101,19 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
     row.addEventListener("scroll", measure);
     return () => { row.removeEventListener("scroll", measure); resized?.disconnect(); };
   }, [value, tabs]);
+
+  // Icons coming or going move every tab; the ink takes its new place at once.
+  useLayoutEffect(() => {
+    const row = strip.current;
+    const active = row?.querySelector<HTMLElement>('[aria-selected="true"]');
+    const line = ink.current;
+    if (!active || !line) return;
+    line.style.transition = "none";
+    line.style.left = `${active.offsetLeft}px`;
+    line.style.width = `${active.offsetWidth}px`;
+    void line.offsetWidth;
+    line.style.transition = "";
+  }, [compact]);
 
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const at = tabs.findIndex((tab) => tab.id === value);
@@ -85,7 +126,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
 
   return (
     <div className="c-tabrow">
-      <div aria-label={label} className={cx("c-tabs", more && "c-tabs-more")} data-scroll="expected" onKeyDown={onKey} ref={strip} role="tablist" /* NOSONAR roving tabindex: the selected tab carries the tab stop */>
+      <div aria-label={label} className={cx("c-tabs", more && "c-tabs-more")} data-compact={compact || undefined} data-scroll="expected" onKeyDown={onKey} ref={strip} role="tablist" /* NOSONAR roving tabindex: the selected tab carries the tab stop */>
         {tabs.map((tab) => {
           const selected = tab.id === value;
           return (
@@ -100,7 +141,7 @@ export function Tabs<Id extends string>({ label, prefix, tabs, value, onChange, 
               tabIndex={selected ? 0 : -1}
               type="button"
             >
-              {tab.icon && <Icon name={tab.icon} size={19} />}
+              {tab.icon && !compact && <Icon name={tab.icon} size={19} />}
               <span>{tab.label}</span>
               {tab.count !== undefined && <span className="c-tab-count">{tab.count}</span>}
             </button>

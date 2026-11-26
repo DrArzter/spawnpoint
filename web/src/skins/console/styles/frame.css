@@ -5,7 +5,9 @@ html[data-skin="console"] .c-app {
   background: var(--c-bg);
 }
 
+/* Its own transition layer, like the bottom bar (A1n). */
 html[data-skin="console"] .c-topbar {
+  view-transition-name: c-topbar;
   position: sticky;
   top: 0;
   z-index: 30;
@@ -33,8 +35,10 @@ html[data-skin="console"] .c-brand {
   letter-spacing: -.01em;
 }
 
-html[data-skin="console"] .c-brand:hover {
-  text-decoration: none;
+@media (hover: hover) {
+  html[data-skin="console"] .c-brand:hover {
+    text-decoration: none;
+  }
 }
 
 html[data-skin="console"] .c-mark {
@@ -69,8 +73,10 @@ html[data-skin="console"] .c-search {
   transition: border-color var(--c-d1), background var(--c-d1);
 }
 
-html[data-skin="console"] .c-search:hover {
-  border-color: var(--c-band-ink-2);
+@media (hover: hover) {
+  html[data-skin="console"] .c-search:hover {
+    border-color: var(--c-band-ink-2);
+  }
 }
 
 html[data-skin="console"] .c-search-text {
@@ -205,10 +211,12 @@ html[data-skin="console"] .c-rail-item {
   border-radius: var(--c-r);
 }
 
-html[data-skin="console"] .c-rail-item:hover,
-html[data-skin="console"] .c-bottom-item:hover {
-  color: var(--c-ink);
-  text-decoration: none;
+@media (hover: hover) {
+  html[data-skin="console"] .c-rail-item:hover,
+  html[data-skin="console"] .c-bottom-item:hover {
+    color: var(--c-ink);
+    text-decoration: none;
+  }
 }
 
 html[data-skin="console"] .c-nav-icon {
@@ -234,8 +242,10 @@ html[data-skin="console"] .c-nav-glyph {
   view-transition-class: nav-glyph;
 }
 
-html[data-skin="console"] .c-rail-item:hover .c-nav-pill {
-  background: var(--c-surface-2);
+@media (hover: hover) {
+  html[data-skin="console"] .c-rail-item:hover .c-nav-pill {
+    background: var(--c-surface-2);
+  }
 }
 
 html[data-skin="console"] .c-rail-item:active .c-nav-icon,

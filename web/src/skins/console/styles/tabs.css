@@ -8,8 +8,13 @@ html[data-skin="console"] .c-tabrow {
   border-bottom: 1px solid var(--c-line);
 }
 
+/* --c-tab-fade is the end fade's width; Tabs reads it to keep the next tab in
+   sight. The strip takes the row's free width, so its clientWidth is the room
+   the tabs have, whether or not they show their icons. */
 html[data-skin="console"] .c-tabs {
+  --c-tab-fade: 48px;
   position: relative;
+  flex: 1 1 auto;
   display: flex;
   gap: 2px;
   max-width: 100%;
@@ -18,8 +23,8 @@ html[data-skin="console"] .c-tabs {
 }
 
 html[data-skin="console"] .c-tabs-more {
-  -webkit-mask-image: linear-gradient(90deg, black calc(100% - 48px), transparent);
-  mask-image: linear-gradient(90deg, black calc(100% - 48px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, black calc(100% - var(--c-tab-fade)), transparent);
+  mask-image: linear-gradient(90deg, black calc(100% - var(--c-tab-fade)), transparent);
 }
 
 html[data-skin="console"] .c-tab {
@@ -39,9 +44,11 @@ html[data-skin="console"] .c-tab {
   transition: color var(--c-d1), background var(--c-d1);
 }
 
-html[data-skin="console"] .c-tab:hover {
-  background: var(--c-surface-2);
-  color: var(--c-ink);
+@media (hover: hover) {
+  html[data-skin="console"] .c-tab:hover {
+    background: var(--c-surface-2);
+    color: var(--c-ink);
+  }
 }
 
 html[data-skin="console"] .c-tab:focus-visible {
@@ -66,7 +73,7 @@ html[data-skin="console"] .c-tab-ink {
   border-radius: 3px 3px 0 0;
   background: var(--c-accent);
   pointer-events: none;
-  transition: left var(--c-d3) var(--c-ease-spring), width var(--c-d3) var(--c-ease-spring);
+  transition: left var(--c-d3) var(--c-ease), width var(--c-d3) var(--c-ease);
 }
 
 html[data-skin="console"] .c-tabrow-end {
@@ -108,4 +115,4 @@ html[data-skin="console"] .c-tabpanel:focus-visible {
   outline-offset: 4px;
 }
 
-@keyframes c-tab-in { from { opacity: .35; } }
+@keyframes c-tab-in { from { opacity: .75; } }

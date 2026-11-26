@@ -126,12 +126,15 @@ html[data-skin="console"] .c-address-value {
   white-space: nowrap;
 }
 
+/* The visible box is one text line tall, so a row with a Copy is as tall as
+   its placeholder; the hit area (::before) is the full target around it. */
 html[data-skin="console"] .c-copy {
+  position: relative;
   display: grid;
   place-items: center;
   flex: none;
   width: 30px;
-  height: 30px;
+  height: 1lh;
   padding: 0;
   border: 0;
   border-radius: var(--c-r-sm);
@@ -141,18 +144,25 @@ html[data-skin="console"] .c-copy {
   transition: background var(--c-d1), color var(--c-d1);
 }
 
-html[data-skin="console"] .c-copy:hover {
-  background: var(--c-surface-2);
-  color: var(--c-ink);
+@media (hover: hover) {
+  html[data-skin="console"] .c-copy:hover {
+    background: var(--c-surface-2);
+    color: var(--c-ink);
+  }
 }
 
 html[data-skin="console"] .c-copy:active {
   transform: scale(.92);
 }
 
-html[data-skin="console"] .c-copy-done,
-html[data-skin="console"] .c-copy-done:hover {
+html[data-skin="console"] .c-copy-done {
   color: var(--c-ok);
+}
+
+@media (hover: hover) {
+  html[data-skin="console"] .c-copy-done:hover {
+    color: var(--c-ok);
+  }
 }
 
 html[data-skin="console"] .c-flash .c-copy {
@@ -197,6 +207,8 @@ html[data-skin="console"] .c-person-detail {
   overflow: hidden;
   color: var(--c-ink-2);
   font-size: var(--c-fs-s);
+  /* Its own weight, so a lead cell's bold does not reach the secondary line. */
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -205,8 +217,18 @@ html[data-skin="console"] .c-person-detail > span {
   text-overflow: ellipsis;
 }
 
+html[data-skin="console"] .c-copy::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
 @media (max-width: 759px) {
-  html[data-skin="console"] .c-copy {
+  html[data-skin="console"] .c-copy::before {
     width: var(--c-target);
     height: var(--c-target);
   }

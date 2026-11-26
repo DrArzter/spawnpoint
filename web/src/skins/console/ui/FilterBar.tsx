@@ -129,6 +129,8 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
   };
 
   const filtering = tokens.length > 0;
+  const showMatches = filtering && matches !== undefined;
+  const clearable = tokens.length >= 2;
   return (
     <div className="c-filterbar">
       <div className="c-filter">
@@ -178,11 +180,14 @@ export function FilterBar({ label, properties, tokens, onChange, matches, end, p
           </div>
         </div>
       </div>
-      <div className="c-filterbar-end">
-        {filtering && matches !== undefined && <span className="c-filter-matches">{t("ui.matchCount", { count: matches })}</span>}
-        {tokens.length >= 2 && <ActionButton action={action("filter.clear", t("ui.clear"), () => onChange([]))} size="sm" variant="ghost" />}
-        {end}
-      </div>
+      {/* The end group is drawn only with something in it, so an empty one leaves no gap after the field. */}
+      {(showMatches || clearable || end) && (
+        <div className="c-filterbar-end">
+          {showMatches && <span className="c-filter-matches">{t("ui.matchCount", { count: matches })}</span>}
+          {clearable && <ActionButton action={action("filter.clear", t("ui.clear"), () => onChange([]))} size="sm" variant="ghost" />}
+          {end}
+        </div>
+      )}
     </div>
   );
 }

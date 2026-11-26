@@ -12,6 +12,8 @@ html[data-skin="console"] {
   --c-surface-2: #F4F5F6;
   --c-surface-3: #E7EAED;
   --c-surface-pop: #FFFFFF;
+  /* A hovered or focused item on a popover surface: one step above it in both themes. */
+  --c-pop-hover: var(--c-surface-2);
   --c-line: #E3E6E9;
   --c-line-2: #C6CBD1;
   --c-ink: #0F141A;
@@ -105,15 +107,15 @@ html[data-skin="console"] {
   --c-ease-spring: cubic-bezier(.34, 1.45, .64, 1);
   /* A view change (A1–A3): the old view leaves in --c-out, the new one starts
      after --c-handover and travels --c-travel (a page) or --c-travel-pane. */
-  --c-out: 130ms;
-  --c-handover: 70ms;
+  --c-out: 100ms;
+  --c-handover: 20ms;
   --c-travel: 32px;
   --c-travel-pane: 12px;
   --c-d-tick: 660ms;
   --c-loop-bar: 1.6s;
   --c-loop-spin: 1s;
   --c-loop-spin-reduced: 3s;
-  --c-loop-shimmer: 1.2s;
+  --c-loop-shimmer: 1.1s;
   --c-shake: 250ms;
   --c-dwell-copy: 1.4s;
   --c-dwell-toast: 3.6s;
@@ -131,6 +133,7 @@ html[data-skin="console"][data-theme="dark"] {
   --c-surface-2: #1C2430;
   --c-surface-3: #28323F;
   --c-surface-pop: #202A37;
+  --c-pop-hover: var(--c-surface-3);
   --c-line: #26303D;
   --c-line-2: #3A4655;
   --c-ink: #E8ECF0;

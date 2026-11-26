@@ -26,9 +26,11 @@ html[data-skin="console"] .c-scope-game {
   transition: background var(--c-d1), color var(--c-d1);
 }
 
-html[data-skin="console"] .c-scope-game:hover {
-  background: var(--c-band-3);
-  color: var(--c-band-ink);
+@media (hover: hover) {
+  html[data-skin="console"] .c-scope-game:hover {
+    background: var(--c-band-3);
+    color: var(--c-band-ink);
+  }
 }
 
 html[data-skin="console"] .c-scope-game:active {
@@ -103,8 +105,10 @@ html[data-skin="console"] .c-scope-row:last-child {
   border-bottom: 0;
 }
 
-html[data-skin="console"] .c-scope-row:hover {
-  background: var(--c-surface-2);
+@media (hover: hover) {
+  html[data-skin="console"] .c-scope-row:hover {
+    background: var(--c-surface-2);
+  }
 }
 
 html[data-skin="console"] .c-scope-row[aria-checked="true"] {

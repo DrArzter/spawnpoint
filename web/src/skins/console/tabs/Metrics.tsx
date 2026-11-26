@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { HostMetrics, HostMetricSeries, MetricRange } from "../../../api/contract";
 import type { MetricsModel } from "../../../core/models";
-import { formatBytes } from "../../../lib/format";
+import { metricScale, seriesLabel, type MetricScale } from "../../../lib/metrics";
 import { Card } from "../ui/Card";
 import { shortDateTime } from "../ui/DetailList";
 import { Empty, LoadError } from "../ui/Empty";
@@ -17,15 +17,16 @@ import { intlLocale, t } from "../../../i18n";
 const seen = new Set<string>();
 
 const clock = new Intl.DateTimeFormat(intlLocale(), { hour: "2-digit", minute: "2-digit" });
-
-/** A reading's value in its series' unit: a percentage, else bytes. */
-export function metricFormat(unit: string): (value: number) => string {
-  return unit === "percent" ? (value) => `${Number(value.toFixed(1))} %` : formatBytes;
-}
+const day = new Intl.DateTimeFormat(intlLocale(), { day: "numeric", month: "short" });
 
 /** A reading's time: the clock within a day, the date as well over a week. */
 export function metricTime(range: MetricRange): (at: string) => string {
   return (at) => range === "7d" ? shortDateTime(at) ?? at : clock.format(Date.parse(at));
+}
+
+/** A time label under a chart: the clock within a day, the day alone over a week, so three fit a phone. */
+export function metricTimeTick(range: MetricRange): (at: string) => string {
+  return (at) => (range === "7d" ? day : clock).format(Date.parse(at));
 }
 
 /**
@@ -94,7 +95,7 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
         )}
       </div>
       {metrics.status === "loading" && (
-        <SkeletonGroup className="c-metrics-loading">
+        <SkeletonGroup flow>
           <StripCard axis={<><Skeleton text width="6em" /><Skeleton text width="2.5em" /></>} share={<Skeleton text width="3ch" />} track={<div className="c-strip-track"><Skeleton height="100%" /></div>} />
           <Grid kind="stat">{SERIES.map((cell) => <StatSkeleton key={cell} />)}</Grid>
           <Grid kind="metrics">{SERIES.map((cell) => <Card key={cell} loading><ChartSkeleton /></Card>)}</Grid>
@@ -109,50 +110,58 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
 
 function Readings({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; range: string; reveal: boolean }>) {
   const time = metricTime(metrics.range);
+  const timeTick = metricTimeTick(metrics.range);
+  const series = metrics.series.map((item) => ({ series: item, label: seriesLabel(item), scale: metricScale(item) }));
   return (
     <>
       <Strip metrics={metrics} range={range} reveal={reveal} />
       <Grid kind="stat" label={t("metrics.latestReadings")}>
-        {metrics.series.map((series) => <Stat key={series.id} series={series} time={time} />)}
+        {series.map((item) => <Stat key={item.series.id} label={item.label} scale={item.scale} series={item.series} time={time} />)}
       </Grid>
       <Grid kind="metrics">
-        {metrics.series.map((series) => <Chart key={series.id} range={range} reveal={reveal} series={series} time={time} />)}
+        {series.map((item) => <Chart key={item.series.id} label={item.label} range={range} reveal={reveal} scale={item.scale} series={item.series} time={time} timeTick={timeTick} />)}
       </Grid>
     </>
   );
 }
 
-function Stat({ series, time }: Readonly<{ series: HostMetricSeries; time: (at: string) => string }>) {
-  const format = metricFormat(series.unit);
-  const summary = chartSummary(series.points);
-  if (!summary) return <StatCard label={series.label} value={null} />;
-  const [value, ...unit] = format(summary.latest).split(" ");
+type SeriesView = Readonly<{ series: HostMetricSeries; label: string; scale: MetricScale; time: (at: string) => string }>;
+
+function Stat({ series, label, scale, time }: SeriesView) {
+  const summary = chartSummary(scale.points);
+  if (!summary) return <StatCard label={label} value={null} />;
+  const latest = scale.points.findIndex((point) => point.at === summary.latestAt);
+  const reading = scale.reading(summary.latest, series.points[latest]?.capacity);
   // One reading is a value; a peak and an average need at least two. Memory
   // arrives once per watchdog check, so its first reading stands alone.
   return (
     <StatCard
-      detail={summary.count < 2 ? undefined : <><span>{t("metrics.peakAt", { value: format(summary.peak.value), time: time(summary.peak.at) })}</span><span>{t("metrics.average", { value: format(summary.average) })}</span></>}
-      label={series.label}
-      unit={unit.join(" ")}
-      value={value ?? null}
+      detail={summary.count < 2 ? undefined : <><span>{t("metrics.peakAt", { value: scale.text(summary.peak.value), time: time(summary.peak.at) })}</span><span>{t("metrics.average", { value: scale.text(summary.average) })}</span></>}
+      label={label}
+      tip={scale.share(latest) ?? undefined}
+      unit={reading.unit}
+      value={reading.value}
     />
   );
 }
 
-function Chart({ series, range, reveal, time }: Readonly<{ series: HostMetricSeries; range: string; reveal: boolean; time: (at: string) => string }>) {
-  const known = series.points.some((point) => point.value !== null);
-  const notes = chartNotes(series.points, series.pendingFrom);
+function Chart({ series, label, scale, range, reveal, time, timeTick }: SeriesView & Readonly<{ range: string; reveal: boolean; timeTick: (at: string) => string }>) {
+  const known = scale.points.some((point) => point.value !== null);
+  const notes = chartNotes(scale.points, series.pendingFrom);
+  // The axis labels carry the unit, so the legend names only the marks that are not readings. A narrow card cuts a
+  // label short; its tooltip keeps it whole.
+  const noHost = t("metrics.noHost");
+  const notReported = t("common.notReportedYet");
   const legend = (
     <span className="c-legend">
-      <span className="c-legend-item"><span aria-hidden="true" className="c-legend-line" />{series.unit === "percent" ? "%" : t("metrics.bytes")}</span>
-      {notes.gaps && known && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-gap" />{t("metrics.noHost")}</span>}
-      {notes.pending && <span className="c-legend-item"><span aria-hidden="true" className="c-legend-pending" />{t("common.notReportedYet")}</span>}
+      {notes.gaps && <span className="c-legend-item" data-tip={noHost}><span aria-hidden="true" className="c-legend-gap" /><span className="c-legend-label">{noHost}</span></span>}
+      {notes.pending && <span className="c-legend-item" data-tip={notReported}><span aria-hidden="true" className="c-legend-pending" /><span className="c-legend-label">{notReported}</span></span>}
     </span>
   );
   return (
-    <Card actions={known ? legend : undefined} title={series.label}>
+    <Card title={label}>
       {known
-        ? <TimeSeriesChart format={metricFormat(series.unit)} label={series.label} pendingFrom={series.pendingFrom} percent={series.unit === "percent"} points={series.points} range={range} reveal={reveal} time={time} />
+        ? <TimeSeriesChart aside={scale.share} ceiling={scale.ceiling} format={scale.text} label={label} legend={legend} pendingFrom={series.pendingFrom} points={scale.points} range={range} reveal={reveal} tick={scale.tick} time={time} timeTick={timeTick} />
         : <Empty icon="monitoring" size="sm" title={t("metrics.hostReportedNothingWindow")} />}
     </Card>
   );
@@ -180,7 +189,7 @@ function Strip({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; rang
   const share = due.length === 0 ? 0 : Math.round((due.filter((state) => state === "on").length / due.length) * 100);
   const points = metrics.series[0]?.points ?? [];
   const time = metricTime(metrics.range);
-  const end = (run: StripRun) => run.from + run.length >= slots.length ? "now" : time(points[run.from + run.length]?.at ?? metrics.endedAt);
+  const end = (run: StripRun) => run.from + run.length >= slots.length ? t("metrics.now") : time(points[run.from + run.length]?.at ?? metrics.endedAt);
   return (
     <StripCard
       axis={<><span>{shortDateTime(metrics.startedAt)}</span><span>{t("metrics.now")}</span></>}

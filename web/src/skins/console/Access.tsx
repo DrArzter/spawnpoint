@@ -13,6 +13,7 @@ import { ActionButton } from "./ui/ActionButton";
 import { Ago } from "./ui/Ago";
 import { Card } from "./ui/Card";
 import { Chip } from "./ui/Chip";
+import { Decision } from "./ui/Decision";
 import { DetailList, shortDateTime } from "./ui/DetailList";
 import { Empty, LoadError } from "./ui/Empty";
 import { Checkbox, Field, Select, TextInput, Toggle } from "./ui/Fields";
@@ -24,6 +25,7 @@ import { Overflow } from "./ui/Overflow";
 import { PageHeader, type Crumb } from "./ui/PageHeader";
 import { Person } from "./ui/Person";
 import { SidePanel } from "./ui/SidePanel";
+import { Skeleton, SkeletonGroup } from "./ui/Skeleton";
 import { SplitPage } from "./ui/SplitPage";
 import { Status } from "./ui/Status";
 import { Table, type Column } from "./ui/Table";
@@ -168,7 +170,7 @@ function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
     { id: "person", header: t("common.person"), kind: "lead", render: (row) => <a href={itemHref("requests", row.id)}><Person detail={row.account} detailIcon={providerIcon(row.candidate.platform)} name={row.candidate.displayName} photoUrl={row.candidate.photoUrl} tone="request" /></a> },
     { id: "requested", header: t("common.requested"), render: (row) => <Ago at={row.candidate.requestedAt ?? row.candidate.firstSeenAt} /> },
     { id: "role", header: t("access.role"), render: (row) => <RoleSelect choice={row.role} label={t("access.roleCandidateDisplayName", { candidateDisplayName: row.candidate.displayName })} onChange={row.setRoleId} /> },
-    { id: "actions", header: t("common.actions"), kind: "act", render: (row) => <><ActionButton action={row.approve} size="sm" /><ActionButton action={row.dismiss} size="sm" /></> },
+    { id: "actions", header: t("common.actions"), kind: "act", render: (row) => <Decision approve={row.approve} dismiss={row.dismiss} /> },
   ];
   const peopleColumns: Column<MemberRow>[] = [
     { id: "person", header: t("common.person"), kind: "lead", render: (row) => <a href={itemHref("people", row.member.id)}><Person name={row.member.name} photoUrl={row.member.photoUrl} /></a> },
@@ -206,6 +208,14 @@ function InviteCard({ model }: Readonly<{ model: InvitationsModel }>) {
           <Field label={t("common.email")}>
             <TextInput autoComplete="email" onChange={(event) => model.setEmail(event.target.value)} type="email" value={model.email} />
           </Field>
+        )}
+        {/* Until the sign-in options answer, the field's place is held, so the card does not grow under the reader. */}
+        {model.emailMode === null && (
+          <SkeletonGroup flow>
+            <Field label={t("common.email")}>
+              <Skeleton height="var(--c-field)" />
+            </Field>
+          </SkeletonGroup>
         )}
         <ActionButton action={model.create} size="sm" />
       </form>

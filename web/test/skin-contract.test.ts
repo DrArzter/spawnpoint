@@ -100,7 +100,7 @@ const worldPage: WorldModel = {
     download: () => spy("backup.download", "Download archive"),
   },
   releases: {
-    rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", downloads: [spy("world.pack", "Client"), spy("release.pack.server", "Server"), spy("release.pack.full", "Full")] }],
+    rows: [{ name: "1.2", status: "Active", downloadable: true, sourceHref: "https://github.com/example/preset", sourceCommit: "7f3c19ab4d0e52b8", downloads: [spy("world.pack", "Client"), spy("release.pack.server", "Server"), spy("release.pack.full", "Full")] }],
     state: "ready",
     mods: modsModel(),
     changes: { release: "1.2", changes: { status: "ready", value: { from: "1.1", unchanged: 40, rows: [
@@ -390,7 +390,7 @@ for (const skin of SKINS) {
   });
 
   test(`${skin.name}: the downloads list the newest release first`, () => {
-    const row = (name: string) => ({ name, status: "Active", downloadable: true, sourceHref: null, downloads: [spy("world.pack", "Download")] });
+    const row = (name: string) => ({ name, status: "Active", downloadable: true, sourceHref: null, sourceCommit: null, downloads: [spy("world.pack", "Download")] });
     const markup = tabWith({ rows: [row("7.2"), row("7.10"), row("7.9")] });
     const at = (name: string) => markup.indexOf(`>${name}<`);
     assert.ok(at("7.10") > 0 && at("7.10") < at("7.9") && at("7.9") < at("7.2"), "7.10, then 7.9, then 7.2");

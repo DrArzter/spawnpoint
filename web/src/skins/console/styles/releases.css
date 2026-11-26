@@ -1,6 +1,7 @@
 /* Releases (spec §6.4): page parts of the presets and release pointer tables. */
 
-html[data-skin="console"] .c-releases-source {
+/* SourceRef: one line, cut at its cell's end. */
+html[data-skin="console"] .c-source {
   display: inline-block;
   overflow: hidden;
   text-overflow: ellipsis;

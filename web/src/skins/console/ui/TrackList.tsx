@@ -76,7 +76,7 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
       {loading && Array.from({ length: placeholders }, (_, row) => (
         <div className="c-tracklist-row" data-from="1024" data-layout="one-line" key={row} role="row">
           {tracks.map((track, index) => (
-            <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} data-rail={index === 0 ? "" : undefined} key={track.id} role="cell">{placeholder(track)}</span>
+            <span className={cx("c-track", track.kind && `c-track-${track.kind}`)} data-rail={index === 0 ? "" : undefined} key={track.id} role="cell">{placeholder(track, tracks.some((other) => other.kind === "optional"))}</span>
           ))}
         </div>
       ))}
@@ -91,9 +91,21 @@ export function TrackList<Row>({ label, tracks, rows, rowKey, empty, header = tr
   );
 }
 
-/** A cell's placeholder: a title and its line for a stack, a small block at the end edge, else one line. */
-function placeholder<Row>(track: Track<Row>) {
-  if (track.kind === "stack") return <span className="c-track-stack-body"><Skeleton text width="55%" />{track.lines !== 1 && <Skeleton text width="35%" />}</span>;
+/**
+ * A cell's placeholder: a title and its line for a stack, a small block at the
+ * end edge, else one line. A one-line stack in a list with optional tracks
+ * also holds the second line those tracks move to under 1024px, as its rows do.
+ */
+function placeholder<Row>(track: Track<Row>, optional: boolean) {
+  if (track.kind === "stack") {
+    return (
+      <span className="c-track-stack-body">
+        <Skeleton text width="55%" />
+        {track.lines !== 1 && <Skeleton text width="35%" />}
+        {track.lines === 1 && optional && <span className="c-track-line c-track-compact"><Skeleton text width="35%" /></span>}
+      </span>
+    );
+  }
   if (track.kind === "end") return <Skeleton height={28} width={track.quietHeader ? 72 : 48} />;
   return <Skeleton text width={track.kind === "num" ? "3em" : "60%"} />;
 }

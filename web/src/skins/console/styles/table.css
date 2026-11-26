@@ -60,8 +60,14 @@ html[data-skin="console"] .c-table tr {
 }
 
 /* The row is one target: hover or the lead link's focus shades all of it. */
-html[data-skin="console"] .c-table tbody tr:is(:hover, :has(.c-col-lead a:focus-visible)) td {
+html[data-skin="console"] .c-table tbody tr:has(.c-col-lead a:focus-visible) td {
   background: var(--c-surface-2);
+}
+
+@media (hover: hover) {
+  html[data-skin="console"] .c-table tbody tr:hover td {
+    background: var(--c-surface-2);
+  }
 }
 
 html[data-skin="console"] .c-table tr.c-row-selected td {
@@ -76,8 +82,10 @@ html[data-skin="console"] .c-table .c-table-empty td {
 }
 
 /* The empty row is not a target: hovering it shades nothing. */
-html[data-skin="console"] .c-table tbody .c-table-empty:hover td {
-  background: none;
+@media (hover: hover) {
+  html[data-skin="console"] .c-table tbody .c-table-empty:hover td {
+    background: none;
+  }
 }
 
 html[data-skin="console"] .c-sort {
@@ -93,8 +101,10 @@ html[data-skin="console"] .c-sort {
   cursor: pointer;
 }
 
-html[data-skin="console"] .c-sort:hover {
-  color: var(--c-ink);
+@media (hover: hover) {
+  html[data-skin="console"] .c-sort:hover {
+    color: var(--c-ink);
+  }
 }
 
 html[data-skin="console"] .c-sort > svg {
@@ -121,8 +131,10 @@ html[data-skin="console"] .c-table .c-col-lead a {
   color: var(--c-ink);
 }
 
-html[data-skin="console"] .c-table tr:hover .c-col-lead a {
-  color: var(--c-accent-text);
+@media (hover: hover) {
+  html[data-skin="console"] .c-table tr:hover .c-col-lead a {
+    color: var(--c-accent-text);
+  }
 }
 
 /* The lead link stays a real anchor; its hit area and focus ring are the whole row. */
@@ -141,8 +153,9 @@ html[data-skin="console"] .c-table .c-col-lead a:focus-visible::after {
   outline-offset: -2px;
 }
 
-/* Controls, copy, tooltips and other links in a row keep their own target above the row link. */
-html[data-skin="console"] .c-table :is(button, select, label, input, [data-tip], .c-copy, a.c-btn),
+/* Controls, copy, tooltips and other links in a row keep their own target above the row link.
+   A select is lifted with its wrapper, so its chevron stays above it. */
+html[data-skin="console"] .c-table :is(button, .c-select, label, input, [data-tip], .c-copy, a.c-btn),
 html[data-skin="console"] .c-table td:not(.c-col-lead) a {
   position: relative;
   z-index: 1;
@@ -275,10 +288,17 @@ html[data-skin="console"] .c-table-fixed td {
     text-align: start;
   }
 
+  /* The empty row keeps the whole record's width, as its colspan does in a table. */
+  html[data-skin="console"] .c-table:not(.c-table-matrix) .c-table-empty td {
+    grid-column: 1 / -1;
+  }
+
+  /* A record's actions wrap rather than leave the card. */
   html[data-skin="console"] .c-table:not(.c-table-matrix) .c-col-act {
     position: relative;
     z-index: 1;
     display: flex;
+    flex-wrap: wrap;
     grid-column: 1 / -1;
     justify-content: flex-end;
     gap: 8px;
@@ -294,9 +314,14 @@ html[data-skin="console"] .c-table-fixed td {
     background: var(--c-accent-soft);
   }
 
-  html[data-skin="console"] .c-table:not(.c-table-matrix) tbody tr:hover td,
   html[data-skin="console"] .c-table:not(.c-table-matrix) tr.c-row-selected td {
     background: none;
+  }
+
+  @media (hover: hover) {
+    html[data-skin="console"] .c-table:not(.c-table-matrix) tbody tr:hover td {
+      background: none;
+    }
   }
 
   html[data-skin="console"] .c-table-matrix {

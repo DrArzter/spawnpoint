@@ -208,7 +208,7 @@ test("a never-started world switches its release at once, with no operation, and
 
 test("a world's config files list the release's files and the world's edit, and keep a save, a reset and a stale save honest (ADR-0093)", () => {
   const listed = store.configFiles(GAME, ROSTIK);
-  assert.equal(listed.release, "1.3");
+  assert.equal(listed.release, "1.2", "the release the world's next start uses, not the game's newest");
   const claims = listed.files.find((file) => file.path === "config/claims.toml")!;
   assert.equal(claims.source, "world", "the seeded world edit");
   assert.equal(claims.releaseChanged, true);

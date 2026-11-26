@@ -1,10 +1,10 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { ARRIVED, useArrivals } from "./Tick";
 import { Skeleton } from "./Skeleton";
-import { useSkeletonRows } from "./rows";
+import { rememberedActWidth, useColumnWidths, useSkeletonRows } from "./rows";
 import { t } from "../../../i18n";
 
 /**
@@ -69,9 +69,11 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
   const tracked = useArrivals(arrivals === true ? rows.map(rowKey) : []);
   const fresh = typeof arrivals === "object" ? arrivals : tracked;
   const placeholders = useSkeletonRows(label, rows.length, loading);
+  const table = useRef<HTMLTableElement>(null);
+  useColumnWidths(label, loading, table, rows.length);
   return (
     <div className={cx("c-table-wrap", split && "c-table-split", className)}>
-      <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)} data-layout="rows">
+      <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)} data-layout="rows" ref={table}>
         <thead>
           <tr>
             {columns.map((column, index) => (
@@ -81,7 +83,7 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
             ))}
           </tr>
         </thead>
-        {loading ? <LoadingBody columns={columns} count={placeholders} /> : (
+        {loading ? <LoadingBody act={rememberedActWidth(label)} columns={columns} count={placeholders} /> : (
           <tbody>
             {rows.length === 0 && empty !== undefined && <tr className="c-table-empty"><td colSpan={columns.length}>{empty}</td></tr>}
             {rows.map((row) => (
@@ -100,23 +102,27 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
   );
 }
 
-/** A cell's placeholder: the size of what the column holds, so the row keeps its height. */
-function placeholder(kind: ColumnKind | undefined) {
-  if (kind === "act") return <Skeleton height="var(--c-ctl-sm)" width={72} />;
+/**
+ * A cell's placeholder: the size of what the column holds, so the row keeps its
+ * height. The action column holds one block as wide as its actions were the
+ * last time, else as wide as two small controls.
+ */
+function placeholder(kind: ColumnKind | undefined, act: number | null) {
+  if (kind === "act") return <Skeleton height="var(--c-ctl-sm)" width={act ?? "calc(2 * var(--c-ctl-sm))"} />;
   if (kind === "check") return <Skeleton height={18} width={18} />;
   const width = { lead: "60%", num: "3em" } as Readonly<Partial<Record<ColumnKind, string>>>;
   return <Skeleton text width={(kind && width[kind]) ?? "50%"} />;
 }
 
 /** The rows of a table that is loading: the same cells, classes and labels as a loaded row. */
-function LoadingBody<Row>({ columns, count }: Readonly<{ columns: readonly Column<Row>[]; count: number }>) {
+function LoadingBody<Row>({ columns, count, act }: Readonly<{ columns: readonly Column<Row>[]; count: number; act: number | null }>) {
   return (
     <tbody aria-busy="true" aria-label={t("common.loading")}>
       {Array.from({ length: count }, (_, row) => (
         <tr key={row}>
           {columns.map((column, index) => (
             <td className={cx(column.kind && `c-col-${column.kind}`, column.clip && "c-col-clip", column.className)} data-col={column.kind === "act" ? "actions" : undefined} data-label={column.kind === "act" || column.kind === "lead" || column.kind === "check" ? undefined : column.header} data-rail={index === 0 ? "" : undefined} key={column.id}>
-              {placeholder(column.kind)}
+              {placeholder(column.kind, act)}
             </td>
           ))}
         </tr>

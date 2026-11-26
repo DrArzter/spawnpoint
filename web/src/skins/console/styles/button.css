@@ -18,9 +18,11 @@ html[data-skin="console"] .c-btn {
   transition: background var(--c-d1), border-color var(--c-d1), filter var(--c-d1);
 }
 
-html[data-skin="console"] .c-btn:hover {
-  background: var(--c-surface-2);
-  text-decoration: none;
+@media (hover: hover) {
+  html[data-skin="console"] .c-btn:hover {
+    background: var(--c-surface-2);
+    text-decoration: none;
+  }
 }
 
 html[data-skin="console"] .c-btn:active:not([aria-disabled="true"]) {
@@ -33,9 +35,11 @@ html[data-skin="console"] .c-btn-primary {
   color: var(--c-accent-ink);
 }
 
-html[data-skin="console"] .c-btn-primary:hover {
-  background: var(--c-accent);
-  filter: brightness(1.08);
+@media (hover: hover) {
+  html[data-skin="console"] .c-btn-primary:hover {
+    background: var(--c-accent);
+    filter: brightness(1.08);
+  }
 }
 
 html[data-skin="console"] .c-btn-danger {
@@ -44,9 +48,11 @@ html[data-skin="console"] .c-btn-danger {
   color: var(--c-err-ink);
 }
 
-html[data-skin="console"] .c-btn-danger:hover {
-  background: var(--c-err);
-  filter: brightness(1.06);
+@media (hover: hover) {
+  html[data-skin="console"] .c-btn-danger:hover {
+    background: var(--c-err);
+    filter: brightness(1.06);
+  }
 }
 
 html[data-skin="console"] .c-btn-ghost {
@@ -55,8 +61,10 @@ html[data-skin="console"] .c-btn-ghost {
   color: var(--c-accent-text);
 }
 
-html[data-skin="console"] .c-btn-ghost:hover {
-  background: var(--c-accent-soft);
+@media (hover: hover) {
+  html[data-skin="console"] .c-btn-ghost:hover {
+    background: var(--c-accent-soft);
+  }
 }
 
 html[data-skin="console"] .c-btn-sm {
@@ -80,8 +88,10 @@ html[data-skin="console"] .c-btn[aria-disabled="true"] {
   filter: none;
 }
 
-html[data-skin="console"] .c-btn-default[aria-disabled="true"]:hover {
-  background: var(--c-surface);
+@media (hover: hover) {
+  html[data-skin="console"] .c-btn-default[aria-disabled="true"]:hover {
+    background: var(--c-surface);
+  }
 }
 
 html[data-skin="console"] .c-btn-danger[aria-disabled="true"] {
@@ -101,9 +111,11 @@ html[data-skin="console"] .c-band-btn {
   color: var(--c-band-ink-2);
 }
 
-html[data-skin="console"] .c-band-btn:hover {
-  background: var(--c-band-2);
-  color: var(--c-band-ink);
+@media (hover: hover) {
+  html[data-skin="console"] .c-band-btn:hover {
+    background: var(--c-band-2);
+    color: var(--c-band-ink);
+  }
 }
 
 html[data-skin="console"] .c-icon-btn {
@@ -121,9 +133,11 @@ html[data-skin="console"] .c-icon-btn {
   transition: background var(--c-d1), color var(--c-d1);
 }
 
-html[data-skin="console"] .c-icon-btn:hover {
-  background: var(--c-surface-3);
-  color: var(--c-ink);
+@media (hover: hover) {
+  html[data-skin="console"] .c-icon-btn:hover {
+    background: var(--c-surface-3);
+    color: var(--c-ink);
+  }
 }
 
 html[data-skin="console"] .c-icon-btn:active {
@@ -139,9 +153,11 @@ html[data-skin="console"] .c-icon-btn-band {
   color: var(--c-band-ink-2);
 }
 
-html[data-skin="console"] .c-icon-btn-band:hover {
-  background: var(--c-band-2);
-  color: var(--c-band-ink);
+@media (hover: hover) {
+  html[data-skin="console"] .c-icon-btn-band:hover {
+    background: var(--c-band-2);
+    color: var(--c-band-ink);
+  }
 }
 
 html[data-skin="console"] .c-icon-btn-flash {
@@ -150,9 +166,11 @@ html[data-skin="console"] .c-icon-btn-flash {
   color: var(--c-flash-ink);
 }
 
-html[data-skin="console"] .c-icon-btn-flash:hover {
-  background: var(--c-flash-hover);
-  color: var(--c-flash-ink);
+@media (hover: hover) {
+  html[data-skin="console"] .c-icon-btn-flash:hover {
+    background: var(--c-flash-hover);
+    color: var(--c-flash-ink);
+  }
 }
 
 html[data-skin="console"] .c-overflow {
@@ -187,8 +205,14 @@ html[data-skin="console"] .c-avatar-badge {
   transition: opacity var(--c-d1);
 }
 
-html[data-skin="console"] .c-avatar-trigger:is(:hover, :focus-visible, [aria-expanded="true"]) .c-avatar-badge {
+html[data-skin="console"] .c-avatar-trigger:is(:focus-visible, [aria-expanded="true"]) .c-avatar-badge {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  html[data-skin="console"] .c-avatar-trigger:hover .c-avatar-badge {
+    opacity: 1;
+  }
 }
 
 @media (hover: none) {
@@ -206,4 +230,11 @@ html[data-skin="console"] .c-avatar-trigger:is(:hover, :focus-visible, [aria-exp
 
 html[data-skin="console"] .c-btn-caret {
   margin-right: -6px;
+}
+
+/* Decision: Approve and the Dismiss icon side by side in a request row's action column. */
+html[data-skin="console"] .c-decide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

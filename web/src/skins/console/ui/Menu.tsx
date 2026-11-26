@@ -9,14 +9,28 @@ import { actionTip } from "./ActionButton";
 import { useToast } from "./Toast";
 import { t } from "../../../i18n";
 
-export type MenuGroup = Readonly<{ label?: string; actions: readonly Action[] }>;
+/** `checked` makes the group one choice: its items are radio items and the Action with that id is the chosen one. */
+export type MenuGroup = Readonly<{ label?: string; actions: readonly Action[]; checked?: string }>;
+
+// How the last menu was asked for. A menu opened from the keyboard moves focus
+// to an item; one opened by pointer or touch focuses the menu itself, so no
+// item looks chosen before the person picks one (U2).
+let keyboardInput = false;
+let tracking = false;
+function trackInput() {
+  if (tracking || typeof document === "undefined") return;
+  tracking = true;
+  document.addEventListener("keydown", () => { keyboardInput = true; }, true);
+  document.addEventListener("pointerdown", () => { keyboardInput = false; }, true);
+}
 
 /**
  * A menu of Actions at its anchor's end edge, flipped up when it would leave
  * the viewport. It opens in the top layer (a manual popover), so a transformed
  * page under it cannot move it. Its items stay in the DOM while it is closed,
  * so every Action in it is reachable markup. Arrows move, Escape and Tab close it, and focus
- * goes back to the anchor.
+ * goes back to the anchor. A keyboard open focuses the chosen radio item, else
+ * the first enabled item.
  */
 /**
  * `side` and `align` place the menu against its anchor through the shared
@@ -29,8 +43,9 @@ export function Menu({ id, label, groups, open, anchor, onClose, side = "bottom"
 }>) {
   const menu = useRef<HTMLDivElement>(null);
   const toast = useToast();
-  const items = () => [...(menu.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
+  const items = () => [...(menu.current?.querySelectorAll<HTMLElement>("[role^=menuitem]") ?? [])];
 
+  useLayoutEffect(trackInput, []);
   useLayoutEffect(() => {
     const element = menu.current;
     const target = anchor.current;
@@ -41,7 +56,12 @@ export function Menu({ id, label, groups, open, anchor, onClose, side = "bottom"
     }
     showLayer(element);
     positionPopover(element, target, side, align);
-    (items().find((item) => item.getAttribute("aria-disabled") !== "true") ?? items()[0])?.focus();
+    if (!keyboardInput) {
+      element.focus();
+      return;
+    }
+    const list = items();
+    (list.find((item) => item.getAttribute("aria-checked") === "true") ?? list.find((item) => item.getAttribute("aria-disabled") !== "true") ?? list[0])?.focus();
   }, [open, anchor, side, align]);
 
   useLightDismiss(open, [menu, anchor], onClose);
@@ -72,28 +92,33 @@ export function Menu({ id, label, groups, open, anchor, onClose, side = "bottom"
   const visible = groups.filter((group) => group.actions.length > 0);
 
   return (
-    <div aria-label={label} className="c-menu c-popover" data-layer="menu" id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu" /* NOSONAR focus moves to the items, which carry the tab stop */>
+    <div aria-label={label} className="c-menu c-popover" data-layer="menu" id={id} popover="manual" onKeyDown={onKey} ref={menu} role="menu" tabIndex={-1} /* NOSONAR focus moves to the items, which carry the tab stop */>
       {visible.map((group, index) => (
         <div className={cx("c-menu-group", index > 0 && "c-menu-group-split")} key={group.label ?? index} role="group" aria-label={group.label} /* NOSONAR a labelled group of menu items; <fieldset> is not valid inside a menu */>
           {group.label && <div aria-hidden="true" className="c-menu-label">{group.label}</div>}
-          {group.actions.map((action) => (
+          {group.actions.map((action) => {
+            const radio = group.checked !== undefined;
+            const checked = action.id === group.checked;
+            return (
             <button
+              aria-checked={radio ? checked : undefined}
               aria-disabled={action.disabled || undefined}
               className={cx("c-menu-item", action.danger && "c-menu-item-danger")}
               data-action={action.id}
               data-tip={action.disabled ? actionTip(action) : undefined}
               key={`${action.id}:${action.label}`}
               onClick={() => run(action)}
-              role="menuitem"
+              role={radio ? "menuitemradio" : "menuitem"}
               tabIndex={-1}
               type="button"
             >
-              {action.icon && <Icon name={action.icon} size={20} />}
+              {radio ? <Icon name={checked ? "check_circle" : "radio_button_unchecked"} size={20} /> : action.icon && <Icon name={action.icon} size={20} />}
               <span className="c-menu-text">{action.label}</span>
               {action.detail && <span className="c-menu-end">{action.detail}</span>}
               {action.disabled && action.hint && <span className="c-sr">{t("ui.unavailableBecause", { reason: action.hint })}</span>}
             </button>
-          ))}
+            );
+          })}
         </div>
       ))}
     </div>

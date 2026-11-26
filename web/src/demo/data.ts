@@ -122,9 +122,8 @@ export const MINECRAFT_SETTINGS: readonly Mutable<SettingDefinition>[] = [
 ];
 
 /** The config files a game's release carries; the demo has rules for Minecraft only (ADR-0093). `bytes` is stated for a file the panel cannot open. */
-export const DEMO_CONFIG_RELEASE: Readonly<Record<string, Readonly<{ release: string; roots: readonly string[]; maxBytes: number; files: readonly Readonly<{ path: string; text: string; bytes?: number; editable?: boolean }>[] }>>> = {
+export const DEMO_CONFIG_RELEASE: Readonly<Record<string, Readonly<{ roots: readonly string[]; maxBytes: number; files: readonly Readonly<{ path: string; text: string; bytes?: number; editable?: boolean }>[] }>>> = {
   minecraft: {
-    release: "1.3",
     roots: ["config", "defaultconfigs"],
     maxBytes: 262_144,
     files: [

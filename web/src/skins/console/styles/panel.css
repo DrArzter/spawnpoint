@@ -12,6 +12,7 @@ html[data-skin="console"] .c-panel {
   border-style: solid;
   border-color: var(--c-line-2);
   border-radius: 0;
+  animation: c-panel-in var(--c-d3) var(--c-ease);
 }
 
 html[data-skin="console"] .c-panel-head {
@@ -58,10 +59,15 @@ html[data-skin="console"] .c-panel-grip::after {
   transition: background var(--c-d1);
 }
 
-html[data-skin="console"] .c-panel-grip:hover::after,
 html[data-skin="console"] .c-panel-grip:focus-visible::after,
 html[data-skin="console"] .c-panel[data-resizing] .c-panel-grip::after {
   background: var(--c-accent);
+}
+
+@media (hover: hover) {
+  html[data-skin="console"] .c-panel-grip:hover::after {
+    background: var(--c-accent);
+  }
 }
 
 html[data-skin="console"] .c-panel-grip:focus-visible {

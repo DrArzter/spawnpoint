@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { CloudWatchClient, GetMetricDataCommand } from "@aws-sdk/client-cloudwatch";
+import { DescribeInstancesCommand, DescribeInstanceTypesCommand, EC2Client } from "@aws-sdk/client-ec2";
 import { DescribeExecutionCommand, ListExecutionsCommand, SFNClient } from "@aws-sdk/client-sfn";
 import { awsControlPlaneSources } from "../src/control-plane/aws.ts";
+import { createHostShapeReader } from "../src/control-plane/aws-host-shapes.ts";
 
 process.env.OPERATION_STATE_MACHINES = JSON.stringify([{ type: "start", arn: "arn:aws:states:eu-central-1:123456789012:stateMachine:start" }]);
 
@@ -146,8 +148,28 @@ test("a history that cannot be read leaves the operation without an expectation"
   assert.equal(operation?.expectedSeconds, undefined);
 });
 
+// EC2 knows `i-0abc` as an m7i-flex.large: 2 vCPUs and 8 GiB.
+function describeShapes(t: TestContext, known: Readonly<Record<string, string>> = { "i-0abc": "m7i-flex.large" }) {
+  const shapes: Record<string, { vcpu: number; memoryMiB: number }> = { "m7i-flex.large": { vcpu: 2, memoryMiB: 8192 }, "r7i.xlarge": { vcpu: 4, memoryMiB: 32768 } };
+  const calls: string[] = [];
+  t.mock.method(EC2Client.prototype, "send", async (command: unknown) => {
+    if (command instanceof DescribeInstancesCommand) {
+      calls.push("instances");
+      const ids = command.input.Filters?.find((filter) => filter.Name === "instance-id")?.Values ?? [];
+      return { Reservations: [{ Instances: ids.filter((id) => known[id]).map((id) => ({ InstanceId: id, InstanceType: known[id] })) }] };
+    }
+    if (command instanceof DescribeInstanceTypesCommand) {
+      calls.push(`types:${(command.input.InstanceTypes ?? []).join(",")}`);
+      return { InstanceTypes: (command.input.InstanceTypes ?? []).map((type) => ({ InstanceType: type, VCpuInfo: { DefaultVCpus: shapes[type]!.vcpu }, MemoryInfo: { SizeInMiB: shapes[type]!.memoryMiB } })) };
+    }
+    throw new Error("unexpected command");
+  });
+  return calls;
+}
+
 test("host metrics add memory from the watchdog's namespace beside the free EC2 series", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: Date.UTC(2026, 10, 21, 14) });
+  describeShapes(t, {});
   let queries: NonNullable<GetMetricDataCommand["input"]["MetricDataQueries"]> = [];
   t.mock.method(CloudWatchClient.prototype, "send", async (command: unknown) => {
     assert.ok(command instanceof GetMetricDataCommand);
@@ -173,6 +195,7 @@ test("a host that was off keeps its gap: every series spans the window, null whe
   const now = Date.UTC(2026, 10, 22, 12, 0);
   t.mock.timers.enable({ apis: ["Date"], now });
   const at = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000);
+  describeShapes(t, {});
   t.mock.method(CloudWatchClient.prototype, "send", async () => ({
     // Running for the last two hours only, at the 6-hour range's 5-minute grain.
     MetricDataResults: [{ Id: "cpu", Timestamps: [at(2), at(1), at(0.5)], Values: [40, 50, 60] }],
@@ -186,4 +209,80 @@ test("a host that was off keeps its gap: every series spans the window, null whe
   assert.equal(cpu.filter((point) => point.value !== null).length, 3);
   assert.equal(cpu[0]!.value, null, "the start of the window, when the host was off");
   assert.deepEqual(cpu.find((point) => point.at === at(1).toISOString()), { at: at(1).toISOString(), value: 50 });
+});
+
+test("CPU and memory stay percentages and carry the host's cores and bytes as capacity", async (t) => {
+  const now = Date.UTC(2026, 10, 22, 12, 0);
+  t.mock.timers.enable({ apis: ["Date"], now });
+  describeShapes(t);
+  const at = new Date(now - 3_600_000);
+  t.mock.method(CloudWatchClient.prototype, "send", async () => ({
+    MetricDataResults: [{ Id: "cpu", Timestamps: [at], Values: [25] }, { Id: "memory", Timestamps: [at], Values: [50] }],
+  }));
+
+  const metrics = await awsControlPlaneSources.readHostMetrics!("i-0abc", 6);
+
+  const series = (id: string) => metrics.series.find((item) => item.id === id)!;
+  assert.deepEqual(series("cpu").points.find((point) => point.value !== null), { at: at.toISOString(), value: 25, capacity: 2 });
+  assert.equal(series("cpu").capacityUnit, "cores");
+  assert.deepEqual(series("memory").points.find((point) => point.value !== null), { at: at.toISOString(), value: 50, capacity: 8 * 1024 ** 3 });
+  assert.equal(series("memory").capacityUnit, "bytes");
+  assert.equal(series("cpu").points[0]?.capacity, undefined, "an empty slot has no host, so no capacity");
+  assert.equal(series("networkIn").capacityUnit, undefined);
+});
+
+test("a host EC2 no longer describes gives its readings no capacity", async (t) => {
+  const now = Date.UTC(2026, 10, 22, 12, 0);
+  t.mock.timers.enable({ apis: ["Date"], now });
+  describeShapes(t, {});
+  t.mock.method(CloudWatchClient.prototype, "send", async () => ({ MetricDataResults: [{ Id: "cpu", Timestamps: [new Date(now - 3_600_000)], Values: [25] }] }));
+
+  const metrics = await awsControlPlaneSources.readHostMetrics!("i-0gone", 6);
+
+  const cpu = metrics.series.find((item) => item.id === "cpu")!;
+  assert.deepEqual(cpu.points.find((point) => point.value !== null), { at: new Date(now - 3_600_000).toISOString(), value: 25 });
+  assert.equal(cpu.capacityUnit, "cores", "the series still says what a capacity would be in");
+});
+
+test("network is a rate: steady traffic reads the same per second over six hours and over a week", async (t) => {
+  const now = Date.UTC(2026, 10, 22, 12, 0);
+  t.mock.timers.enable({ apis: ["Date"], now });
+  describeShapes(t, {});
+  const bytesPerSecond = 1000;
+  // CloudWatch sums each period, so a longer period holds more bytes.
+  t.mock.method(CloudWatchClient.prototype, "send", async (command: unknown) => {
+    assert.ok(command instanceof GetMetricDataCommand);
+    const period = command.input.MetricDataQueries![0]!.MetricStat!.Period!;
+    const at = new Date(Math.floor((now - 2 * 3_600_000) / (period * 1000)) * period * 1000);
+    return { MetricDataResults: [{ Id: "networkIn", Timestamps: [at], Values: [bytesPerSecond * period] }] };
+  });
+
+  const rateOf = (metrics: Awaited<ReturnType<NonNullable<typeof awsControlPlaneSources.readHostMetrics>>>) => {
+    const series = metrics.series.find((item) => item.id === "networkIn")!;
+    assert.equal(series.unit, "bytesPerSecond");
+    return series.points.find((point) => point.value !== null)?.value;
+  };
+  const sixHours = await awsControlPlaneSources.readHostMetrics!("i-0abc", 6);
+  const week = await awsControlPlaneSources.readHostMetrics!("i-0abc", 168);
+  assert.equal(sixHours.periodSeconds, 300);
+  assert.equal(week.periodSeconds, 3600);
+  assert.equal(rateOf(sixHours), bytesPerSecond);
+  assert.equal(rateOf(week), bytesPerSecond);
+});
+
+test("a host's shape is read from its instance type, once per type, and a failed read gives none", async (t) => {
+  const calls = describeShapes(t, { "i-0abc": "m7i-flex.large", "i-0def": "r7i.xlarge", "i-0ghi": "m7i-flex.large" });
+  const ec2 = new EC2Client({});
+  const read = createHostShapeReader(ec2);
+
+  const first = await read(["i-0abc", "i-0def", "i-0gone"]);
+  assert.deepEqual(first.get("i-0abc"), { instanceType: "m7i-flex.large", vcpu: 2, memoryMiB: 8192 });
+  assert.deepEqual(first.get("i-0def"), { instanceType: "r7i.xlarge", vcpu: 4, memoryMiB: 32768 });
+  assert.equal(first.has("i-0gone"), false);
+  await read(["i-0ghi"]);
+  assert.deepEqual(calls, ["instances", "types:m7i-flex.large,r7i.xlarge", "instances"], "a known type is not described again");
+
+  t.mock.method(ec2, "send", async () => { throw new Error("denied"); });
+  t.mock.method(console, "warn", () => {});
+  assert.equal((await read(["i-0abc"])).size, 0);
 });

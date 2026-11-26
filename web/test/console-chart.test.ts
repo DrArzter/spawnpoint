@@ -9,9 +9,10 @@ import { action } from "../src/core/actions.ts";
 import type { ConsoleModel, MetricsModel } from "../src/core/models.ts";
 import type { HostMetrics } from "../src/api/contract.ts";
 import { ConsoleTab } from "../src/skins/console/tabs/Console.tsx";
-import { hostRunning, hostSlots, metricFormat, MetricsTab, stripRuns } from "../src/skins/console/tabs/Metrics.tsx";
+import { hostRunning, hostSlots, MetricsTab, stripRuns } from "../src/skins/console/tabs/Metrics.tsx";
+import { StatSkeleton } from "../src/skins/console/ui/StatCard.tsx";
 import { Terminal } from "../src/skins/console/ui/Terminal.tsx";
-import { chartGeometry, chartMax, chartSummary, nextCursor, PLOT, TimeSeriesChart, type ChartPoint } from "../src/skins/console/ui/TimeSeriesChart.tsx";
+import { ChartSkeleton, chartGeometry, chartMax, chartSummary, nextCursor, PLOT, TimeSeriesChart, type ChartPoint } from "../src/skins/console/ui/TimeSeriesChart.tsx";
 import { noop } from "./support/fixtures.ts";
 
 /*
@@ -38,22 +39,22 @@ test("a missing reading ends a run: two lines, one hatched gap, a lone reading i
 });
 
 test("the y axis tops out at 100 for a percentage, else at the peak rounded up", () => {
-  assert.equal(chartMax(series([12, 40]), true), 100);
-  assert.equal(chartMax(series([3_400_000, null]), false), 5_000_000);
-  assert.equal(chartMax(series([null]), false), 1);
+  assert.equal(chartMax(series([12, 40]), "percent"), 100);
+  assert.equal(chartMax(series([3_400_000, null]), "decimal"), 5_000_000);
+  assert.equal(chartMax(series([null]), "decimal"), 1);
   const summary = chartSummary(series([10, null, 30, 20]));
   assert.deepEqual([summary?.latest, summary?.peak.value, summary?.average, summary?.count], [20, 30, 20, 3]);
   assert.equal(chartSummary(series([null, null])), null);
 });
 
 test("a lone reading is an HTML mark, so the stretched plot cannot squash it", () => {
-  const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "6 hours", points: series([null, 30, null]), format, time, percent: true }));
+  const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "6 hours", points: series([null, 30, null]), format, time, ceiling: "percent" }));
   assert.doesNotMatch(markup, /<circle/);
   assert.match(markup, /class="c-chart-point" style="left:50%;top:/);
 });
 
 test("the chart is one focusable group named by its series, range, latest and peak, with a data table on demand", () => {
-  const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "24 hours", points: series([10, null, 30, 20]), format, time, percent: true }));
+  const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "24 hours", points: series([10, null, 30, 20]), format, time, ceiling: "percent" }));
   assert.match(markup, /role="group"[^>]*tabindex="0"|tabindex="0"[^>]*role="group"/);
   assert.match(markup, /aria-label="CPU, 24 hours, latest 20 %, peak 30 %"/);
   assert.match(markup, /aria-roledescription="chart"/);
@@ -83,8 +84,6 @@ test("the host strip is running wherever any series reported, joined into runs",
   const mask = hostRunning(metrics);
   assert.deepEqual(mask, [false, true, true, true, false, false]);
   assert.deepEqual(stripRuns(hostSlots(metrics)), [{ state: "off", from: 0, length: 1 }, { state: "on", from: 1, length: 3 }, { state: "off", from: 4, length: 2 }]);
-  assert.equal(metricFormat("percent")(42.04), "42 %");
-  assert.equal(metricFormat("bytes")(2048), "2 KiB");
 });
 
 test("memory is the watchdog's reading and never says when the host ran", () => {
@@ -194,7 +193,7 @@ test("a joined memory reading is part of the line but never the latest, the peak
   assert.equal(chartGeometry(joined, 100).gaps.length, 0);
   const summary = chartSummary(joined);
   assert.deepEqual([summary?.latest, summary?.peak.value, summary?.average, summary?.count], [70, 70, 55, 2]);
-  const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "Memory", range: "6 hours", points: joined, format, time, percent: true }));
+  const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "Memory", range: "6 hours", points: joined, format, time, ceiling: "percent" }));
   assert.match(markup, /aria-label="Memory, 6 hours, latest 70 %, peak 70 %"/);
 });
 
@@ -202,4 +201,59 @@ test("CPU and network keep their hatched gaps: only a flagged reading joins", ()
   const plain = chartGeometry(series([40, null, null, 70]), 100);
   assert.equal(plain.lines.length, 0);
   assert.equal(plain.gaps.length, 1);
+});
+
+// --- units, the legend's place and the skeletons (H1, 9d, G16, StatSkeleton) -----
+
+const sized: HostMetrics = {
+  range: "6h", startedAt: at(0), endedAt: at(3), periodSeconds: 300,
+  series: [
+    { id: "cpu", label: "CPU", unit: "percent", capacityUnit: "cores", points: [{ at: at(0), value: null }, { at: at(1), value: 50, capacity: 2 }, { at: at(2), value: 90, capacity: 2 }, { at: at(3), value: 65, capacity: 2 }] },
+    { id: "networkIn", label: "Network in", unit: "bytesPerSecond", points: [{ at: at(0), value: null }, { at: at(1), value: 1024 }, { at: at(2), value: 2048 }, { at: at(3), value: 3072 }] },
+  ],
+};
+const ready = (value: HostMetrics): MetricsModel => ({ range: "6h", ranges: [{ id: "6h", label: "6 hours" }], setRange: noop, metrics: { status: "ready", value } });
+const classes = (markup: string, prefix: string) => [...markup.matchAll(new RegExp(`class="(${prefix}[a-z-]*)`, "g"))].map((match) => match[1]);
+
+test("a stat reads cores of its host, with the share of the host as the value's tooltip", () => {
+  const markup = renderToStaticMarkup(createElement(MetricsTab, { model: ready(sized), worldId: "sized" }));
+  assert.match(markup, /class="c-stat-value" data-tip="65 % of host" tabindex="0">1\.3<span class="c-stat-unit">of 2 cores<\/span>/);
+  assert.match(markup, /<span>Peak 1\.8 cores at \d\d:02<\/span>/);
+  assert.match(markup, /3<span class="c-stat-unit">KiB\/s<\/span>/, "the network is a rate");
+  assert.match(markup, /aria-label="CPU, 6 hours, latest 1\.3 cores, peak 1\.8 cores"/);
+  assert.match(markup, /<span>2 cores<\/span><span>1 core<\/span><span>0 cores<\/span>/, "the axis tops out at the host's cores");
+});
+
+test("a chart card's head is its title alone; the legend and the data key share the chart's foot, under the time row", () => {
+  const markup = renderToStaticMarkup(createElement(MetricsTab, { model: ready(sized), worldId: "foot" }));
+  const heads = [...markup.matchAll(/<header class="c-card-head"[^>]*>([\s\S]*?)<\/header>/g)].map((match) => match[1]!);
+  const chartHeads = heads.filter((head) => /<h2[^>]*>(CPU|Network in)</.test(head));
+  assert.equal(chartHeads.length, 2);
+  for (const head of chartHeads) assert.doesNotMatch(head, /c-legend|c-card-actions/, "the head holds the title only");
+  const chart = markup.slice(markup.indexOf('class="c-chart'));
+  assert.match(chart, /c-chart-plot[\s\S]*c-chart-area[\s\S]*c-chart-times[\s\S]*c-chart-foot"><span class="c-legend">[\s\S]*data-action="chart\.data"/);
+  assert.match(chart, /data-tip="No host"><span aria-hidden="true" class="c-legend-gap"><\/span><span class="c-legend-label">No host/, "the axis carries the unit; the legend names the gap");
+});
+
+test("the chart skeleton reserves the time row and a foot with the legend and the data key", () => {
+  const skeleton = renderToStaticMarkup(createElement(ChartSkeleton));
+  const loaded = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "6 hours", points: series([10, 20, 30]), format, time, legend: createElement("span", { className: "c-legend" }) }));
+  const shape = (markup: string) => classes(markup, "c-chart-|c-legend").filter((name) => /^c-chart-(plot|axis|area|times|foot)$|^c-legend$/.test(name!));
+  assert.deepEqual(shape(skeleton), shape(loaded));
+  assert.equal(skeleton.match(/<span style="left:/g)?.length, 3, "three time labels' places");
+  assert.equal(loaded.match(/<span style="left:/g)?.length, 3);
+});
+
+test("a stat skeleton draws the lines of a loaded stat", () => {
+  const markup = renderToStaticMarkup(createElement(MetricsTab, { model: ready(sized), worldId: "lines" }));
+  const stat = markup.slice(markup.indexOf('class="c-card c-stat"'), markup.indexOf("</section>", markup.indexOf('class="c-card c-stat"')));
+  const skeleton = renderToStaticMarkup(createElement(StatSkeleton));
+  assert.deepEqual(classes(skeleton, "c-stat-"), classes(stat, "c-stat-").filter((name) => name !== "c-stat-unit"));
+  // One placeholder per line of text: the label, each part of the detail, the value.
+  assert.equal(skeleton.match(/class="c-skeleton/g)?.length, 1 + stat.match(/<span>/g)!.length + 1);
+});
+
+test("the strip's last run ends now, in the console's words", () => {
+  const markup = renderToStaticMarkup(createElement(MetricsTab, { model: ready(sized), worldId: "now" }));
+  assert.match(markup, /data-tip="Host running · \d\d:\d\d–Now"/);
 });

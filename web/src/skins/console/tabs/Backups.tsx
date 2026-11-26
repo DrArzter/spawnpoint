@@ -25,7 +25,7 @@ export function BackupsTab({ model }: Readonly<{ model: BackupsModel }>) {
     <Segmented label={t("common.wipe")} onChange={(value) => model.setFilter(value === ALL ? null : value)} options={options} value={model.filter ?? ALL} />
   );
   return (
-    <Card actions={model.canRead ? filter : undefined} body="flush" title={t("common.backups")}>
+    <Card actions={model.canRead ? filter : undefined} body="flush" count={model.canRead && model.inventory.status === "ready" ? model.inventory.value.entries.length : undefined} title={t("common.backups")}>
       <Body model={model} />
     </Card>
   );
@@ -48,7 +48,7 @@ function Body({ model }: Readonly<{ model: BackupsModel }>) {
     { id: "checksum", header: t("backups.checksum"), kind: "wide", render: (entry) => (
       <span className="c-sum">
         <span className="c-mono" title={entry.checksum}>{entry.checksum.slice(0, 12)}</span>
-        <Copy value={entry.checksum} what="checksum" />
+        <Copy value={entry.checksum} what={t("backups.checksum2")} />
       </span>
     ) },
     { id: "actions", header: t("common.actions"), kind: "act", render: (entry) => (

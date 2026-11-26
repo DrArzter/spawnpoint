@@ -4,6 +4,7 @@ import { cx } from "../../../lib/cx";
 import type { Instant } from "../../../lib/format";
 import { Address } from "./Address";
 import { Ago, instantMs } from "./Ago";
+import { SourceRef } from "./SourceRef";
 import { Chip } from "./Chip";
 import { Copy } from "./Copy";
 import { Skeleton } from "./Skeleton";
@@ -44,7 +45,7 @@ export function DetailValueView({ value }: Readonly<{ value: DetailValue }>) {
       return (
         <span className="c-detail-preset">
           <span className="c-detail-text">{value.name}</span>
-          {value.source && <a className="c-mono c-faint" href={value.source.href} rel="noreferrer" target="_blank" title={value.source.commit}>@{value.source.short}</a>}
+          {value.source && <SourceRef commit={value.source.commit} href={value.source.href} />}
         </span>
       );
   }

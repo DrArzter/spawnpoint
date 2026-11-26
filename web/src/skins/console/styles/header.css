@@ -58,9 +58,11 @@ html[data-skin="console"] .c-crumb a {
   color: var(--c-ink-2);
 }
 
-html[data-skin="console"] .c-crumb a:hover {
-  color: var(--c-accent-text);
-  text-decoration: none;
+@media (hover: hover) {
+  html[data-skin="console"] .c-crumb a:hover {
+    color: var(--c-accent-text);
+    text-decoration: none;
+  }
 }
 
 html[data-skin="console"] .c-crumb-sep {

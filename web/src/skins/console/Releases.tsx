@@ -7,6 +7,7 @@ import { Chip } from "./ui/Chip";
 import { Empty } from "./ui/Empty";
 import { Grid } from "./ui/Grid";
 import { PageHeader } from "./ui/PageHeader";
+import { SourceRef } from "./ui/SourceRef";
 import { Table, type Column } from "./ui/Table";
 import { t } from "../../i18n";
 
@@ -30,7 +31,7 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
     { id: "build", header: t("common.build"), render: (row) => <BuildState row={row} /> },
     { id: "latest", header: t("common.latestRelease"), render: (row) => row.preset.latestRelease ? <span className="c-mono">{row.preset.latestRelease}</span> : <span className="c-faint">—</span> },
     { id: "releases", header: t("common.releases"), kind: "wide", className: "c-col-num", render: (row) => row.preset.releases.length },
-    { id: "source", header: t("common.source"), kind: "wide", clip: true, render: (row) => <SourceRef row={row} /> },
+    { id: "source", header: t("common.source"), kind: "wide", clip: true, render: (row) => <SourceRef commit={row.preset.commit} repository={row.preset.repository} /> },
     { id: "actions", header: t("common.actions"), kind: "act", render: (row) => <>{row.build && <ActionButton action={row.build} size="sm" />}{row.createWorld && <ActionButton action={row.createWorld} size="sm" />}</> },
   ];
   const pointers: Column<PointerRow>[] = [
@@ -54,17 +55,12 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
   );
 }
 
-function SourceRef({ row }: Readonly<{ row: PresetRow }>) {
-  const source = `${row.preset.repository.replace(/^https?:\/\/(www\.)?github\.com\//, "")}@${row.preset.commit.slice(0, 7)}`;
-  return <span className="c-mono c-faint c-releases-source" title={`${row.preset.repository}@${row.preset.commit}`}>{source}</span>;
-}
-
 /** The release a world points at; the desired one only while it differs from the active one (R3). */
 function PointerRelease({ row }: Readonly<{ row: PointerRow }>) {
   const { activeRelease, desiredRelease } = row.world.release;
   return (
     <span className="c-releases-release">
-      <span className="c-mono">{row.summary}</span>
+      <span className="c-mono">{activeRelease ?? row.summary}</span>
       {desiredRelease !== null && desiredRelease !== activeRelease && <Chip tip={t("common.desiredDesiredRelease", { desiredRelease })}>→ {desiredRelease}</Chip>}
     </span>
   );

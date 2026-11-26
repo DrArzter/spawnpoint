@@ -3,6 +3,7 @@ import type { RequestSummary, WorldRow, WorldsModel } from "../../core/models";
 import { routeHash } from "../../routing";
 import { BuildState } from "./BuildState";
 import { HostingChip, Players, Uptime, statesOf } from "./WorldFacts";
+import { Decision } from "./ui/Decision";
 import { ActionButton, LinkButton } from "./ui/ActionButton";
 import { Address } from "./ui/Address";
 import { Ago } from "./ui/Ago";
@@ -191,7 +192,7 @@ function Requests({ model, requests }: Readonly<{ model: WorldsModel; requests: 
               { id: "since", header: t("common.requested"), width: "auto", kind: "optional", render: (row) => <Ago at={row.since} /> },
               { id: "decide", header: t("app.decision"), width: "auto", kind: "end", quietHeader: true, render: (row) => {
                 const pair = verbs(row);
-                return pair && <span className="c-home-decide"><ActionButton action={pair.approve} size="sm" /><ActionButton action={pair.dismiss} iconOnly size="sm" /></span>;
+                return pair && <Decision approve={pair.approve} dismiss={pair.dismiss} />;
               } },
             ]}
           />

@@ -478,7 +478,7 @@ export function worldNotices(world: World): Notice[] {
   return notices;
 }
 
-export function releaseRows(world: World, canDownload: boolean, busy: boolean, download: () => void): Array<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; downloads: readonly Action[] }> {
+export function releaseRows(world: World, canDownload: boolean, busy: boolean, download: () => void): Array<{ name: string; status: string; downloadable: boolean; sourceHref: string | null; sourceRepository: string | null; sourceCommit: string | null; downloads: readonly Action[] }> {
   const map = new Map<string, { name: string; status: string; downloadable: boolean }>();
   if (world.release.activeRelease) map.set(world.release.activeRelease, { name: world.release.activeRelease, status: t("common.active"), downloadable: true });
   if (world.release.desiredRelease) {
@@ -490,7 +490,9 @@ export function releaseRows(world: World, canDownload: boolean, busy: boolean, d
   }
   return [...map.values()].map((row) => ({
     ...row,
-    sourceHref: world.preset?.repository ?? null,
+    sourceHref: world.preset ? commitUrl(world.preset.repository, world.preset.commit) : null,
+    sourceRepository: world.preset?.repository ?? null,
+    sourceCommit: world.preset?.commit ?? null,
     downloads: row.downloadable && canDownload ? [action("world.pack", t("common.download"), download, { icon: "download", disabled: busy, hint: t("world.clientPackRelease") })] : [],
   }));
 }

@@ -27,8 +27,10 @@ html[data-skin="console"] a {
   text-decoration: none;
 }
 
-html[data-skin="console"] a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  html[data-skin="console"] a:hover {
+    text-decoration: underline;
+  }
 }
 
 html[data-skin="console"] :focus-visible {
@@ -59,16 +61,18 @@ html[data-skin="console"] .c-spin {
 @keyframes c-fade { from { opacity: 0; } }
 @keyframes c-rise { from { opacity: .55; transform: translateY(12px); } }
 @keyframes c-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes c-sheet-in { from { transform: translateY(100%); } }
+@keyframes c-panel-in { from { transform: translateX(100%); } }
 @keyframes c-up { from { opacity: 0; transform: translateY(24px); } }
 @keyframes c-flash-in { from { opacity: 0; transform: translateY(-10px); } }
 @keyframes c-pop { 0% { transform: scale(.9); } 55% { transform: scale(1.06); } 100% { transform: none; } }
 @keyframes c-ring { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 7px transparent; } }
-@keyframes c-unblur { from { opacity: .25; filter: blur(3px); } }
 @keyframes c-indet { from { transform: translateX(-100%); } to { transform: translateX(330%); } }
 @keyframes c-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
-@keyframes c-shimmer { to { background-position: -200% 0; } }
+@keyframes c-shimmer { to { opacity: .55; } }
 @keyframes c-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes c-fade-out { to { opacity: 0; } }
+@keyframes c-collapse { from { max-height: var(--c-leave-h); } to { max-height: 0; padding-block: 0; opacity: 0; } }
 @keyframes c-move-out { to { opacity: 0; transform: translateX(calc(var(--c-dir) * var(--c-travel) / -4)); } }
 @keyframes c-move-in { from { opacity: 0; transform: translateX(calc(var(--c-dir) * var(--c-travel))); } 40% { opacity: 1; } }
 @keyframes c-bump { 40% { color: var(--c-accent-text); transform: translateY(-2px); } }
@@ -146,9 +150,11 @@ html[data-skin="console"]::view-transition-new(*.move) {
 /*
  * A1h: the page header is its own group in a page or pane switch, so it does
  * not travel with the sheet. It keeps its place and cross-fades; text both
- * pages share stays put, and only the words that change dissolve.
+ * pages share stays put, and only the words that change dissolve. A tab
+ * switch keeps the same header, so it is not named there (A3).
  */
-html[data-skin="console"][data-transition] .c-page-header {
+html[data-skin="console"][data-transition="page"] .c-page-header,
+html[data-skin="console"][data-transition="pane"] .c-page-header {
   view-transition-name: c-head;
 }
 
@@ -193,8 +199,10 @@ html[data-skin="console"]::view-transition-group(c-bottom-pill) {
   animation-timing-function: var(--c-ease);
 }
 
-/* Layer order is set here, not left to paint order: the bar above the page,
-   the pill above the bar, the glyphs above the pill. */
+/* Layer order is set here, not left to paint order: the bars above the page,
+   the pill above the bars, the glyphs above the pill. The top bar is a layer
+   too, so a moving page or header never paints over it. */
+html[data-skin="console"]::view-transition-group(c-topbar),
 html[data-skin="console"]::view-transition-group(c-bottom) {
   z-index: 1;
 }
@@ -203,11 +211,14 @@ html[data-skin="console"]::view-transition-group(*.nav-glyph) {
   z-index: 3;
 }
 
+html[data-skin="console"]::view-transition-old(c-topbar),
 html[data-skin="console"]::view-transition-old(c-bottom),
 html[data-skin="console"]::view-transition-old(*.nav-glyph) {
   display: none;
 }
 
+html[data-skin="console"]::view-transition-group(c-topbar),
+html[data-skin="console"]::view-transition-new(c-topbar),
 html[data-skin="console"]::view-transition-group(c-bottom),
 html[data-skin="console"]::view-transition-new(c-bottom),
 html[data-skin="console"]::view-transition-group(*.nav-glyph),

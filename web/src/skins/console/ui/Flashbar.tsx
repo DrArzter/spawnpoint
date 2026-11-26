@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Icon, ProgressRing } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { clock, elapsedSeconds, eta, type Expectation } from "../../../lib/operation-time";
 import { IconButton } from "./IconButton";
+import { holdHeight, useLeaving } from "./leaving";
 import { MOTION } from "./motion";
 import { t } from "../../../i18n";
 
@@ -63,10 +64,12 @@ const icons = { ok: "check_circle", err: "error" } as const;
  * page switch (A1 rule).
  */
 export function Flashbar({ items }: Readonly<{ items: readonly FlashItem[] }>) {
+  const shown = useMemo(() => items.slice(-4), [items]);
+  const stack = useLeaving(shown, (item) => item.id);
   return (
     <div aria-label={t("common.notifications")} aria-live="polite" className="c-flashbar" role="status">
-      {items.slice(-4).map((item) => (
-        <div className={cx("c-flash", `c-flash-${item.kind}`)} key={item.id}>
+      {stack.map(({ item, leaving }) => (
+        <div inert={leaving || undefined} className={cx("c-flash", `c-flash-${item.kind}`, leaving && "c-leaving")} key={item.id} ref={leaving ? holdHeight : undefined}>
           {item.kind === "busy" ? <ProgressRing className="c-spin" size={20} /> : <Icon name={icons[item.kind]} size={20} />}
           <span className="c-flash-message">
             <span>{item.message}</span>

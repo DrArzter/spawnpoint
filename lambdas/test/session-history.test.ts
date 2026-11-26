@@ -172,13 +172,21 @@ const SLOTS = 24;
 const PERIOD = 300;
 const grid = Array.from({ length: SLOTS }, (_, index) => iso(index * 5));
 
-function host(values: Readonly<{ cpu?: (number | null)[]; memory?: (number | null)[] }>): HostMetricsWindow {
-  const series = (id: string, label: string, unit: string, list: (number | null)[] | undefined) => ({
-    id, label, unit, points: grid.map((slot, index) => ({ at: slot, value: list?.[index] ?? null })),
+// `shape` gives each reading its host's capacity, as the EC2 adapter does.
+function host(values: Readonly<{ cpu?: (number | null)[]; memory?: (number | null)[] }>, shape?: Readonly<{ cores: number; bytes: number }>): HostMetricsWindow {
+  const series = (id: string, label: string, unit: string, list: (number | null)[] | undefined, capacity?: number) => ({
+    id, label, unit, points: grid.map((slot, index) => {
+      const value = list?.[index] ?? null;
+      return value !== null && capacity !== undefined ? { at: slot, value, capacity } : { at: slot, value };
+    }),
   });
   return {
     startedAt: grid[0]!, endedAt: iso(SLOTS * 5), periodSeconds: PERIOD,
-    series: [series("cpu", "CPU", "percent", values.cpu), series("memory", "Memory", "percent", values.memory), series("networkIn", "Network in", "bytes", values.cpu)],
+    series: [
+      { ...series("cpu", "CPU", "percent", values.cpu, shape?.cores), capacityUnit: "cores" as const },
+      { ...series("memory", "Memory", "percent", values.memory, shape?.bytes), capacityUnit: "bytes" as const },
+      series("networkIn", "Network in", "bytesPerSecond", values.cpu),
+    ],
   };
 }
 const fill = (from: number, to: number, value: number): (number | null)[] => Array.from({ length: SLOTS }, (_, index) => index >= from && index < to ? value : null);
@@ -205,6 +213,32 @@ test("a host's own readings outside its run are left out, and an overlapping slo
   assert.equal(cpu[5], 40, "the second run covers most of slot 5");
   assert.equal(cpu[9], 40);
   assert.equal(cpu[10], null, "after the last run the host's idle readings do not count");
+});
+
+const SMALL = { cores: 2, bytes: 8 * 1024 ** 3 };
+const LARGE = { cores: 4, bytes: 32 * 1024 ** 3 };
+const capacitiesOf = (metrics: HostMetricsWindow | null, id: string) => metrics?.series.find((series) => series.id === id)?.points.map((point) => point.capacity);
+
+test("each slot carries the capacity of the host that gave its reading", () => {
+  const merged = mergeWorldMetrics(
+    { "i-aaaa1111": host({ cpu: fill(0, 4, 10), memory: fill(0, 4, 50) }, SMALL), "i-bbbb2222": host({ cpu: fill(6, 10, 40), memory: fill(6, 10, 25) }, LARGE) },
+    [run("i-aaaa1111", 0, 4), run("i-bbbb2222", 6, 10)],
+  );
+  assert.deepEqual(capacitiesOf(merged, "cpu")?.slice(0, 10), [2, 2, 2, 2, undefined, undefined, 4, 4, 4, 4]);
+  assert.deepEqual(capacitiesOf(merged, "memory")?.slice(3, 7), [SMALL.bytes, undefined, undefined, LARGE.bytes]);
+  assert.equal(merged?.series.find((series) => series.id === "cpu")?.capacityUnit, "cores");
+  assert.equal(merged?.series.find((series) => series.id === "memory")?.capacityUnit, "bytes");
+  assert.equal(merged?.series.find((series) => series.id === "networkIn")?.capacityUnit, undefined);
+});
+
+test("a slot whose host has no known shape has no capacity", () => {
+  const merged = mergeWorldMetrics(
+    { "i-aaaa1111": host({ cpu: fill(0, 4, 10) }), "i-bbbb2222": host({ cpu: fill(4, 8, 40) }, LARGE) },
+    [run("i-aaaa1111", 0, 4), run("i-bbbb2222", 4, 8)],
+  );
+  const cpu = merged?.series.find((series) => series.id === "cpu")?.points ?? [];
+  assert.deepEqual(cpu[1], { at: grid[1], value: 10 }, "no capacity key at all");
+  assert.equal(cpu[5]?.capacity, 4);
 });
 
 // --- memory ---------------------------------------------------------------------
@@ -236,6 +270,18 @@ test("only memory is joined: CPU and network keep their gaps", () => {
   assert.deepEqual(valuesOf(merged, "cpu")?.slice(0, 4), [10, null, null, 10]);
   assert.equal(valuesOf(merged, "networkIn")?.[1], null);
   assert.equal(valuesOf(merged, "memory")?.[1], null, "CPU was missing in those slots, so the host cannot be said to have run");
+});
+
+test("a joined memory point carries the capacity of the host that owns it", () => {
+  const merged = mergeWorldMetrics(
+    { "i-aaaa1111": host({ cpu: fill(0, 4, 10), memory: [50, null, null, 50] }, SMALL), "i-bbbb2222": host({ cpu: fill(4, 10, 10), memory: [null, null, null, null, 20, null, null, 40] }, LARGE) },
+    [run("i-aaaa1111", 0, 4), run("i-bbbb2222", 4, 10)],
+  );
+  const memory = merged?.series.find((series) => series.id === "memory")?.points ?? [];
+  assert.deepEqual(memory.slice(0, 4).map((point) => point.capacity), Array(4).fill(SMALL.bytes));
+  assert.deepEqual(memory.slice(4, 8).map((point) => [point.value, point.interpolated === true, point.capacity]), [
+    [20, false, LARGE.bytes], [26.67, true, LARGE.bytes], [33.33, true, LARGE.bytes], [40, false, LARGE.bytes],
+  ]);
 });
 
 test("memory across two hosts is joined within one host only", () => {

@@ -1,0 +1,10 @@
+/* SourceRef: a preset's repository and commit on one line, cut at its cell's end. */
+
+html[data-skin="console"] .c-source {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}

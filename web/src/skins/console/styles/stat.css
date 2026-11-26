@@ -1,4 +1,4 @@
-/* StatCard shell: the label, its detail on the next line, then the value. Every card in a row reads the same way. */
+/* StatCard shell: the label, its detail on the next line, then the value at the foot. Every card in a row reads the same way. */
 
 html[data-skin="console"] .c-stat {
   gap: 8px;
@@ -31,7 +31,9 @@ html[data-skin="console"] .c-stat-detail > span {
   white-space: nowrap;
 }
 
+/* G6: the value sits at the foot, so stats of one row (stretched to one height) share its line whatever their detail. */
 html[data-skin="console"] .c-stat-value {
+  margin-top: auto;
   font-size: var(--c-fs-stat);
   font-weight: 800;
   letter-spacing: -.02em;

@@ -44,11 +44,25 @@ export function formatStamp(value: Instant): Readonly<{ iso: string; date: strin
   };
 }
 
+// The one set of binary byte units, for sizes and for rates. Decimals per unit:
+// none for bytes and KiB, one for MiB, two for GiB, so a value keeps its width.
+const BYTE_UNIT_IDS = ["ui.unitB", "ui.unitKiB", "ui.unitMiB", "ui.unitGiB"] as const;
+export const BYTE_DECIMALS = [0, 0, 1, 2] as const;
+
+/** Which binary unit fits `bytes`: 0 for B up to 3 for GiB. */
+export function bytePower(bytes: number): number {
+  if (bytes < 1024) return 0;
+  return Math.min(BYTE_UNIT_IDS.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+}
+
+export function byteUnit(power: number): string {
+  return t(BYTE_UNIT_IDS[power]!);
+}
+
 export function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return t("ui.fixedGiB", { fixed: (bytes / 1024 ** 3).toFixed(2) });
-  if (bytes >= 1024 ** 2) return t("ui.fixedMiB", { fixed: (bytes / 1024 ** 2).toFixed(1) });
-  if (bytes >= 1024) return t("ui.fixedKiB", { fixed: (bytes / 1024).toFixed(0) });
-  return t("ui.bytesB", { bytes });
+  const power = bytePower(bytes);
+  const value = new Intl.NumberFormat(intlLocale(), { minimumFractionDigits: BYTE_DECIMALS[power], maximumFractionDigits: BYTE_DECIMALS[power] }).format(bytes / 1024 ** power);
+  return `${value} ${byteUnit(power)}`;
 }
 
 export function shortDigest(value: string, length = 12): string {

@@ -8,7 +8,6 @@ html[data-skin="console"] .c-panel {
   background: var(--c-surface-pop);
   color: var(--c-ink);
   box-shadow: var(--c-shadow-pop);
-  animation: c-dialog-in var(--c-d2) var(--c-ease);
 }
 
 html[data-skin="console"] .c-dialog:not([open]),
@@ -27,8 +26,11 @@ html[data-skin="console"] .c-panel:focus-visible {
   outline: none;
 }
 
+/* Each surface enters from where it stands: the centred dialog rises a little,
+   the phone sheet from the bottom edge, the side panel from the end edge. */
 html[data-skin="console"] .c-dialog {
   width: min(520px, calc(100vw - 32px));
+  animation: c-dialog-in var(--c-d2) var(--c-ease);
   max-height: calc(100vh - 32px);
   border: 1px solid var(--c-line-2);
   border-radius: var(--c-r-dlg);
@@ -101,6 +103,7 @@ html[data-skin="console"] .c-dialog-cancel {
     max-width: 100vw;
     margin: auto 0 0;
     border-radius: var(--c-r-dlg) var(--c-r-dlg) 0 0;
+    animation: c-sheet-in var(--c-d3) var(--c-ease);
   }
 
   html[data-skin="console"] .c-dialog-foot {

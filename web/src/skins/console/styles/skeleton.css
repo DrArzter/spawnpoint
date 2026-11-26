@@ -6,13 +6,24 @@ html[data-skin="console"] .c-skeleton-group {
   gap: 10px;
 }
 
+/* A flow group draws no box: its placeholders sit in the parent's layout. */
+html[data-skin="console"] .c-skeleton-flow {
+  display: contents;
+}
+
+/* Every bar breathes on the same beat, so a list reads as one calm block, not
+   bars of different widths sweeping at different speeds. */
 html[data-skin="console"] .c-skeleton {
   display: block;
   max-width: 100%;
   border-radius: var(--c-r-sm);
-  background: linear-gradient(90deg, var(--c-surface-2), var(--c-surface-3), var(--c-surface-2));
-  background-size: 200% 100%;
-  animation: c-shimmer var(--c-loop-shimmer) linear infinite;
+  background: var(--c-surface-3);
+  animation: c-shimmer var(--c-loop-shimmer) var(--c-ease) infinite alternate;
+}
+
+/* A block that takes its column's free height, as .c-textarea-fill does. */
+html[data-skin="console"] .c-skeleton-fill {
+  flex: 1 1 auto;
 }
 
 /* A line of text: as tall as the line, drawn as a bar inside it. */

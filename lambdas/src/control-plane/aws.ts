@@ -26,13 +26,15 @@ import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type 
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 import { createSessionHostReader } from "./aws-session-history.ts";
 import { createOperationProgressReader, createHostLogReader } from "./aws-operation-progress.ts";
+import { createHostShapeReader } from "./aws-host-shapes.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import { buildLifecycleStartInput, buildLifecycleStopInput, buildPromotionInput, buildStopInput, type StopPlayersPolicy } from "../domain/telegram-bot.ts";
 import type { ControlPlaneSources, HostMetricPoint, HostMetricsWindow, HostObservation, OperationObservation, ReleasePointerObservation } from "./read-model.ts";
 import { operationWorldId } from "./world-session.ts";
 import { expectationFromRuns, type FinishedRun } from "./operation-eta.ts";
-import type { HostRecord, SessionPolicy } from "../domain/placement.ts";
+import type { HostRecord, HostShape, SessionPolicy } from "../domain/placement.ts";
+import type { MetricUnit } from "../../../contract/metrics.ts";
 
 type MachineType = OperationObservation["type"];
 type OperationMachine = Readonly<{ type: MachineType; arn: string }>;
@@ -68,6 +70,7 @@ const sfn = new SFNClient({});
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const readReleaseState = dynamoReleaseStateReader(document);
+const readHostShapes = createHostShapeReader(ec2);
 
 const ssm = new SSMClient({});
 const logs = new CloudWatchLogsClient({});
@@ -201,13 +204,30 @@ async function readReleasePlan(gameId: string, presetId: string, version: string
 // (ADR-0015). A series with no readings stays empty: an instance that was
 // stopped, or a session whose host predates the probe, has none, and that
 // absence is the most informative thing on the chart.
+//
+// CPU and memory stay a percentage of the whole host; each reading carries the
+// host's size as its capacity, so the panel can show cores and bytes. Network is
+// a rate: the period's sum over its seconds, so a week reads on the same scale
+// as six hours.
 const HOST_METRICS_NAMESPACE = "Spawnpoint/Host";
-const HOST_SERIES = [
-  { id: "cpu", label: "CPU", unit: "percent", namespace: "AWS/EC2", metric: "CPUUtilization", statistic: "Average" },
-  { id: "memory", label: "Memory", unit: "percent", namespace: HOST_METRICS_NAMESPACE, metric: "MemoryUsedPercent", statistic: "Average" },
-  { id: "networkIn", label: "Network in", unit: "bytes", namespace: "AWS/EC2", metric: "NetworkIn", statistic: "Sum" },
-  { id: "networkOut", label: "Network out", unit: "bytes", namespace: "AWS/EC2", metric: "NetworkOut", statistic: "Sum" },
-] as const;
+const MIB = 1024 * 1024;
+
+type HostSeriesSpec = Readonly<{
+  id: string;
+  label: string;
+  unit: MetricUnit;
+  namespace: string;
+  metric: string;
+  statistic: "Average" | "Sum";
+  capacity?: Readonly<{ unit: MetricUnit; of: (shape: HostShape) => number }>;
+}>;
+
+const HOST_SERIES: readonly HostSeriesSpec[] = [
+  { id: "cpu", label: "CPU", unit: "percent", namespace: "AWS/EC2", metric: "CPUUtilization", statistic: "Average", capacity: { unit: "cores", of: (shape) => shape.vcpu } },
+  { id: "memory", label: "Memory", unit: "percent", namespace: HOST_METRICS_NAMESPACE, metric: "MemoryUsedPercent", statistic: "Average", capacity: { unit: "bytes", of: (shape) => shape.memoryMiB * MIB } },
+  { id: "networkIn", label: "Network in", unit: "bytesPerSecond", namespace: "AWS/EC2", metric: "NetworkIn", statistic: "Sum" },
+  { id: "networkOut", label: "Network out", unit: "bytesPerSecond", namespace: "AWS/EC2", metric: "NetworkOut", statistic: "Sum" },
+];
 
 function metricPeriodSeconds(hours: number): number {
   if (hours <= 6) return 300;
@@ -229,6 +249,7 @@ function hostMetricsFrom(
   results: ReadonlyMap<string | undefined, MetricDataResult>,
   suffix: string,
   window: Readonly<{ start: Date; end: Date; period: number }>,
+  shape: HostShape | undefined,
 ): HostMetricsWindow {
   const slots = metricSlots(window.start, window.end, window.period);
   return {
@@ -237,11 +258,15 @@ function hostMetricsFrom(
     periodSeconds: window.period,
     series: HOST_SERIES.map((series) => {
       const result = results.get(`${series.id}${suffix}`);
+      const values = series.statistic === "Sum" ? (result?.Values ?? []).map((value) => value / window.period) : result?.Values ?? [];
+      const capacity = shape && series.capacity ? series.capacity.of(shape) : undefined;
+      const points = onSlots(slots, window.period, result?.Timestamps ?? [], values);
       return {
         id: series.id,
         label: series.label,
         unit: series.unit,
-        points: onSlots(slots, window.period, result?.Timestamps ?? [], result?.Values ?? []),
+        ...(series.capacity ? { capacityUnit: series.capacity.unit } : {}),
+        points: capacity === undefined ? points : points.map((point) => point.value === null ? point : { ...point, capacity }),
       };
     }),
   };
@@ -262,14 +287,17 @@ async function readHostsMetrics(instanceIds: readonly string[], hours: number): 
   const period = metricPeriodSeconds(hours);
   // One host keeps the plain series ids; several are told apart by position.
   const suffix = (index: number) => hostIds.length === 1 ? "" : `_${index}`;
-  const response = await cloudwatch.send(new GetMetricDataCommand({
-    StartTime: start,
-    EndTime: end,
-    ScanBy: "TimestampAscending",
-    MetricDataQueries: hostIds.flatMap((hostId, index) => hostQueries(hostId, period, suffix(index))),
-  }));
+  const [response, shapes] = await Promise.all([
+    cloudwatch.send(new GetMetricDataCommand({
+      StartTime: start,
+      EndTime: end,
+      ScanBy: "TimestampAscending",
+      MetricDataQueries: hostIds.flatMap((hostId, index) => hostQueries(hostId, period, suffix(index))),
+    })),
+    readHostShapes(hostIds),
+  ]);
   const results = new Map((response.MetricDataResults ?? []).map((result) => [result.Id, result]));
-  return Object.fromEntries(hostIds.map((hostId, index) => [hostId, hostMetricsFrom(results, suffix(index), { start, end, period })]));
+  return Object.fromEntries(hostIds.map((hostId, index) => [hostId, hostMetricsFrom(results, suffix(index), { start, end, period }, shapes.get(hostId))]));
 }
 
 // CloudWatch returns only the periods that have data, so a host that was off

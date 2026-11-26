@@ -133,6 +133,14 @@ html[data-skin="console"] .c-toast-info > svg {
   color: var(--c-accent);
 }
 
+/* A flash or toast that leaves collapses out (A10), from the height it held, so the stack closes up over it. */
+html[data-skin="console"] .c-leaving {
+  min-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  animation: c-collapse var(--c-d2) var(--c-ease) both;
+}
+
 html[data-skin="console"] .c-tip {
   max-width: 300px;
   padding: 7px 11px;

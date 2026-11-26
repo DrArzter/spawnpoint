@@ -1,7 +1,8 @@
-import { useId, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useId, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 
 import { action } from "../../../core/actions";
 import { cx } from "../../../lib/cx";
+import { binaryCeiling, decimalCeiling, type MetricCeiling } from "../../../lib/metrics";
 import { ActionButton } from "./ActionButton";
 import { Skeleton } from "./Skeleton";
 import { Table } from "./Table";
@@ -13,14 +14,23 @@ export type ChartPoint = Readonly<{ at: string; value: number | null; interpolat
 /** The plot's own units: the SVG stretches to its box, so lines keep their width with non-scaling strokes. */
 export const PLOT = { width: 600, height: 200, inset: 4 } as const;
 
-/** The top of the y axis: 100 for a percentage, else the peak rounded up to 1, 2 or 5 of its power of ten. */
-export function chartMax(points: readonly ChartPoint[], percent: boolean): number {
-  if (percent) return 100;
+/**
+ * The top of the y axis: a capacity as given, 100 for a percentage, else the
+ * peak rounded up to a round step (1, 2 or 5 of a power of ten, or a binary
+ * step for bytes, so the labels read 4 MiB/s, not 3.81 MiB/s).
+ */
+export function chartMax(points: readonly ChartPoint[], ceiling: MetricCeiling | number): number {
+  if (typeof ceiling === "number") return ceiling;
+  if (ceiling === "percent") return 100;
   const peak = Math.max(0, ...points.map((point) => point.value ?? 0));
-  if (peak <= 0) return 1;
-  const power = 10 ** Math.floor(Math.log10(peak));
-  const step = [1, 2, 5, 10].find((factor) => factor * power >= peak) ?? 10;
-  return step * power;
+  return ceiling === "binary" ? binaryCeiling(peak) : decimalCeiling(peak);
+}
+
+/** Where the time labels sit under the plot: the first reading, the middle one and the last. */
+export function timeTicks(count: number): number[] {
+  if (count === 0) return [];
+  if (count === 1) return [0];
+  return [...new Set([0, Math.round((count - 1) / 2), count - 1])];
 }
 
 export type ChartGeometry = Readonly<{
@@ -106,12 +116,12 @@ export function nextCursor(key: string, cursor: number | null, count: number): n
 }
 
 /** The latest, peak and average of the readings there are; null when there are none. */
-export function chartSummary(points: readonly ChartPoint[]): Readonly<{ latest: number; peak: ChartPoint & { value: number }; average: number; count: number }> | null {
+export function chartSummary(points: readonly ChartPoint[]): Readonly<{ latest: number; latestAt: string; peak: ChartPoint & { value: number }; average: number; count: number }> | null {
   // A joined point is a line, not a measurement: it never counts as latest, peak or average.
   const known = points.filter((point): point is ChartPoint & { value: number } => point.value !== null && point.interpolated !== true);
   if (known.length === 0) return null;
   const peak = known.reduce((best, point) => (point.value > best.value ? point : best), known[0]);
-  return { latest: known.at(-1)!.value, peak, average: known.reduce((sum, point) => sum + point.value, 0) / known.length, count: known.length };
+  return { latest: known.at(-1)!.value, latestAt: known.at(-1)!.at, peak, average: known.reduce((sum, point) => sum + point.value, 0) / known.length, count: known.length };
 }
 
 /** What a reading says for itself: its value, "Joined" beside a joined one, "No reading" for a gap, "Not reported yet" for the pending tail. */
@@ -126,10 +136,10 @@ export function chartNotes(points: readonly ChartPoint[], pendingFrom?: string |
   return { gaps: shape.gaps.length > 0, pending: shape.pending !== null };
 }
 
-/** The announced reading: its time, then its value. */
-function readingText(at: ChartPoint | null, time: (at: string) => string, format: (value: number) => string, pending: boolean): string {
+/** The announced reading: its time, then its value, then its aside. */
+function readingText(at: ChartPoint | null, time: (at: string) => string, format: (value: number) => string, pending: boolean, aside: string | null): string {
   if (!at) return "";
-  return `${time(at.at)}: ${readingValue(at, format, pending)}`;
+  return `${time(at.at)}: ${[readingValue(at, format, pending), aside].filter(Boolean).join(", ")}`;
 }
 
 /**
@@ -140,15 +150,24 @@ function readingText(at: ChartPoint | null, time: (at: string) => string, format
  * value; on keyboard focus the arrows move a cursor point by point, Home and
  * End jump, and the reading is announced. "Show data" lists every reading.
  */
-export function TimeSeriesChart({ label, range, points, format, time, percent = false, reveal = false, pendingFrom = null }: Readonly<{
+export function TimeSeriesChart({ label, range, points, format, tick = format, time, timeTick = time, ceiling = "decimal", aside, legend, reveal = false, pendingFrom = null }: Readonly<{
   label: string;
   /** The window in words, for the accessible name: "24 hours". */
   range: string;
   points: readonly ChartPoint[];
   format: (value: number) => string;
-  /** A reading's time as the axis and the tooltip say it. */
+  /** A y axis label; `format` when absent. */
+  tick?: (value: number) => string;
+  /** A reading's time as the tooltip says it. */
   time: (at: string) => string;
-  percent?: boolean;
+  /** A time label under the plot; `time` when absent. */
+  timeTick?: (at: string) => string;
+  /** The top of the y axis: a capacity, or how to find one from the peak. */
+  ceiling?: MetricCeiling | number;
+  /** A second fact about a reading, by index, for the readout only: "65 % of host". */
+  aside?: (index: number) => string | null;
+  /** The unit and marks the plot draws, on one line in the foot. */
+  legend?: ReactNode;
   /** Draws the line in from the start of the window (A5). */
   reveal?: boolean;
   /** The first slot not reported yet while the session runs. */
@@ -157,13 +176,14 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
   const [cursor, setCursor] = useState<number | null>(null);
   const [table, setTable] = useState(false);
   const id = useId();
-  const max = chartMax(points, percent);
+  const max = chartMax(points, ceiling);
   const shape = chartGeometry(points, max, pendingFrom);
   const pendingAt = pendingIndex(points, pendingFrom);
   const summary = chartSummary(points);
   const name = [label, range, summary ? t("ui.latestValue", { value: format(summary.latest) }) : t("ui.noReadings"), summary ? t("ui.peakValue", { value: format(summary.peak.value) }) : null].filter(Boolean).join(", ");
   const at = cursor === null ? null : points[cursor] ?? null;
-  const reading = readingText(at, time, format, pendingAt !== null && cursor !== null && cursor >= pendingAt);
+  const atAside = at?.value != null && cursor !== null ? aside?.(cursor) ?? null : null;
+  const reading = readingText(at, time, format, pendingAt !== null && cursor !== null && cursor >= pendingAt, atAside);
 
   const onPointer = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -184,7 +204,7 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
     <div className={cx("c-chart", reveal && "c-chart-reveal")}>
       <div className="c-chart-plot">
         <div aria-hidden="true" className="c-chart-axis">
-          {[max, max / 2, 0].map((tick) => <span key={tick}>{format(tick)}</span>)}
+          {[max, max / 2, 0].map((value) => <span key={value}>{tick(value)}</span>)}
         </div>
         <div // NOSONAR a focusable chart region: the arrow keys and pointer move a cursor through the readings
           aria-label={name}
@@ -222,13 +242,18 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
               <span aria-hidden="true" className={cx("c-chart-tip", left > 70 && "c-chart-tip-end")} style={{ left: `${left}%` }}>
                 <span>{time(at.at)}</span>
                 <strong>{readingValue(at, format, pendingAt !== null && cursor !== null && cursor >= pendingAt)}</strong>
+                {atAside && <span>{atAside}</span>}
               </span>
             </>
           )}
           <span aria-live="polite" className="c-sr">{reading}</span>
         </div>
+        <div aria-hidden="true" className="c-chart-times">
+          {timeTicks(points.length).map((index) => <span key={index} style={{ left: `${(pointX(index, points.length) / PLOT.width) * 100}%` }}>{timeTick(points[index]!.at)}</span>)}
+        </div>
       </div>
       <div className="c-chart-foot">
+        {legend}
         <ActionButton action={action("chart.data", table ? t("ui.hideData") : t("ui.showData"), () => setTable((open) => !open), { icon: table ? "expand_less" : "expand_more" })} size="sm" variant="ghost" />
       </div>
       {table && (
@@ -246,7 +271,7 @@ export function TimeSeriesChart({ label, range, points, format, time, percent = 
   );
 }
 
-/** A chart that is still loading: the axis column, the plot box and the data key, at their final size. */
+/** A chart that is still loading: the axis column, the plot box, the time row, the legend and the data key, at their final size. */
 export function ChartSkeleton() {
   return (
     <div className="c-chart">
@@ -255,8 +280,14 @@ export function ChartSkeleton() {
           {[0, 1, 2].map((tick) => <Skeleton height={12} key={tick} width={26} />)}
         </div>
         <div className="c-chart-area"><Skeleton height="100%" /></div>
+        <div aria-hidden="true" className="c-chart-times">
+          {[0, 50, 100].map((left) => <span key={left} style={{ left: `${left}%` }}><Skeleton text width="3em" /></span>)}
+        </div>
       </div>
-      <div className="c-chart-foot"><Skeleton height="var(--c-ctl-sm)" width={96} /></div>
+      <div className="c-chart-foot">
+        <span className="c-legend"><Skeleton text width="8em" /></span>
+        <Skeleton height="var(--c-ctl-sm)" width={96} />
+      </div>
     </div>
   );
 }

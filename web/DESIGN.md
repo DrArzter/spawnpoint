@@ -227,25 +227,27 @@ came from. Under `prefers-reduced-motion: reduce` every transition is instant an
 
 | # | Element | Trigger | Motion |
 |---|---|---|---|
-| A1 | Page switch | Navigation to another page | One mechanism for every view change (A1–A3): `runTransition(kind, direction)` in `ui/transition.ts`, one fade-through in `base.css`. The old view leaves in `--c-out` with a quarter-travel shift; the new one starts after `--c-handover` and comes in by `--c-travel` (32px) from the side the move points to. They barely overlap, so text never shows twice; measured per frame: at most 2 frames with both visible. Direction follows the hierarchy (`data-direction`): deeper (a list to an item, Home to a world) forward from the end edge; up or earlier on the rail back from the start edge; the same place in another game only fades. Order between two pages of one depth follows the rail: Home, Worlds, Releases, Access, Profile. The area is clipped to itself. Back and Forward in the browser do not animate |
-| A1n | Navigation through a page change | Page change | The rail and the bottom bar hold still: each is its own transition layer above the page area, so the page sheet never covers them; the nav glyphs do not move or fade; only the current item's pill slides from the old item to the new one, under the glyphs (layer order set by z-index on the groups) |
-| A1h | Page header | A page or pane switch | The header is its own transition group: it does not travel with the sheet, holds still and cross-fades in `--c-d2`; words both pages share stay steady, only the words that change dissolve. It is 44px on every page from 760px; under it the title row is 44px and the actions, when a page has any, are one 44px row |
+| A1 | Page switch | Navigation to another page | One mechanism for every view change (A1–A3): `runTransition(kind, direction)` in `ui/transition.ts`, one fade-through in `base.css`. The old view leaves in `--c-out` (100ms) with a quarter-travel shift; the new one starts after `--c-handover` (20ms) and comes in by `--c-travel` (32px) from the side the move points to. They barely overlap, so text never shows twice, and the content never drops below about 78% of its strength mid-switch (measured per frame). Browsers without view transitions fade the panel in from 0.75. Direction follows the hierarchy (`data-direction`): deeper (a list to an item, Home to a world) forward from the end edge; up or earlier on the rail back from the start edge; the same place in another game only fades. Order between two pages of one depth follows the rail: Home, Worlds, Releases, Access, Profile. The area is clipped to itself. Back and Forward in the browser do not animate |
+| A1n | Navigation through a page change | Page change | The top bar, the rail and the bottom bar hold still: each is its own transition layer above the page area (`c-topbar`, `c-bottom`), so the page sheet never covers them; the nav glyphs do not move or fade; only the current item's pill slides from the old item to the new one, under the glyphs (layer order set by z-index on the groups) |
+| A1h | Page header | A page or pane switch (not a tab switch) | The header is its own transition group: it does not travel with the sheet, holds still and cross-fades in `--c-d2`; words both pages share stay steady, only the words that change dissolve. It is 44px on every page from 760px; under it the title row is 44px and the actions, when a page has any, are one 44px row |
 | A2 | Pane switch | Navigation inside a split page | As A1 on the pane only, by `--c-travel-pane` (12px); another world only fades; the list column does not move |
-| A3 | Tab switch | Tab activation | As A1 on the tab panel only, by `--c-travel-pane`, in the tab bar's order; the header, the world strip and the tab bar keep still; the group eases the height; the tab ink slides; a switch never shortens the page under the reader (the panel keeps the height the scroll needs), and the tab strip glides to a tab out of view |
+| A3 | Tab switch | Tab activation | As A1 on the tab panel only, by `--c-travel-pane`, in the tab bar's order; the header, the world strip and the tab bar keep still; the group eases the height; the tab ink slides on `--c-ease`, with no overshoot; a switch never shortens the page under the reader (the panel keeps the height the scroll needs), and the tab strip glides only as far as a tab out of view needs, plus the end fade's width so the next tab shows |
 | A3h | Panel height | A tab's content changes size: data arrives, another tab or world replaces it | The panel box eases from the old height to the new one in `--c-d3` (`Settle`); it clips only while it moves |
-| A4 | Card entrance | First view of a page in the session | All cards rise 12px together; no stagger |
+| A4 | Card entrance | First view of a page in the session, without a view change | All cards rise 12px together; no stagger. It runs once: never inside a page slide, and not again on a tab switch or another world of the same page |
 | A5 | Chart draw-in | First view of Metrics; a range change | Reveal from the left |
 | A6 | Strip and worlds-by-state bar | First view; a count change | Reveal; segments move |
-| A7 | Status change | A world's status value changed | Pop and a one-time ring |
+| A7 | Status change | A world's status value changed | Pop and a one-time ring; no fade |
 | A8 | Number tick | A count changed | Counts to the new value with a small lift |
 | A9 | Row arrival | A new row key while the page is open | Fades in with a soft accent background that clears |
-| A10–A12 | Flashbar, busy bar, spinner | An operation starts, changes or ends | Item springs in and collapses out; indeterminate bar; spinner |
-| A13–A17 | Quick look, dialog, menu and palette, toast, tooltip | Open | Slide or fade at their anchor |
+| A10–A12 | Flashbar, busy bar, spinner | An operation starts, changes or ends | Item springs in and collapses out in `--c-d2` from the height it held (`useLeaving`, also for toasts), so the stack closes up rather than jumping; indeterminate bar; spinner |
+| A13–A17 | Quick look, dialog, menu and palette, toast, tooltip | Open | Slide or fade at their anchor. Each surface enters from where it stands: a centred dialog rises a little, a phone sheet from the bottom edge, a side panel from the end edge |
 | A18–A21 | Hover and press, toggle, refused-action shake, copy check | Pointer, change, refusal, copy | Colour, a small press, a two-pass shake, a check icon |
 
 Never animated: the top bar, rail and bottom bar; the flashbar and toasts during a page switch (they float above the
 transition); content re-rendered by polling or refresh (only A7–A9 react to a real change); unchanged numbers; table
-rows on sort or filter; focus rings; skeletons on a page switch; any attention pulse on an idle element.
+rows on sort or filter; focus rings; skeletons on a page switch; any attention pulse on an idle element. Skeleton bars
+pulse together, in phase, never as a sweep per bar. A hover state applies only where a pointer can hover
+(`@media (hover: hover)`), so a tap leaves nothing grey behind; keyboard focus keeps its look everywhere.
 
 ## Frame
 
@@ -269,16 +271,17 @@ stays focusable and shows the hint) and `aria-busy` while busy. Contract tests: 
 | Primitive | Use |
 |---|---|
 | `ActionButton`, `IconButton` | One Action. Variants `primary` (one per page), `default`, `danger` (confirmation footer only), `ghost` (card-head links); sizes `md` 40px and `sm` 34px, 44px under 760px |
-| `Overflow`, `Menu`, `MenuButton` | The row and page "more" menu. Always a menu, so a column has one control; danger items in a last group under a rule |
+| `Overflow`, `Menu`, `MenuButton` | The row and page "more" menu. Always a menu, so a column has one control; danger items in a last group under a rule. A group with `checked` is one choice of radio items (`TablePreferences`). A pointer or touch open focuses the menu itself; a keyboard open focuses the chosen or first enabled item |
 | `Card`, `Grid`, `SplitPage`, `ListColumn` | Surfaces and layout |
-| `PageHeader`, `Tabs` | Page structure |
+| `PageHeader`, `Tabs` | Page structure. A tab strip that fits only without its icons drops them (`data-compact`); one that overflows anyway keeps them and scrolls |
 | `Table`, `TrackList`, `DetailList` | Rows on shared tracks; key-value sections in equal columns |
 | `Status`, `Indicator`, `Chip`, `Tile`, `Tick` | State: icon and label; icon with the label in the tooltip; facts; status count tiles; ticking counts |
-| `Notice`, `Empty`, `Skeleton`, `ProgressBar` | One-line notices; empty and error states; loading at the final geometry; indeterminate work |
+| `Decision` | A request row's Approve and Dismiss: two named icon buttons of one style in the row's action column. A page header keeps its worded buttons |
+| `Notice`, `Empty`, `Skeleton`, `ProgressBar` | One-line notices; empty and error states; loading at the final geometry (`Skeleton fill` takes a column's free height; `SkeletonGroup flow` lays its placeholders in the parent's own layout); indeterminate work |
 | `Settle` | Wraps the tab panel so its height glides when the content changes size (A3h) |
 | `Dialog`, `SidePanel`, `Palette`, `Flashbar`, `Toast`, `Tooltip` | Layers |
 | `Field`, `TextInput`, `NumberInput`, `ColourInput`, `Select`, `Toggle`, `RadioCards`, `Checkbox`, `Segmented`, `FilterBar`, `Pager`, `Preferences` | Input |
-| `Address`, `Copy`, `Person`, `Avatar`, `GameGlyph`, `Ago` | Facts with a fixed form |
+| `Address`, `Copy`, `Person`, `Avatar`, `GameGlyph`, `Ago`, `SourceRef` | Facts with a fixed form. `Copy` is one text line tall; its touch target is drawn around it. `SourceRef` is a preset's repository and commit |
 | `StatCard`, `TimeSeriesChart`, `Terminal` | Metrics and the world console |
 
 A primitive that promises a layout emits its marker (`data-layout`, `data-rail`, `data-col`, `data-status`,
@@ -292,7 +295,8 @@ A primitive that promises a layout emits its marker (`data-layout`, `data-rail`,
   and draw placeholder rows with the loaded row's cells, classes, labels and tracks; `Card loading`, `StatSkeleton`,
   `ChartSkeleton` and `ListItemWorldSkeleton` keep a card, a stat, a chart and a world row at their size; a `Skeleton
   text` is exactly one line of its container. A list draws as many placeholder rows as it knows, else as many as it
-  showed last time in the session, else three, so another world's backups are as tall loading as loaded.
+  showed last time in the session, else three, so another world's backups are as tall loading as loaded. A table
+also takes back the column widths it had at the same width last time, so its columns do not move.
 - **Empty**: one icon, one title, at most one Action.
 - **Error**: the empty state's error variant with the reason as one line and Retry. A refused role (403) shows a lock
   and no Retry. An API that did not answer (network, 501, 503) reads "Unavailable" and keeps Retry. Both skins word

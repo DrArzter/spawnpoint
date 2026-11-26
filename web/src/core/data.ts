@@ -668,8 +668,8 @@ export function useUsers(opts: Readonly<{ bootstrap: OwnerBootstrap; canInvite: 
           since: `${candidate.status === "REQUESTED" ? t("access.requestedAccess") : t("access.signed")} ${formatDateTime(candidate.status === "REQUESTED" ? candidate.requestedAt : candidate.lastSeenAt)}`,
           role: roleChoice(roles, chosen ?? "", working === key),
           setRoleId: (roleId: string) => setCandidateRoles((current) => ({ ...current, [key]: roleId })),
-          approve: action("access.approve", t("access.approve"), () => { if (chosen !== null) void directory.approve(candidate, chosen); }, { disabled: !rolesReady, busy: working === key, hint: rolesReady ? t("access.approveChosenRole") : t("access.rolesStillLoading") }),
-          dismiss: action("access.dismiss", t("access.dismiss"), () => void directory.dismiss(candidate), { disabled: working === key }),
+          approve: action("access.approve", t("access.approve"), () => { if (chosen !== null) void directory.approve(candidate, chosen); }, { icon: "check", disabled: !rolesReady, busy: working === key, hint: rolesReady ? t("access.approveChosenRole") : t("access.rolesStillLoading") }),
+          dismiss: action("access.dismiss", t("access.dismiss"), () => void directory.dismiss(candidate), { icon: "close", disabled: working === key }),
         };
       }),
     };

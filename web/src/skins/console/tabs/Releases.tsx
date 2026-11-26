@@ -8,6 +8,7 @@ import { action } from "../../../core/actions";
 import { ActionButton } from "../ui/ActionButton";
 import { Card } from "../ui/Card";
 import { Chip } from "../ui/Chip";
+import { SourceRef } from "../ui/SourceRef";
 import { Copy } from "../ui/Copy";
 import { DetailList } from "../ui/DetailList";
 import { Empty, LoadError } from "../ui/Empty";
@@ -45,7 +46,7 @@ export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
             rows={rows}
             tracks={[
               { id: "release", header: t("common.release"), width: "minmax(0, 1fr)", kind: "stack", render: (row) => <TrackTitle title={<span className="c-mono">{row.name}</span>} /> },
-              { id: "source", header: t("common.source"), width: "120px", kind: "optional", render: (row) => row.sourceHref ? <a href={row.sourceHref} rel="noreferrer" target="_blank">{t("common.source")}</a> : <span className="c-faint">—</span> },
+              { id: "source", header: t("common.source"), width: "120px", kind: "optional", render: (row) => row.sourceRepository ? <SourceRef commit={row.sourceCommit} href={row.sourceHref ?? undefined} repository={row.sourceRepository} /> : <span className="c-faint">—</span> },
               { id: "download", header: t("common.download"), width: "auto", compactWidth: "auto", kind: "end", quietHeader: true, render: (row) => <>{row.downloads.map((item) => <ActionButton action={item} key={item.id} size="sm" />)}</> },
             ]}
           />

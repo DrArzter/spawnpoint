@@ -7,13 +7,25 @@ export type MetricRange = keyof typeof METRIC_RANGES;
 
 export const METRIC_RANGE_NAMES: readonly MetricRange[] = Object.keys(METRIC_RANGES) as MetricRange[];
 
-/** `interpolated`: a reading drawn between two real ones, memory only; it is a line, never a stat. */
-export type HostMetricPoint = Readonly<{ at: string; value: number | null; interpolated?: true }>;
+/** Every unit a series' value or capacity is sent in. */
+export const METRIC_UNITS = ["percent", "bytesPerSecond", "cores", "bytes"] as const;
+
+export type MetricUnit = (typeof METRIC_UNITS)[number];
+
+/**
+ * `interpolated`: a reading drawn between two real ones, memory only; it is a line, never a stat.
+ * `capacity`: the whole of the host that gave this reading, in the series' `capacityUnit`, so a
+ * percentage reads as an absolute (`value / 100 * capacity`). Absent when that host's shape is unknown.
+ */
+export type HostMetricPoint = Readonly<{ at: string; value: number | null; interpolated?: true; capacity?: number }>;
 
 export type HostMetricSeries = Readonly<{
   id: string;
   label: string;
+  /** A `MetricUnit`. */
   unit: string;
+  /** The unit of the points' `capacity`; absent on a series that has none. */
+  capacityUnit?: MetricUnit;
   points: readonly HostMetricPoint[];
   /**
    * While the world's session runs: the first slot that cannot hold a reading

@@ -393,6 +393,14 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "DiscoverGameHosts"]) == toset(["ec2:DescribeInstances"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "DescribeHostShape"]) == toset(["ec2:DescribeInstanceTypes"]),
+    ])
+    error_message = "The API reads hosts and their shapes from EC2 with Describe calls only."
+  }
+
+  assert {
+    condition = alltrue([
       for statement in data.aws_iam_policy_document.access_api.statement :
       (!contains(statement.actions, "logs:GetLogEvents") || statement.sid == "ReadHostStartOutput") &&
       (!contains(statement.actions, "ssm:ListCommands") || statement.sid == "FindHostStartCommand")

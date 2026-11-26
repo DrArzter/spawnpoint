@@ -113,8 +113,9 @@ html[data-skin="console"] .c-access-owner-id {
     vertical-align: bottom;
   }
 
+  /* The count under the name: the cells sit on the bottom edge, so every count shares one line. */
   html[data-skin="console"] .c-access-role-head {
-    flex-direction: column-reverse;
+    flex-direction: column;
     gap: 6px;
   }
 

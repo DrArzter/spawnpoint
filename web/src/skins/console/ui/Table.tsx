@@ -1,10 +1,10 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 import { Icon, type IconName } from "../../../icons";
 import { cx } from "../../../lib/cx";
 import { ARRIVED, useArrivals } from "./Tick";
 import { Skeleton } from "./Skeleton";
-import { useSkeletonRows } from "./rows";
+import { useColumnWidths, useSkeletonRows } from "./rows";
 import { t } from "../../../i18n";
 
 /**
@@ -69,9 +69,11 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
   const tracked = useArrivals(arrivals === true ? rows.map(rowKey) : []);
   const fresh = typeof arrivals === "object" ? arrivals : tracked;
   const placeholders = useSkeletonRows(label, rows.length, loading);
+  const table = useRef<HTMLTableElement>(null);
+  useColumnWidths(label, loading, table, rows.length);
   return (
     <div className={cx("c-table-wrap", split && "c-table-split", className)}>
-      <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)} data-layout="rows">
+      <table aria-label={label} className={cx("c-table", variant !== "default" && `c-table-${variant}`)} data-layout="rows" ref={table}>
         <thead>
           <tr>
             {columns.map((column, index) => (
@@ -100,9 +102,14 @@ export function Table<Row>({ label, columns, rows, rowKey, selected, empty, load
   );
 }
 
-/** A cell's placeholder: the size of what the column holds, so the row keeps its height. */
+/**
+ * A cell's placeholder: the size of what the column holds, so the row keeps its
+ * height. The action column holds one block as wide as its actions were the
+ * last time at this width (--c-act-w, from useColumnWidths), else as wide as
+ * two small controls.
+ */
 function placeholder(kind: ColumnKind | undefined) {
-  if (kind === "act") return <Skeleton height="var(--c-ctl-sm)" width={72} />;
+  if (kind === "act") return <Skeleton height="var(--c-ctl-sm)" width="var(--c-act-w, calc(2 * var(--c-ctl-sm)))" />;
   if (kind === "check") return <Skeleton height={18} width={18} />;
   const width = { lead: "60%", num: "3em" } as Readonly<Partial<Record<ColumnKind, string>>>;
   return <Skeleton text width={(kind && width[kind]) ?? "50%"} />;

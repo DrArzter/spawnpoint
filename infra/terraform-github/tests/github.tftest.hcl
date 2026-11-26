@@ -274,6 +274,17 @@ run "deployment_role_trusts_only_the_production_environment" {
   assert {
     condition = anytrue([
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
+      statement.sid == "CreateOnlyTheSpotServiceLinkedRole" &&
+      toset(statement.actions) == toset(["iam:CreateServiceLinkedRole"]) &&
+      toset(statement.resources) == toset(["arn:aws:iam::123456789012:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot"]) &&
+      toset([for condition in statement.condition : condition.variable]) == toset(["iam:AWSServiceName"])
+    ])
+    error_message = "The deploy identity may create the EC2 Spot service-linked role and no other, and may not delete it (ADR-0102)."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       statement.sid == "TagOnlyReleaseBuilderSources" &&
       toset(statement.actions) == toset(["s3:PutObjectTagging"]) &&
       toset(statement.resources) == toset([

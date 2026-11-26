@@ -436,6 +436,21 @@ data "aws_iam_policy_document" "github_deploy_iam" {
     ]
   }
 
+  # ADR-0102: EC2 needs this role to launch Spot capacity. Only this one
+  # service may be named; the deploy identity may not delete it.
+  statement {
+    sid       = "CreateOnlyTheSpotServiceLinkedRole"
+    effect    = "Allow"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values   = ["spot.amazonaws.com"]
+    }
+  }
+
   statement {
     sid       = "AttachOnlyLambdaLoggingPolicy"
     effect    = "Allow"

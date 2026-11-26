@@ -662,7 +662,34 @@ async function runSelfTest(browser) {
     if (!(await runFixture(tab, fixture))) failed += 1; // NOSONAR one tab, fixture by fixture
   }
   console.log(failed === 0 ? `self-test: ${FIXTURES.length} fixtures, every miss caught` : `self-test: ${failed} of ${FIXTURES.length} fixtures failed`);
-  return failed === 0 ? 0 : 1;
+  const faults = await browserFaultsFail();
+  return failed === 0 && faults ? 0 : 1;
+}
+
+// A Chrome that stays silent or dies must fail the gate, never hold it: a run
+// once waited two days on a call nothing would answer.
+async function browserFaultsFail() {
+  const rejects = async (promise, pattern) => {
+    try {
+      await promise;
+      return false;
+    } catch (error) {
+      return pattern.test(String(error.message ?? error));
+    }
+  };
+  const browser = await launch({ callTimeoutMs: 2000 });
+  try {
+    const tab = await browser.open();
+    const silent = await rejects(tab.evaluate("new Promise(() => {})", true), /did not answer Runtime\.evaluate/);
+    browser.kill();
+    const dead = await rejects(tab.evaluate("1"), /chrome (exited|closed)/);
+    const later = await rejects(browser.open(), /chrome (exited|closed)/);
+    const ok = silent && dead && later && browser.gone() !== null;
+    console.log(ok ? "self-test: a silent or dead Chrome fails the call" : `self-test: browser faults not caught (silent ${silent}, dead ${dead}, later ${later})`);
+    return ok;
+  } finally {
+    browser.close();
+  }
 }
 
 // ---- Main --------------------------------------------------------------------
@@ -687,12 +714,12 @@ function addLostStates(records) {
   }
 }
 
-// Each worker tab takes the next job until none is left.
-async function runJobs(tabs, jobs) {
+// Each worker tab takes the next job until none is left, or Chrome has gone.
+async function runJobs(browser, tabs, jobs) {
   const records = [];
   let next = 0;
   await Promise.all(tabs.map(async (tab) => {
-    while (next < jobs.length) {
+    while (next < jobs.length && browser.gone() === null) {
       const job = jobs[next];
       next += 1;
       await runJob(tab, job, records); // NOSONAR one tab runs its jobs in turn
@@ -728,7 +755,8 @@ async function runAudit(browser) {
   const jobs = plan();
   const workers = Math.max(1, Number(process.env.AUDIT_WORKERS ?? Math.min(4, availableParallelism())));
   const tabs = await Promise.all(Array.from({ length: workers }, () => browser.open()));
-  const records = await runJobs(tabs, jobs);
+  const records = await runJobs(browser, tabs, jobs);
+  if (browser.gone() !== null) throw new Error(`the gate lost Chrome: ${browser.gone()}`);
   addLostStates(records);
   const probes = records.filter((r) => !r.absent && !r.found?.error).length;
   if (process.env.AUDIT_JSON) writeFileSync(process.env.AUDIT_JSON, JSON.stringify(records, null, 1));
@@ -771,6 +799,9 @@ const browser = await launch();
 try {
   if (selfTest) process.exitCode = await runSelfTest(browser);
   else await runAudit(browser);
+} catch (error) {
+  console.log(String(error.message ?? error));
+  process.exitCode = 1;
 } finally {
   browser.close();
 }

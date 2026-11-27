@@ -182,7 +182,7 @@ function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
   return (
     <>
       <PageHeader count={model.members.length} title={t("access.users")} trail={[ACCESS]} />
-      <Grid kind="stack">
+      <Grid fill kind="stack">
         {showRequests && (
           <Card body="flush" count={candidates.status === "ready" ? candidates.value.length : undefined} title={t("access.requests")}>
             {candidates.status === "error"
@@ -190,7 +190,7 @@ function UsersPane({ model }: Readonly<{ model: UsersModel }>) {
               : <Table arrivals columns={requestColumns} label={t("access.requests")} loading={candidates.status === "loading"} rowKey={(row) => row.id} rows={candidates.status === "ready" ? candidates.value : []} />}
           </Card>
         )}
-        <Card body="flush" count={model.members.length} title={t("access.people")}>
+        <Card body="flush" count={model.members.length} fill title={t("access.people")}>
           <Table arrivals columns={peopleColumns} empty={<Empty icon="group" size="sm" title={t("access.noPeople")} />} label={t("access.people")} rowKey={(row) => row.member.id} rows={model.members} />
         </Card>
         {model.invitations && <InviteCard model={model.invitations} />}
@@ -417,8 +417,8 @@ function RolesPane({ model, users, catalogue }: Readonly<{ model: RolesModel; us
   return (
     <>
       <PageHeader actions={<ActionButton action={model.create} variant="primary" />} count={state.status === "ready" ? roles.length : undefined} title={t("access.roles")} trail={[ACCESS]} />
-      <Grid kind="stack">
-        <Card body="flush" label={t("access.rolesPermissions")}>
+      <Grid fill kind="stack">
+        <Card body="flush" fill label={t("access.rolesPermissions")}>
           {state.status === "error"
             ? <LoadError error={state.error} kind={state.kind} retry={state.retry} title={t("access.rolesCouldNotLoaded2")} verb={t("access.readRoles")} />
             : <Table columns={columns} empty={<Empty icon="admin_panel_settings" size="sm" title={t("access.noRoles")} />} label={t("access.permissionsByRole")} loading={state.status === "loading"} rowKey={(permission) => permission.id} rows={permissions} variant="matrix" />}
@@ -502,7 +502,7 @@ function NotificationsPane({ model }: Readonly<{ model: NotificationsModel }>) {
     <>
       <PageHeader title={t("access.myNotifications")} trail={[ACCESS]} />
       {model.state === "error" && <Notice notice={{ id: "notifications", tone: "error", title: t("access.subscriptionsCouldNotLoaded"), description: model.error, action: model.retry ?? undefined }} />}
-      <Card body="flush" label={t("access.myNotifications")}>
+      <Card body="flush" fill label={t("access.myNotifications")}>
         <TrackList
           label={t("common.notifications")}
           loading={model.state === "loading"}

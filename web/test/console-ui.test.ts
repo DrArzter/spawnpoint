@@ -224,7 +224,7 @@ test("Shell helpers: a world's tab is not a page; operations and outcomes become
   assert.equal(transitionKind("#/worlds/mc/rostik", "#/worlds/mc/rostik/metrics"), null, "a tab is not a page (A3 instead)");
   assert.equal(transitionKind("#/access/users", "#/access/roles"), "pane");
   assert.equal(transitionKind("#/home/mc", "#/worlds/mc"), "page");
-  assert.match(html(createElement(TabPanel, { prefix: "w", id: "wipes" }, "x")), /^<div class="c-settle"><div><div aria-labelledby="w-tab-wipes"/, "the panel sits in a Settle box that eases its height");
+  assert.match(html(createElement(TabPanel, { prefix: "w", id: "wipes" }, "x")), /^<div class="c-settle"><div class="c-settle-body"><div aria-labelledby="w-tab-wipes"/, "the panel sits in a Settle box that eases its height");
   const shell = aShell(aGame(), { flash: { operations: [{ id: "op1", label: "Starting session", worldName: "Rostik", worldId: "rostik", startedAt: "2026-11-21T10:00:00Z" }] } });
   const items = flashItems(shell, { items: [{ id: 7, message: "Saved", tone: "error" }], dismiss: noop }, null);
   assert.deepEqual(items.map((item) => [item.kind, item.message]), [["busy", "Starting session · Rostik"], ["err", "Saved"]]);

@@ -10,7 +10,7 @@ import { Grid } from "../ui/Grid";
 import { Segmented } from "../ui/Segmented";
 import { Skeleton, SkeletonGroup } from "../ui/Skeleton";
 import { StatCard, StatSkeleton } from "../ui/StatCard";
-import { ChartSkeleton, chartNotes, chartSummary, TimeSeriesChart } from "../ui/TimeSeriesChart";
+import { ChartSkeleton, chartSummary, TimeSeriesChart } from "../ui/TimeSeriesChart";
 import { intlLocale, t } from "../../../i18n";
 
 // A5: the charts draw in on the first view of a world's metrics in this session.
@@ -101,8 +101,8 @@ export function MetricsTab({ model, worldId }: Readonly<{ model: MetricsModel; w
           <Grid kind="metrics">{SERIES.map((cell) => <Card key={cell} loading><ChartSkeleton /></Card>)}</Grid>
         </SkeletonGroup>
       )}
-      {metrics.status === "error" && <Card label={t("common.metrics")}><LoadError error={metrics.error} kind={metrics.kind} retry={metrics.retry} title={t("metrics.metricsCouldNotLoaded")} verb={t("metrics.readMetrics")} /></Card>}
-      {metrics.status === "ready" && value === null && <Card label={t("common.metrics")}><Empty icon="monitoring" title={t("metrics.noSessionWindow")} /></Card>}
+      {metrics.status === "error" && <Card fill label={t("common.metrics")}><LoadError error={metrics.error} kind={metrics.kind} retry={metrics.retry} title={t("metrics.metricsCouldNotLoaded")} verb={t("metrics.readMetrics")} /></Card>}
+      {metrics.status === "ready" && value === null && <Card fill label={t("common.metrics")}><Empty icon="monitoring" title={t("metrics.noSessionWindow")} /></Card>}
       {value && <Readings metrics={value} range={rangeLabel} reveal={reveal} />}
     </>
   );
@@ -118,7 +118,7 @@ function Readings({ metrics, range, reveal }: Readonly<{ metrics: HostMetrics; r
       <Grid kind="stat" label={t("metrics.latestReadings")}>
         {series.map((item) => <Stat key={item.series.id} label={item.label} scale={item.scale} series={item.series} time={time} />)}
       </Grid>
-      <Grid kind="metrics">
+      <Grid fill kind="metrics">
         {series.map((item) => <Chart key={item.series.id} label={item.label} range={range} reveal={reveal} scale={item.scale} series={item.series} time={time} timeTick={timeTick} />)}
       </Grid>
     </>
@@ -147,21 +147,10 @@ function Stat({ series, label, scale, time }: SeriesView) {
 
 function Chart({ series, label, scale, range, reveal, time, timeTick }: SeriesView & Readonly<{ range: string; reveal: boolean; timeTick: (at: string) => string }>) {
   const known = scale.points.some((point) => point.value !== null);
-  const notes = chartNotes(scale.points, series.pendingFrom);
-  // The axis labels carry the unit, so the legend names only the marks that are not readings. A narrow card cuts a
-  // label short; its tooltip keeps it whole.
-  const noHost = t("metrics.noHost");
-  const notReported = t("common.notReportedYet");
-  const legend = (
-    <span className="c-legend">
-      {notes.gaps && <span className="c-legend-item" data-tip={noHost}><span aria-hidden="true" className="c-legend-gap" /><span className="c-legend-label">{noHost}</span></span>}
-      {notes.pending && <span className="c-legend-item" data-tip={notReported}><span aria-hidden="true" className="c-legend-pending" /><span className="c-legend-label">{notReported}</span></span>}
-    </span>
-  );
   return (
     <Card title={label}>
       {known
-        ? <TimeSeriesChart aside={scale.share} ceiling={scale.ceiling} format={scale.text} label={label} legend={legend} pendingFrom={series.pendingFrom} points={scale.points} range={range} reveal={reveal} tick={scale.tick} time={time} timeTick={timeTick} />
+        ? <TimeSeriesChart aside={scale.share} ceiling={scale.ceiling} format={scale.text} label={label} pendingFrom={series.pendingFrom} points={scale.points} range={range} reveal={reveal} tick={scale.tick} time={time} timeTick={timeTick} />
         : <Empty icon="monitoring" size="sm" title={t("metrics.hostReportedNothingWindow")} />}
     </Card>
   );

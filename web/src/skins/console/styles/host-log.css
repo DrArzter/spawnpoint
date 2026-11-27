@@ -45,3 +45,11 @@ html[data-skin="console"] .c-host-line[data-tone="warning"] .c-host-text {
 html[data-skin="console"] .c-host-line[data-tone="error"] .c-host-text {
   color: var(--c-err);
 }
+
+/* In a filling card the whole log takes the card's height and scrolls inside it. */
+html[data-skin="console"] .c-card[data-fill] .c-host-log[data-size="tall"] {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 320px;
+  max-height: none;
+}

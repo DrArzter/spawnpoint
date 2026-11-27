@@ -48,7 +48,7 @@ export function Profile({ model }: Readonly<{ model: ProfileModel }>) {
         lead={<Overflow actions={avatarActions(model.avatar)} avatar={{ name: member.name, photoUrl: viewer.photoUrl, size: "lg" }} label={t("profile.changePicture")} />}
         title={member.name}
       />
-      <Grid kind="profile">
+      <Grid fill kind="profile">
         <SignInMethods model={model.loginAccounts} />
         <Appearance language={model.language} look={model.look} model={model.appearance} />
       </Grid>

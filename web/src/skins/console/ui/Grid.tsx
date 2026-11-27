@@ -9,8 +9,9 @@ import { cx } from "../../../lib/cx";
  */
 export type GridKind = "detail" | "stat" | "name" | "home" | "metrics" | "profile" | "stack";
 
-export function Grid({ kind, className, children, label }: Readonly<{ kind: GridKind; className?: string; label?: string; children: ReactNode }>) {
-  return <div aria-label={label} className={cx("c-grid", `c-grid-${kind}`, className)} data-layout="grid" role={label ? "group" : undefined} /* NOSONAR a named region of cards; <fieldset> is for form controls */>{children}</div>;
+/** A `fill` grid takes the free height of its tab panel, and its row of cards grows with it. */
+export function Grid({ kind, className, children, label, fill = false }: Readonly<{ kind: GridKind; className?: string; label?: string; fill?: boolean; children: ReactNode }>) {
+  return <div aria-label={label} className={cx("c-grid", `c-grid-${kind}`, className)} data-fill={fill || undefined} data-layout="grid" role={label ? "group" : undefined} /* NOSONAR a named region of cards; <fieldset> is for form controls */>{children}</div>;
 }
 
 /** How many columns of a fixed grid a cell spans. */

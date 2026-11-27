@@ -49,7 +49,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
     return (
       <div className="c-page">
         {header}
-        <Card label={t("common.games")}>
+        <Card fill label={t("common.games")}>
           <GamesEmpty refresh={model.refresh} unavailable={model.unavailable} />
         </Card>
       </div>
@@ -59,7 +59,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
     return (
       <div className="c-page">
         {header}
-        <Card label={t("common.worlds")}><LoadError error={model.error} kind={model.errorKind} retry={model.refresh} title={t("common.worldsCouldNotLoaded")} verb={t("common.viewWorlds")} /></Card>
+        <Card fill label={t("common.worlds")}><LoadError error={model.error} kind={model.errorKind} retry={model.refresh} title={t("common.worldsCouldNotLoaded")} verb={t("common.viewWorlds")} /></Card>
       </div>
     );
   }
@@ -68,7 +68,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
       <div className="c-page">
         {header}
         <Notices notices={model.notices} />
-        <Card label={t("common.worlds")}><Empty action={model.createWorld} icon="public" title={t("common.noWorlds")} /></Card>
+        <Card fill label={t("common.worlds")}><Empty action={model.createWorld} icon="public" title={t("common.noWorlds")} /></Card>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export function Home({ model, onState }: Readonly<{ model: WorldsModel; /** Open
     <div className="c-page">
       {header}
       <Notices notices={model.notices} />
-      <Grid kind="home">
+      <Grid fill kind="home">
         <GridCell span="2">
           <Card
             actions={<LinkButton href={list} label={t("common.worlds")} size="sm" variant="ghost" />}

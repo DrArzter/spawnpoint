@@ -172,8 +172,6 @@ test("the strip names pending slots as not reported yet and leaves them out of t
   assert.match(markup, /c-strip-run c-strip-pending/);
   assert.match(markup, /data-tip="Not reported yet · /);
   assert.doesNotMatch(markup, /data-tip="No host/, "no real gap, so no No host segment");
-  assert.match(markup, /c-legend-pending/);
-  assert.doesNotMatch(markup, /c-legend-gap/);
 });
 
 test("a pending tail is a neutral band after the last reading, and a real gap before it stays hatched", () => {
@@ -224,21 +222,27 @@ test("a stat reads cores of its host, with the share of the host as the value's 
   assert.match(markup, /<span>2 cores<\/span><span>1 core<\/span><span>0 cores<\/span>/, "the axis tops out at the host's cores");
 });
 
-test("a chart card's head is its title alone; the legend and the data key share the chart's foot, under the time row", () => {
+test("a chart card's head is its title alone; the data key sits in the chart's foot, under the time row, and no legend repeats what hovering tells", () => {
   const markup = renderToStaticMarkup(createElement(MetricsTab, { model: ready(sized), worldId: "foot" }));
   const heads = [...markup.matchAll(/<header class="c-card-head"[^>]*>([\s\S]*?)<\/header>/g)].map((match) => match[1]!);
   const chartHeads = heads.filter((head) => /<h2[^>]*>(CPU|Network in)</.test(head));
   assert.equal(chartHeads.length, 2);
-  for (const head of chartHeads) assert.doesNotMatch(head, /c-legend|c-card-actions/, "the head holds the title only");
+  for (const head of chartHeads) assert.doesNotMatch(head, /c-card-actions/, "the head holds the title only");
   const chart = markup.slice(markup.indexOf('class="c-chart'));
-  assert.match(chart, /c-chart-plot[\s\S]*c-chart-area[\s\S]*c-chart-times[\s\S]*c-chart-foot"><span class="c-legend">[\s\S]*data-action="chart\.data"/);
-  assert.match(chart, /data-tip="No host"><span aria-hidden="true" class="c-legend-gap"><\/span><span class="c-legend-label">No host/, "the axis carries the unit; the legend names the gap");
+  assert.match(chart, /c-chart-plot[\s\S]*c-chart-area[\s\S]*c-chart-times[\s\S]*c-chart-foot">[\s\S]*data-action="chart\.data"/);
+  assert.doesNotMatch(markup, /c-legend/);
 });
 
-test("the chart skeleton reserves the time row and a foot with the legend and the data key", () => {
+test("Show data puts the readings in the plot's place, so the card keeps its height", () => {
+  const markup = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "6 hours", points: series([10, 20, 30]), format, time }));
+  assert.match(markup, /c-chart-plot/);
+  assert.doesNotMatch(markup, /c-chart-readings/, "the plot shows until the data is asked for");
+});
+
+test("the chart skeleton reserves the time row and a foot with the data key", () => {
   const skeleton = renderToStaticMarkup(createElement(ChartSkeleton));
-  const loaded = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "6 hours", points: series([10, 20, 30]), format, time, legend: createElement("span", { className: "c-legend" }) }));
-  const shape = (markup: string) => classes(markup, "c-chart-|c-legend").filter((name) => /^c-chart-(plot|axis|area|times|foot)$|^c-legend$/.test(name!));
+  const loaded = renderToStaticMarkup(createElement(TimeSeriesChart, { label: "CPU", range: "6 hours", points: series([10, 20, 30]), format, time }));
+  const shape = (markup: string) => classes(markup, "c-chart-").filter((name) => /^c-chart-(plot|axis|area|times|foot)$/.test(name!));
   assert.deepEqual(shape(skeleton), shape(loaded));
   assert.equal(skeleton.match(/<span style="left:/g)?.length, 3, "three time labels' places");
   assert.equal(loaded.match(/<span style="left:/g)?.length, 3);

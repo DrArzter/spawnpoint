@@ -105,6 +105,8 @@ html[data-skin="console"] .c-arrived > td {
  */
 html[data-skin="console"] {
   --c-dir: 0;
+  /* A page just taller than the screen must not gain and lose a scrollbar, and with it width and height. */
+  scrollbar-gutter: stable;
 }
 
 html[data-skin="console"][data-direction="forward"] {

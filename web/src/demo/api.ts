@@ -4,6 +4,16 @@ import { UNREACHABLE } from "../api/error-text";
 import { clearDemoFlag, demoFailure, demoLatency, type DemoFailureCall } from "./flag";
 import * as store from "./store";
 
+/** Calls `changed` when `read` returns something other than at the last call; the first call only remembers. */
+export function changeWatcher(read: () => string, changed: () => void): () => void {
+  let last: string | null = null;
+  return () => {
+    const next = read();
+    if (last !== null && next !== last) changed();
+    last = next;
+  };
+}
+
 let accessInvitations: AccessInvitation[] = [];
 // The first snapshot is a boot answer; every one after it is a refresh.
 let snapshotServed = false;
@@ -203,8 +213,10 @@ export const demoApi: SpawnpointApi = {
     return store.snapshot();
   },
 
+  // As the socket does: a message only when the backend's state changed.
   subscribeControlPlane(onInvalidated) {
-    const timer = window.setInterval(onInvalidated, 1_000);
+    const watch = changeWatcher(() => JSON.stringify(store.snapshot()), onInvalidated);
+    const timer = window.setInterval(watch, 1_000);
     return () => window.clearInterval(timer);
   },
 

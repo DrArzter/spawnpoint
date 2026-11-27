@@ -66,10 +66,20 @@ class DeploymentPlanTest(unittest.TestCase):
         self.assertFalse(plan["lambdas"])
         self.assertEqual(plan["terraform_roots"], [])
 
-    def test_lambda_change_deploys_only_lambda_pipeline(self) -> None:
-        plan = make_plan(["lambdas/src/handlers/access-api.ts"])
+    def test_lambda_code_also_applies_the_roots_that_package_lambdas(self) -> None:
+        # 2026-11-27: a fix in spot-interruption.ts deployed only the Lambda job,
+        # which does not know that function; the old code ran the next fault test.
+        plan = make_plan(["lambdas/src/control-plane/spot-interruption.ts"])
         self.assertTrue(plan["lambdas"])
         self.assertFalse(plan["web"])
+        self.assertEqual(
+            sorted(plan["terraform_roots"]),
+            sorted(["infra/terraform-operations", "infra/terraform-access-api", "infra/terraform-releases"]),
+        )
+
+    def test_a_lambda_test_change_applies_no_root(self) -> None:
+        plan = make_plan(["lambdas/test/spot-interruption.test.ts"])
+        self.assertTrue(plan["lambdas"])
         self.assertEqual(plan["terraform_roots"], [])
 
     def test_root_change_selects_only_that_root(self) -> None:

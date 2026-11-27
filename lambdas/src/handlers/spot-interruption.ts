@@ -9,6 +9,7 @@ import { interruptionEvent, markHostSessionsMoving, moveHostSessions } from "../
 import { dynamoLifecycleStores } from "../lifecycle/dynamo-lifecycle-stores.ts";
 
 // The composition root (ADR-0092): the clients, then the ports over them.
+// infra/terraform-operations packages and deploys this function, not scripts/deploy-lambdas.sh.
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required`);

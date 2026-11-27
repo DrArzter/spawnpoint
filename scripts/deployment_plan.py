@@ -54,6 +54,13 @@ WORKFLOW_ROOTS = {
 # plan test reads both source trees and fails on an import no prefix covers.
 BUNDLED_BY_LAMBDAS = ("contract/", "server/games/", "server/scripts/host-output.json")
 BUNDLED_BY_WEB = ("contract/",)
+# Lambda bundles that only Terraform deploys (scripts/deploy-lambdas.sh does not
+# know them): spot-interruption, the sweepers and the reconciler in operations,
+# the assistant worker and subscriptions in the access API, the release writer.
+# A change to their code must apply these roots; a root whose zips are
+# unchanged plans no change.
+LAMBDA_CODE = ("lambdas/src/", "lambdas/scripts/build.sh", "lambdas/package.json", "lambdas/package-lock.json")
+ROOTS_PACKAGING_LAMBDAS = (TF_OPERATIONS, TF_ACCESS_API, TF_RELEASES)
 
 RELEASE_SCRIPTS = {
     "scripts/aws-release-builder.sh",
@@ -170,6 +177,8 @@ def select_path(path: str, selected: Selection) -> None:
         return
     selected.web |= path.startswith("web/") or path == "scripts/deploy-web.sh" or path.startswith(BUNDLED_BY_WEB)
     selected.lambdas |= path.startswith("lambdas/") or path == "scripts/deploy-lambdas.sh" or path.startswith(BUNDLED_BY_LAMBDAS)
+    if path.startswith(LAMBDA_CODE) or path.startswith(BUNDLED_BY_LAMBDAS):
+        selected.add_roots(ROOTS_PACKAGING_LAMBDAS)
     if select_terraform_path(path, selected) or select_workflow_path(path, selected):
         return
     select_other_path(path, selected)

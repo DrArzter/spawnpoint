@@ -52,10 +52,10 @@ test("a malformed id is refused before AWS is asked", async (t) => {
   assert.deepEqual(asked, []);
 });
 
-test("the route is read with the authority that reads a world's operations, and is advertised", () => {
+test("the route is read with the authority that reads a world's operations, and is advertised", async () => {
   const key = "GET /games/{gameId}/worlds/{worldId}/operations/{operationId}";
   assert.deepEqual(Object.keys(operationsRoutes), [key]);
   assert.deepEqual(routes[key]?.access, { kind: "permission", permission: "status.read" });
   assert.deepEqual(routes["GET /control-plane"]?.access, routes[key]?.access);
-  assert.ok(deployedCapabilities().includes("operationProgress"));
+  assert.ok((await deployedCapabilities()).includes("operationProgress"));
 });

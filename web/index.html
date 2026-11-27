@@ -26,10 +26,12 @@
           document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#222222" : "#ffffff");
           // The remembered face, so the first frame is already drawn in it and
           // its font is asked for now rather than when the shell mounts. The
-          // front door never wears it; the app takes it off there.
+          // front door never wears it; the app takes it off there. A face that
+          // is switched off is never stamped (the build fills in the list).
+          const enabled = __ENABLED_SKINS__;
           const asked = new URLSearchParams(location.search).get("skin");
-          const chosen = asked === "terminal" || asked === "console" ? asked : localStorage.getItem("spawnpoint.skin");
-          const skin = chosen === "terminal" ? "terminal" : "console";
+          const chosen = enabled.includes(asked) ? asked : localStorage.getItem("spawnpoint.skin");
+          const skin = enabled.includes(chosen) ? chosen : "console";
           const fonts = {
             terminal: "https://fonts.googleapis.com/css2?family=B612+Mono:wght@400;700&display=swap",
             console: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap",

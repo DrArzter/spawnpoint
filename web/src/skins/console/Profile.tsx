@@ -67,7 +67,7 @@ const THEMES: readonly { value: ThemePreference; label: string; icon: IconName }
   { value: "system", label: t("profile.system"), icon: "contrast" },
 ];
 
-function Appearance({ model, look, language }: Readonly<{ model: AppearanceModel; look: LookModel; language: LookModel }>) {
+function Appearance({ model, look, language }: Readonly<{ model: AppearanceModel; look: LookModel | null; language: LookModel }>) {
   const toast = useToast();
   const choose = (next: ThemePreference) => {
     model.setPreference(next).catch((error: unknown) => toast(error instanceof Error ? error.message : t("profile.themeCouldNotSaved"), "err"));
@@ -85,7 +85,7 @@ function Appearance({ model, look, language }: Readonly<{ model: AppearanceModel
     <Card title={t("profile.appearance")}>
       <div className="c-profile-settings">
         <RadioCards legend={t("profile.theme")} name="theme" onChange={choose} options={THEMES} value={model.preference} />
-        {look.options.length > 0 && (
+        {look && (
           <RadioCards
             legend={t("profile.look")}
             name="look"

@@ -61,7 +61,7 @@ function scenario(t: TestContext, options: Readonly<{
   return inputs;
 }
 
-// ADR-0106: a secret the game needs and SSM lacks refuses the start before any machine runs.
+// ADR-0108: a secret the game needs and SSM lacks refuses the start before any machine runs.
 test("a start is refused with the missing keys when the host env lacks the game's secrets", async (t) => {
   const inputs = scenario(t, { hostEnv: ["AWS_REGION"] });
   const refused = await controlSession(identity, "start", "minecraft", record.worldId);

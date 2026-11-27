@@ -7,6 +7,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { revealDelta } from "../src/lib/revealTab.ts";
 import { Tabs as TerminalTabs } from "../src/skins/terminal/ui.tsx";
+import { skinTest } from "./support/skins.ts";
+
+// The terminal skin's cases skip while it is switched off (ADR-0106).
+const terminalTest = skinTest("terminal");
 
 // A world page has six tabs; on a phone the strip scrolls, and the open one
 // must not sit past its edge.
@@ -19,7 +23,7 @@ test("a tab past the strip's edge is scrolled in, and only as far as needed", ()
   assert.equal(revealDelta(strip, { left: 300, right: 700 }), 284, "a tab wider than the strip shows its start");
 });
 
-test("the terminal draws a scrolling tablist with one selected, focusable tab", () => {
+terminalTest("the terminal draws a scrolling tablist with one selected, focusable tab", () => {
   const options = [{ id: "details", label: "Details" }, { id: "metrics", label: "Metrics" }] as const;
   const markup = renderToStaticMarkup(createElement(TerminalTabs, { label: "World", options, value: "metrics", onChange: () => undefined }));
   assert.match(markup, /role="tablist"/);

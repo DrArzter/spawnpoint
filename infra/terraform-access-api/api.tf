@@ -314,7 +314,7 @@ data "aws_iam_policy_document" "access_api" {
     ]
   }
 
-  # The start preflight (ADR-0106) lists the host .env's parameter names. No
+  # The start preflight (ADR-0108) lists the host .env's parameter names. No
   # decryption and no kms:Decrypt: the API never reads a value.
   statement {
     sid     = "ListHostEnvParameterNames"
@@ -323,6 +323,12 @@ data "aws_iam_policy_document" "access_api" {
       "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/spawnpoint/host/env",
       "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/spawnpoint/host/env/*",
     ]
+  }
+
+  statement {
+    sid       = "ReadFeatureFlags"
+    actions   = ["ssm:GetParameter"]
+    resources = [local.feature_flags_parameter_arn]
   }
 
   dynamic "statement" {
@@ -414,6 +420,7 @@ resource "aws_lambda_function" "access_api" {
       SPAWNPOINT_APP_COMMIT            = var.app_commit
       GAME_DNS_SUFFIX                  = var.game_dns_suffix
       REFRESH_COOKIE_SAME_SITE         = local.custom_api_domain_enabled ? "Strict" : "None"
+      FEATURE_FLAGS_PARAMETER          = aws_ssm_parameter.feature_flags.name
     }
   }
 

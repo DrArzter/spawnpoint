@@ -49,9 +49,9 @@ export type GameModule = Readonly<{
   presentation: GamePresentation;
   /** The game settings a world may carry (ADR-0064), as the module's settings.json states them. */
   settings: readonly Readonly<Record<string, unknown>>[];
-  /** The .env keys the host reads from /spawnpoint/host/env/ for it; checked before a launch (ADR-0106). */
+  /** The .env keys the host reads from /spawnpoint/host/env/ for it; checked before a launch (ADR-0108). */
   requiredSecrets: readonly string[];
-  /** How long the host waits for it to serve after `compose up` (ADR-0106). */
+  /** How long the host waits for it to serve after `compose up` (ADR-0108). */
   startTimeoutSeconds: number;
 }>;
 
@@ -68,7 +68,7 @@ export type Interruption = Readonly<{ save: "live" | "stop"; saveBudgetSeconds: 
  */
 export const INTERRUPTION_BUDGET_LIMIT_SECONDS = 90;
 
-/** What the host waits when a manifest states no start_timeout_seconds, and the most one may state (ADR-0106). */
+/** What the host waits when a manifest states no start_timeout_seconds, and the most one may state (ADR-0108). */
 export const DEFAULT_START_TIMEOUT_SECONDS = 600;
 const START_TIMEOUT_LIMIT_SECONDS = 3000;
 

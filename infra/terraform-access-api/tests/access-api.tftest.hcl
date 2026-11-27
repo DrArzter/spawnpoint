@@ -405,7 +405,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
       ]),
       !anytrue([for statement in data.aws_iam_policy_document.access_api.statement : contains(statement.actions, "kms:Decrypt")]),
     ])
-    error_message = "The start preflight lists the host .env's names on its path only, and the API cannot decrypt a value (ADR-0106)."
+    error_message = "The start preflight lists the host .env's names on its path only, and the API cannot decrypt a value (ADR-0108)."
   }
 
   assert {
@@ -667,6 +667,18 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition     = aws_lambda_function.access_api.environment[0].variables.SPAWNPOINT_LAUNCH == "disabled" && aws_lambda_function.access_api.environment[0].variables.SPAWNPOINT_APP_COMMIT == "main"
     error_message = "Launching hosts (ADR-0054, phase 12) must default to disabled; a launched host checks out the commit the API names."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_ssm_parameter.feature_flags.name == "/spawnpoint/flags",
+      aws_ssm_parameter.feature_flags.type == "String",
+      aws_ssm_parameter.feature_flags.value == "{}",
+      aws_lambda_function.access_api.environment[0].variables.FEATURE_FLAGS_PARAMETER == "/spawnpoint/flags",
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "ReadFeatureFlags"]) == toset(["ssm:GetParameter"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "ReadFeatureFlags"]) == toset(["arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/flags"]),
+    ])
+    error_message = "The API reads the feature flags (ADR-0107) from /spawnpoint/flags, created empty, and may read that one parameter only."
   }
 
   assert {

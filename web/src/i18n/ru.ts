@@ -579,6 +579,7 @@ export const ru: Catalogue = {
   "error.no_release_selected": "Указатель релиза этого мира пока не называет релиз.",
   "error.not_a_spawnpoint_host": "Здесь можно удалить только постоянный хост Spawnpoint.",
   "error.not_found": "Spawnpoint пока не предлагает этого.",
+  "error.feature_off": "Эта функция выключена.",
   "error.operation_in_progress": "Для этого мира уже выполняется другая операция.",
   "error.operation_progress_unavailable": "Сейчас нельзя прочитать ход операции.",
   "error.panel_url_unavailable": "Сейчас нельзя создать ссылку-приглашение.",

@@ -1,9 +1,12 @@
 import "./support/browser.ts";
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { painterFor, type SceneSize } from "../src/skins/terminal/GameIcon.tsx";
+import { skinTest } from "./support/skins.ts";
+
+// The terminal skin's own tests skip while it is switched off (ADR-0106).
+const test = skinTest("terminal");
 
 // The terminal's game icons: every painter fills its scene with brightness
 // between 0 and 1 and has something to show at rest; the ones that move do

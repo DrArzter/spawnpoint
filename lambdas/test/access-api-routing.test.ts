@@ -154,7 +154,7 @@ test("promoting a world is release.promote, which only the Owner role holds", as
   const { builtInRoles } = await import("../src/access/domain.ts");
   const holders = Object.values(builtInRoles).filter((role) => role.permissions.includes("release.promote")).map((role) => role.id);
   assert.deepEqual(holders, ["owner"]);
-  assert.ok(deployedCapabilities().includes("releasePromotion"));
+  assert.ok((await deployedCapabilities()).includes("releasePromotion"));
 });
 
 test("retiring a release is release.retire, which only the Owner role holds", async () => {
@@ -177,8 +177,8 @@ test("permanent world deletion is owner-level world management", () => {
 // A capability names a route. If the route is renamed or removed and the
 // capability is not, the panel would keep offering a screen that cannot load —
 // which is the failure this whole mechanism exists to prevent.
-test("every advertised capability names a route this API serves", () => {
-  const advertised = deployedCapabilities();
+test("every advertised capability names a route this API serves", async () => {
+  const advertised = await deployedCapabilities();
   assert.ok(advertised.length > 0, "a deployment that routes anything advertises something");
   for (const name of advertised) {
     assert.equal(typeof name, "string");
@@ -197,7 +197,7 @@ test("a capability is advertised only while its route exists", async () => {
   }
   // The assistant is advertised only where the deployment switched it on and
   // set its limits (ADR-0094); this build has no settings for it.
-  const advertised = deployedCapabilities();
+  const advertised = await deployedCapabilities();
   assert.equal(advertised.length, named.length - 1, "every other mapped capability should be advertised by this build");
   assert.ok(!advertised.includes("assistant"), "the assistant is off until the deployment switches it on");
 });

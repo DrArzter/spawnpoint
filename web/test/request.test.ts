@@ -87,7 +87,7 @@ test("a role without the permission has nothing to retry; an API that did not an
   assert.equal(failureView("failed", "Backups could not be loaded", "read backups", "x").retry, true);
 });
 
-// ADR-0106: a start or an update refused for missing secrets names them.
+// ADR-0108: a start or an update refused for missing secrets names them.
 test("a start refused for missing game secrets names the keys", async () => {
   const { worldsApi } = await import("../src/api/live/worlds.ts");
   answer(409, { error: "missing_game_secrets", keys: ["ZOMBOID_RCON_PASSWORD", "ZOMBOID_ADMIN_PASSWORD"] });

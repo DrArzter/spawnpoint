@@ -8,6 +8,7 @@ import { launch } from "./cdp.mjs";
 import { STATES, WORLD } from "./states.mjs";
 import { en } from "../../src/i18n/en.ts";
 import { ru } from "../../src/i18n/ru.ts";
+import { enabledSkins } from "../../src/skins/skin.ts";
 
 // usage: audit.mjs [--gate] [--advise] [--accept] [--self-test] [base-url]
 //
@@ -29,8 +30,13 @@ const accepted = join(here, "accepted.txt");
 const reportDir = resolve(process.env.AUDIT_OUT ?? join(here, "../../out/ui-audit"));
 const PROBE_SOURCE = readFileSync(join(here, "probe.js"), "utf8");
 
-// The faces CI gates.
-const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : ["console", "terminal"];
+// The faces CI gates: the ones switched on in src/skins/skin.ts (ADR-0106), or those of them SKIN names.
+// VITE_ENABLED_SKINS replaces the list here as it does in the build.
+const ENABLED = enabledSkins(process.env.VITE_ENABLED_SKINS);
+const SKINS = process.env.SKIN ? process.env.SKIN.split(",") : [...ENABLED];
+for (const skin of SKINS) {
+  if (!ENABLED.includes(skin)) throw new Error(`SKIN names ${skin}, which is switched off (src/skins/skin.ts)`);
+}
 // The languages CI gates: English, and Russian, whose words run longer (ADR-0098). A Russian job's name ends in `@ru`.
 const LOCALES = process.env.LOCALE ? process.env.LOCALE.split(",") : ["en", "ru"];
 const named = (name, locale) => (locale === "en" ? name : `${name}@${locale}`);

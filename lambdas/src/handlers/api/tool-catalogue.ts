@@ -1,6 +1,6 @@
 import { type Identity, type Permission } from "../../access/domain.ts";
 import { type Event, type Response, InvalidBodyError, errorResponse } from "./http.ts";
-import { identityRefusal } from "./dispatcher.ts";
+import { featureRefusal, identityRefusal } from "./dispatcher.ts";
 import { type ArgumentSchema, isToolFacts, type Route, type ToolFacts } from "./routing.ts";
 
 /*
@@ -130,12 +130,14 @@ export async function runTool(
   identity: Identity,
   args: unknown,
   agent?: Readonly<{ clientId: string; name: string }>,
+  /** The route keys the feature flags switched off (ADR-0107). */
+  switchedOff: ReadonlySet<string> = new Set(),
 ): Promise<Response | null> {
   const route = routes[tool.routeKey];
   if (route === undefined) return errorResponse(404, "not_found");
   const event = toolEvent(tool, args, agent);
   if (event === null) return null;
-  const refused = identityRefusal(route, identity);
+  const refused = identityRefusal(route, identity) ?? featureRefusal(tool.routeKey, switchedOff);
   if (refused) return refused;
   try {
     return await (route.handle as (subject: Identity, event: Event) => Promise<Response> | Response)(identity, event);

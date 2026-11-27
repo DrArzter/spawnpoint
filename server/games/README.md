@@ -17,7 +17,7 @@ writes the world while the game runs, `"stop"` when only a graceful stop does, a
 measured worst case. `capabilities.spot` may be `true` only with this block, a budget of at most 90 seconds, and a
 measured section in `docs/measurements.md`.
 
-What a launch needs is in the manifest too ([ADR-0106](../../docs/adr/0106-a-game-declares-what-its-launch-needs.md)).
+What a launch needs is in the manifest too ([ADR-0108](../../docs/adr/0108-a-game-declares-what-its-launch-needs.md)).
 `required_secrets` lists the `.env` keys the game reads from `/spawnpoint/host/env/` (`[]` when none); the API
 refuses to start a session while one is missing. `start_timeout_seconds` (default 600) is how long `start.sh` waits
 for the game to serve. `server/tests/game-requirements-test.sh` fails when a Compose file requires a variable that is

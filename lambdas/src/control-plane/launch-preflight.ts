@@ -2,7 +2,7 @@ import { findGameModule } from "./game-modules.ts";
 
 /**
  * The names of the parameters a host renders its .env from, never their values
- * (ADR-0106). The last segment of a name is the .env key.
+ * (ADR-0108). The last segment of a name is the .env key.
  */
 export type HostEnvKeys = Readonly<{ list: () => Promise<readonly string[]> }>;
 

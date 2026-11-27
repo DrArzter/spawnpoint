@@ -12,6 +12,7 @@ import { Tooltip } from "../src/components/ui/Tooltip.tsx";
 import { Menu } from "../src/skins/console/ui/Menu.tsx";
 import { ToastProvider } from "../src/skins/console/ui/Toast.tsx";
 import { TooltipLayer } from "../src/skins/console/ui/Tooltip.tsx";
+import { skinEnabled } from "./support/skins.ts";
 
 // Every floating layer (tip, menu, toast) is a manual popover shown through
 // components/ui/layer.ts. A modal dialog is in the top layer, and only another
@@ -75,7 +76,9 @@ test("the rendered layers carry the popover attribute", () => {
 });
 
 test("the layers' stylesheet owners keep no stacking of their own", () => {
-  for (const sheet of ["styles/components.css", "skins/console/styles/menu.css", "skins/console/styles/notify.css", "skins/terminal/terminal.css"]) {
+  // A switched-off skin's sheet is not checked (ADR-0106).
+  const terminal = skinEnabled("terminal") ? ["skins/terminal/terminal.css"] : [];
+  for (const sheet of ["styles/components.css", "skins/console/styles/menu.css", "skins/console/styles/notify.css", ...terminal]) {
     const text = readFileSync(join(root, sheet), "utf8");
     for (const selector of [".tip ", ".menu ", ".snackbar-host ", ".c-menu ", ".c-toasts ", ".c-tip ", ".t-menu "]) {
       const at = text.indexOf(`${selector}{`);

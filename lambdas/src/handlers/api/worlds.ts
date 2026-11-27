@@ -180,7 +180,7 @@ export type WorldsDependencies = Readonly<{
   machines: SessionMachines;
   gateway: Pick<ConsoleGateway, "send" | "read" | "reloadWhitelist">;
   backupReleases: () => BackupReleaseSources;
-  /** The host .env's names, checked before a start (ADR-0106). */
+  /** The host .env's names, checked before a start (ADR-0108). */
   hostEnv: HostEnvKeys;
 }>;
 

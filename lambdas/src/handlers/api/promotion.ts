@@ -18,7 +18,7 @@ export type PromotionDependencies = Readonly<{
   sources: ControlPlaneSources;
   machines: Pick<SessionMachines, "promote">;
   worlds: Pick<WorldRecords, "switchReleaseBeforeFirstStart">;
-  /** The host .env's names: a promotion starts the world on its host (ADR-0106). */
+  /** The host .env's names: a promotion starts the world on its host (ADR-0108). */
   hostEnv: HostEnvKeys;
 }>;
 

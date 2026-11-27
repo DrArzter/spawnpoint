@@ -6,7 +6,7 @@ import { HOST_ENV_PATH, ssmHostEnvKeys } from "../src/control-plane/aws-host-env
 import { gameModules } from "../src/control-plane/game-modules.ts";
 import { missingGameSecrets } from "../src/control-plane/launch-preflight.ts";
 
-// ADR-0106: a game's required secrets are checked by name before a session starts.
+// ADR-0108: a game's required secrets are checked by name before a session starts.
 
 const listing = (keys: readonly string[]) => {
   let reads = 0;

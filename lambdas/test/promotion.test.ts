@@ -133,7 +133,7 @@ function scenario(t: TestContext, options: Readonly<{ operations?: OperationObse
 
 const owner = { id: "owner", displayName: "Owner", roleId: "owner", directGrants: [] } as const;
 
-// ADR-0106: the promote machine starts the world on its host, so it needs the game's secrets too.
+// ADR-0108: the promote machine starts the world on its host, so it needs the game's secrets too.
 test("a promotion is refused with the missing keys when the host env lacks the game's secrets", async (t) => {
   const { machines } = scenario(t, { hostEnv: [] });
   const result = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }));

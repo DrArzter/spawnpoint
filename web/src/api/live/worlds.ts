@@ -78,7 +78,7 @@ function named(template: (value: string) => string, fallback: string, key: "name
   };
 }
 
-// ADR-0106: the keys a start needs and SSM lacks, named so the Owner can set them.
+// ADR-0108: the keys a start needs and SSM lacks, named so the Owner can set them.
 const MISSING_SECRETS = (detail: ApiErrorBody) => {
   const keys = Array.isArray(detail.keys) ? detail.keys.filter((key): key is string => typeof key === "string") : [];
   return keys.length > 0 ? t("world.gameSecretsMissing", { keys: keys.join(", ") }) : API_ERROR_TEXT.missing_game_secrets;

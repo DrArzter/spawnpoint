@@ -38,6 +38,13 @@ test("builds a multi-host read model without binding stopped worlds to instances
   assert.equal(snapshot.operations[0]?.providerRef, "arn:execution");
 });
 
+test("a promotion's nested start is not listed as an operation of its own", async () => {
+  const promote = { id: "panel-promote-1-ab", type: "promote" as const, status: "running" as const, startedAt: "2026-08-29T00:00:00.000Z", providerRef: "arn:promote", worldId: "world" };
+  const nested = { ...promote, id: "panel-promote-1-ab-target-start", type: "start" as const, startedAt: "2026-08-29T00:00:04.000Z", providerRef: "arn:start" };
+  const snapshot = await readControlPlaneSnapshot(withRecords({ ...sources, listRunningOperations: async () => [nested, promote] }, configuredCatalog), { includeInfrastructure: false, includeDesiredRelease: false });
+  assert.deepEqual(snapshot.operations.map((operation) => operation.id), ["panel-promote-1-ab"]);
+});
+
 test("redacts infrastructure references and desired releases from coarse status", async () => {
   const snapshot = await readControlPlaneSnapshot(withRecords(sources, configuredCatalog), { includeInfrastructure: false, includeDesiredRelease: false });
   assert.equal("providerRef" in snapshot.hosts[0]!, false);

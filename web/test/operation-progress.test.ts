@@ -210,3 +210,17 @@ test("the model carries nothing a skin has to compute", () => {
   const model: OperationProgressModel = progressModel(null, failed)!;
   assert.deepEqual(Object.keys(model).sort(), ["caught", "child", "expectation", "failure", "id", "known", "log", "logged", "nests", "ranSeconds", "running", "startedAt", "status", "step", "title"]);
 });
+
+test("it says once that the operation ended, so the snapshot is read again", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  let ends = 0;
+  const answers = [ok(), ok(failed)];
+  let reads = 0;
+  startPolling({ read: () => answers[Math.min(reads++, 1)]!(), onProgress: () => undefined, visible: () => true, onEnded: () => { ends += 1; } });
+  await flush();
+  assert.equal(ends, 0);
+  await after(POLL_MS);
+  assert.equal(ends, 1);
+  await after(POLL_MS * 5);
+  assert.equal(ends, 1);
+});

@@ -182,11 +182,11 @@ export type Poller = Readonly<{
 
 /**
  * Reads one operation now and every few seconds. It ends when the operation is
- * no longer running, after too many reads or failed reads in a row, or on
+ * no longer running (and says so through `onEnded`, as the snapshot is then behind), after too many reads or failed reads in a row, or on
  * `stop`. A failed read keeps the last good value; a read that finds nothing
  * counts as a failure. No timer runs while hidden.
  */
-export function startPolling(options: Readonly<{ read: () => Promise<OperationProgress | null>; onProgress: (progress: OperationProgress) => void; visible: () => boolean }>): Poller {
+export function startPolling(options: Readonly<{ read: () => Promise<OperationProgress | null>; onProgress: (progress: OperationProgress) => void; visible: () => boolean; onEnded?: () => void }>): Poller {
   let stopped = false;
   let inflight = false;
   let reads = 0;
@@ -205,7 +205,7 @@ export function startPolling(options: Readonly<{ read: () => Promise<OperationPr
       else {
         failures = 0;
         options.onProgress(progress);
-        if (progress.status !== "running") { stopped = true; return; }
+        if (progress.status !== "running") { stopped = true; options.onEnded?.(); return; }
       }
     } catch {
       if (stopped) return;
@@ -240,6 +240,7 @@ export function useOperationProgress(
   scope: Readonly<{ gameId: string; worldId: string }> | null,
   running: Operation | null,
   load?: ProgressLoader,
+  onEnded?: () => void,
 ): OperationProgress | null {
   const api = useApi();
   const [held, setHeld] = useState<Held | null>(null);
@@ -248,6 +249,8 @@ export function useOperationProgress(
   const read: ProgressLoader = load ?? ((gameId, worldId, operationId) => api.loadOperationProgress(gameId, worldId, operationId));
   const loader = useRef(read);
   loader.current = read;
+  const ended = useRef(onEnded);
+  ended.current = onEnded;
   const heldRef = useRef(held);
   heldRef.current = held;
   const before = useRef<Readonly<{ world: string; id: string }> | null>(null);
@@ -260,6 +263,7 @@ export function useOperationProgress(
       read: () => loader.current(scope.gameId, scope.worldId, runningId),
       onProgress: (progress) => setHeld({ world, progress }),
       visible: () => document.visibilityState !== "hidden",
+      onEnded: () => ended.current?.(),
     });
     const onVisibility = () => (document.visibilityState === "hidden" ? poller.hide() : poller.show());
     document.addEventListener("visibilitychange", onVisibility);

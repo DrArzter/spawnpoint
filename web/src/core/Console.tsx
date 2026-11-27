@@ -245,7 +245,7 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   const shown = useWorldTabs(console, game, world, notify);
   const offersProgress = capabilities.has("operationProgress");
   const running = newestRunning(snapshot?.operations ?? [], world.id);
-  const progress = progressModel(offersProgress ? running : null, useOperationProgress(offersProgress ? { gameId: game.id, worldId: world.id } : null, running));
+  const progress = progressModel(offersProgress ? running : null, useOperationProgress(offersProgress ? { gameId: game.id, worldId: world.id } : null, running, undefined, () => void console.refresh(true)));
   const canDownload = granted.has("backup.download") && capabilities.has("backupDownloads");
   const backups = useBackups(game.id, world, {
     canRead: granted.has("backup.read"),

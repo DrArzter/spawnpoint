@@ -8,6 +8,7 @@ locals {
 
   spawnpoint_ssm_documents         = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:document/spawnpoint-*"
   host_app_commit_parameter        = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/spawnpoint/host/app-commit"
+  feature_flags_parameter          = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/spawnpoint/flags"
   build_release_state_machine_arn  = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-build-release"
   build_release_execution_arn      = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:spawnpoint-build-release:*"
   preset_catalog_state_machine_arn = "arn:aws:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:spawnpoint-publish-preset-catalog"
@@ -362,7 +363,8 @@ data "aws_iam_policy_document" "github_deploy_iam" {
   }
 
   # The commit a host brings its checkout to before a session starts
-  # (ADR-0067). One parameter, written on every access API apply.
+  # (ADR-0067), written on every access API apply, and the feature flags
+  # (ADR-0107), created once with {} and then left to the owner.
   statement {
     sid    = "WriteOnlyTheHostAppCommitParameter"
     effect = "Allow"
@@ -372,7 +374,7 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "ssm:PutParameter",
       "ssm:RemoveTagsFromResource",
     ]
-    resources = [local.host_app_commit_parameter]
+    resources = [local.host_app_commit_parameter, local.feature_flags_parameter]
   }
 
   # EC2 creates a default allow-all egress rule with every security group.
@@ -727,7 +729,7 @@ data "aws_iam_policy_document" "github_plan_iam" {
     sid       = "ReadOnlyTheHostAppCommitParameter"
     effect    = "Allow"
     actions   = ["ssm:GetParameter", "ssm:ListTagsForResource"]
-    resources = [local.host_app_commit_parameter]
+    resources = [local.host_app_commit_parameter, local.feature_flags_parameter]
   }
 
   # DescribeParameters takes no resource; it lists names and metadata, not values.

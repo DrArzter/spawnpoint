@@ -77,7 +77,7 @@ run "plan_role_is_owner_reviewed_and_separate_from_deploy" {
       for statement in data.aws_iam_policy_document.github_plan_iam.statement :
       statement.sid == "ReadOnlyTheHostAppCommitParameter" &&
       toset(statement.actions) == toset(["ssm:GetParameter", "ssm:ListTagsForResource"]) &&
-      toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/host/app-commit"])
+      toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/host/app-commit", "arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/flags"])
     ])
     error_message = "The plan identity reads the host app-commit parameter and changes nothing (ADR-0067)."
   }
@@ -266,7 +266,7 @@ run "deployment_role_trusts_only_the_production_environment" {
       for statement in data.aws_iam_policy_document.github_deploy_iam.statement :
       statement.sid == "WriteOnlyTheHostAppCommitParameter" &&
       contains(statement.actions, "ssm:PutParameter") && !contains(statement.actions, "ssm:DeleteParameter") &&
-      toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/host/app-commit"])
+      toset(statement.resources) == toset(["arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/host/app-commit", "arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/flags"])
     ])
     error_message = "The deploy identity may write the host app-commit parameter and no other parameter (ADR-0067)."
   }

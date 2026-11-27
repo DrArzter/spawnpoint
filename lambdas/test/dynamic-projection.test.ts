@@ -93,3 +93,12 @@ test("a stored operation keeps its expected time and drops a malformed one", () 
   assert.equal(dropped?.id, "start-1");
   assert.equal(dropped?.expectedSeconds, undefined);
 });
+
+test("a launched host keeps its provenance and market when the projection is read back", () => {
+  const launched = { ...host, id: "fleet-1", providerRef: "i-fleet", provenance: "launched", market: "spot" };
+  const parsed = parseDynamicProjection({ schema_version: 1, observed_at_epoch_ms: 1_000, hosts: [host, launched], operations: [] }, 1_500);
+  assert.equal(parsed?.hosts[0]?.provenance, undefined);
+  assert.equal(parsed?.hosts[1]?.provenance, "launched");
+  assert.equal(parsed?.hosts[1]?.market, "spot");
+  assert.equal(parseDynamicProjection({ schema_version: 1, observed_at_epoch_ms: 1_000, hosts: [{ ...launched, provenance: "borrowed" }], operations: [] }, 1_500)?.hosts[0]?.provenance, undefined);
+});

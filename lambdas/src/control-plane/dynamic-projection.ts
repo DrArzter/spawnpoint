@@ -44,6 +44,9 @@ function host(value: unknown): HostObservation | null {
   const launchedAt = nullableString(item.launchedAt);
   const publicIp = nullableString(item.publicIp);
   if (instanceType === undefined || availabilityZone === undefined || launchedAt === undefined || publicIp === undefined) return null;
+  // A launched host must stay launched when read back, or it counts as the configured one.
+  const provenance = item.provenance === "configured" || item.provenance === "launched" ? item.provenance : undefined;
+  const market = item.market === "spot" || item.market === "on-demand" || item.market === null ? item.market : undefined;
   return {
     id: item.id,
     name: item.name,
@@ -53,6 +56,8 @@ function host(value: unknown): HostObservation | null {
     availabilityZone,
     launchedAt,
     publicIp,
+    ...(market === undefined ? {} : { market }),
+    ...(provenance === undefined ? {} : { provenance }),
   };
 }
 
@@ -161,3 +166,4 @@ export function hostOwnsSession(record: unknown, hostId: string, sessionId: stri
   if (hostRecord?.hostId !== hostId || !Array.isArray(hostRecord.reservations)) return false;
   return hostRecord.reservations.some((value) => object(value)?.sessionId === sessionId);
 }
+

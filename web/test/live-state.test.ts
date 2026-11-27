@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
 
 import type { ControlPlaneSnapshot, Game } from "../src/model.ts";
-import { SETTLE_POLL_MS, SETTLE_SLOW_AFTER_MS, SETTLE_SLOW_POLL_MS, settlePollDelay, startSettlePoll, unsettled } from "../src/core/live-state.ts";
+import { owesShowReload, SETTLE_EXPECT_MS, SETTLE_GIVE_UP_AFTER_MS, SETTLE_POLL_MS, SETTLE_SLOW_AFTER_MS, SETTLE_SLOW_POLL_MS, settlePollDelay, settleWanted, SHOW_RELOAD_GAP_MS, startSettlePoll, unsettled } from "../src/core/live-state.ts";
 import { deriveServerState } from "../src/core/useConsole.ts";
 
 afterEach(() => { mock.timers.reset(); });
@@ -85,4 +85,47 @@ test("a failed reload keeps the poll going, and slows after ten minutes", async 
   poll.stop();
   await after(SETTLE_SLOW_POLL_MS * 4);
   assert.equal(reads, before + 1);
+});
+
+test("a state that never settles stops the poll after thirty minutes", async () => {
+  assert.equal(settlePollDelay(SETTLE_GIVE_UP_AFTER_MS - 1), SETTLE_SLOW_POLL_MS);
+  assert.equal(settlePollDelay(SETTLE_GIVE_UP_AFTER_MS), null);
+  mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  let reads = 0;
+  startSettlePoll({ reload: async () => { reads += 1; }, visible: () => true });
+  for (let elapsed = 0; elapsed < SETTLE_GIVE_UP_AFTER_MS; elapsed += SETTLE_POLL_MS) await after(SETTLE_POLL_MS);
+  const atCap = reads;
+  // 10 min at 5 s and 20 min at 15 s, give or take the one in flight at the cap.
+  assert.ok(atCap >= 120 + 80 - 1 && atCap <= 120 + 80 + 1, String(atCap));
+  for (let index = 0; index < 20; index += 1) await after(SETTLE_SLOW_POLL_MS);
+  assert.equal(reads, atCap, "no read after the cap");
+});
+
+test("an accepted request keeps the poll until its operation is listed, at most a minute", () => {
+  const settled = snapshot();
+  assert.equal(settleWanted(settled, 0, 1_000), false);
+  assert.equal(settleWanted(settled, 1_000 + SETTLE_EXPECT_MS, 1_000), true, "the first read after the request lists nothing yet");
+  assert.equal(settleWanted(settled, 1_000 + SETTLE_EXPECT_MS, 1_000 + SETTLE_EXPECT_MS), false, "a request that never shows stops after a minute");
+  const listed = snapshot({ operations: [{ id: "o", type: "start", status: "running", startedAt: "2026-11-27T00:00:00.000Z" }] });
+  assert.equal(settleWanted(listed, 0, 1_000), true, "the second read lists it, and the transition keeps the poll");
+});
+
+test("an accepted request whose first read lists nothing still reads again within one delay", async () => {
+  mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const reads: ControlPlaneSnapshot[] = [snapshot(), snapshot({ operations: [{ id: "o", type: "start", status: "running", startedAt: "2026-11-27T00:00:00.000Z" }] })];
+  let shown = reads[0]!;
+  let index = 0;
+  const expectingUntil = Date.now() + SETTLE_EXPECT_MS;
+  assert.equal(settleWanted(shown, expectingUntil, Date.now()), true);
+  const poll = startSettlePoll({ reload: async () => { shown = reads[Math.min(++index, 1)]!; }, visible: () => true });
+  await after(SETTLE_POLL_MS);
+  assert.equal(shown.operations.length, 1);
+  assert.equal(deriveServerState(shown.games[0], shown), "starting");
+  poll.stop();
+});
+
+test("showing the tab or coming back online reads once, unless a read began a moment ago", () => {
+  assert.equal(owesShowReload(0, 10_000), true);
+  assert.equal(owesShowReload(10_000, 10_000 + SHOW_RELOAD_GAP_MS - 1), false);
+  assert.equal(owesShowReload(10_000, 10_000 + SHOW_RELOAD_GAP_MS), true);
 });

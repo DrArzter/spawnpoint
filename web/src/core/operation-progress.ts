@@ -18,7 +18,13 @@ import { intlLocale, t } from "../i18n";
 export const POLL_MS = 4000;
 /** About half an hour of polling at the cadence above. */
 export const MAX_POLLS = 450;
-export const MAX_FAILURES = 3;
+/** Failed reads in a row wait twice as long each time, up to this. */
+export const MAX_BACKOFF_MS = 30_000;
+
+/** The wait before the next read, after this many failed reads in a row. */
+export function pollDelay(failures: number): number {
+  return Math.min(POLL_MS * 2 ** failures, MAX_BACKOFF_MS);
+}
 
 /** The words of the rows, in one place. */
 export const PROGRESS_LABELS = {
@@ -182,17 +188,17 @@ export type Poller = Readonly<{
 
 /**
  * Reads one operation now and every few seconds. It ends when the operation is
- * no longer running, after too many reads or failed reads in a row, or on
- * `stop`. A failed read keeps the last good value; a read that finds nothing
+ * no longer running (and says so through `onEnded`, as the snapshot is then behind), after too many reads, or on
+ * `stop`. Failed reads in a row back off to 30 s instead of ending it. A failed read keeps the last good value; a read that finds nothing
  * counts as a failure. No timer runs while hidden.
  */
-export function startPolling(options: Readonly<{ read: () => Promise<OperationProgress | null>; onProgress: (progress: OperationProgress) => void; visible: () => boolean }>): Poller {
+export function startPolling(options: Readonly<{ read: () => Promise<OperationProgress | null>; onProgress: (progress: OperationProgress) => void; visible: () => boolean; onEnded?: () => void }>): Poller {
   let stopped = false;
   let inflight = false;
   let reads = 0;
   let failures = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const later = () => { timer = setTimeout(() => { void tick(); }, POLL_MS); };
+  const later = () => { timer = setTimeout(() => { void tick(); }, pollDelay(failures)); };
   async function tick(): Promise<void> {
     clearTimeout(timer);
     if (stopped || inflight || !options.visible()) return;
@@ -205,7 +211,7 @@ export function startPolling(options: Readonly<{ read: () => Promise<OperationPr
       else {
         failures = 0;
         options.onProgress(progress);
-        if (progress.status !== "running") { stopped = true; return; }
+        if (progress.status !== "running") { stopped = true; options.onEnded?.(); return; }
       }
     } catch {
       if (stopped) return;
@@ -213,7 +219,7 @@ export function startPolling(options: Readonly<{ read: () => Promise<OperationPr
     } finally {
       inflight = false;
     }
-    if (failures >= MAX_FAILURES || reads >= MAX_POLLS) { stopped = true; return; }
+    if (reads >= MAX_POLLS) { stopped = true; return; }
     later();
   }
   void tick();
@@ -240,6 +246,7 @@ export function useOperationProgress(
   scope: Readonly<{ gameId: string; worldId: string }> | null,
   running: Operation | null,
   load?: ProgressLoader,
+  onEnded?: () => void,
 ): OperationProgress | null {
   const api = useApi();
   const [held, setHeld] = useState<Held | null>(null);
@@ -248,6 +255,8 @@ export function useOperationProgress(
   const read: ProgressLoader = load ?? ((gameId, worldId, operationId) => api.loadOperationProgress(gameId, worldId, operationId));
   const loader = useRef(read);
   loader.current = read;
+  const ended = useRef(onEnded);
+  ended.current = onEnded;
   const heldRef = useRef(held);
   heldRef.current = held;
   const before = useRef<Readonly<{ world: string; id: string }> | null>(null);
@@ -260,6 +269,7 @@ export function useOperationProgress(
       read: () => loader.current(scope.gameId, scope.worldId, runningId),
       onProgress: (progress) => setHeld({ world, progress }),
       visible: () => document.visibilityState !== "hidden",
+      onEnded: () => ended.current?.(),
     });
     const onVisibility = () => (document.visibilityState === "hidden" ? poller.hide() : poller.show());
     document.addEventListener("visibilitychange", onVisibility);

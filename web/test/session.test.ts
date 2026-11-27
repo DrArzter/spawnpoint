@@ -122,3 +122,19 @@ test("the panel knows when the next shown reading expires, across game and world
   assert.equal(nextReadingExpiry(snapshot({ games: [game] }), 6_000), null);
   assert.equal(nextReadingExpiry(null, 0), null);
 });
+
+const operation = (type: "start" | "stop", worldId: string | null = "world-a") =>
+  ({ id: `${type}-1`, type, status: "running" as const, startedAt: "2026-09-14T00:00:00.000Z", worldId });
+const recordAt = (observedState: "ready" | "starting" | "stopping" | "stopped", active: boolean): Game => ({
+  ...activeGame,
+  lifecycle: { ...activeGame.lifecycle!, observedState, activeSessionId: active ? "session-1" : null, activeWorldId: active ? "world-a" : null },
+});
+
+test("the record ends a shared-host transition while a stale listing still shows the run", () => {
+  const stopped = { id: "host", name: "Shared host", state: "stopped" as const };
+  assert.equal(deriveSharedHostSession(snapshot({ games: [recordAt("stopped", false)], operations: [operation("start")] })).state, "starting", "a start begins from a stopped record");
+  assert.equal(deriveSharedHostSession(snapshot({ games: [recordAt("ready", true)], operations: [operation("start")] })).state, "running", "a ready record ends the start");
+  assert.equal(deriveSharedHostSession(snapshot({ games: [recordAt("ready", true)], operations: [operation("stop")] })).state, "stopping", "a stop begins from a ready record");
+  assert.equal(deriveSharedHostSession(snapshot({ games: [recordAt("stopped", false)], hosts: [stopped], operations: [operation("stop")] })).state, "stopped", "a stopped record ends the stop, though it names no session");
+  assert.equal(deriveSharedHostSession(snapshot({ games: [recordAt("stopped", false)], hosts: [stopped], operations: [operation("stop", null)] })).state, "stopping", "an operation with no world still decides");
+});

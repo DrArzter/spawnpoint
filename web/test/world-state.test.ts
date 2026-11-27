@@ -172,3 +172,15 @@ test("a fleet world's copy names the world, not a host or the fleet", () => {
   const labels = sessionDetails(minecraft, fleetA, shared, snapshot(), "running", true).map((item) => item.label);
   assert.equal(labels.includes("Fleet"), false, "the fleet-wide host count is not this world's");
 });
+
+test("the record ends a game's transition while a stale listing still shows the run", () => {
+  const at = (observedState: "ready" | "stopped"): Game => ({ ...minecraft, lifecycle: {
+    serverId: "minecraft", desiredState: observedState === "ready" ? "running" : "stopped", observedState,
+    activeSessionId: observedState === "ready" ? "session-1" : null, activeWorldId: observedState === "ready" ? configuredB.id : null, updatedAtEpochSeconds: 1,
+  } });
+  const single = (game: Game, type: "start" | "stop") => snapshot({ deployment: { placement: "single", launchEnabled: false, dnsAvailable: false }, hosts: [configuredHost], games: [game], operations: [{ ...start(configuredB.id), type }] });
+  assert.equal(deriveServerState(at("stopped"), single(at("stopped"), "start")), "starting");
+  assert.equal(deriveServerState(at("ready"), single(at("ready"), "start")), "running");
+  assert.equal(deriveServerState(at("ready"), single(at("ready"), "stop")), "stopping");
+  assert.equal(deriveServerState(at("stopped"), single(at("stopped"), "stop")), "stopped");
+});

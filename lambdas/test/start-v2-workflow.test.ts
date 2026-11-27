@@ -246,7 +246,7 @@ test("the stop releases the session's reservation after the verified stop, and t
   const template = await readFile(url, "utf8");
   const definition = JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition;
   assert.equal(state(definition, "Mark Session Stopped").Next, "Close Session History");
-  assert.equal(state(definition, "Close Session History").Next, "Release Placement");
+  assert.equal(state(definition, "Close Session History").Next, "Route Session Volume Release");
   const release = state(definition, "Release Placement");
   assert.equal(release.Next, "Route Emptied Host");
   assert.equal(release.Catch?.[0]?.Next, "Release Stop Lease");

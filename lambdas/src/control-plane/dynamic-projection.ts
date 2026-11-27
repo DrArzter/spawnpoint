@@ -44,6 +44,9 @@ function host(value: unknown): HostObservation | null {
   const launchedAt = nullableString(item.launchedAt);
   const publicIp = nullableString(item.publicIp);
   if (instanceType === undefined || availabilityZone === undefined || launchedAt === undefined || publicIp === undefined) return null;
+  // A launched host must stay launched when read back, or it counts as the configured one.
+  const provenance = item.provenance === "configured" || item.provenance === "launched" ? item.provenance : undefined;
+  const market = item.market === "spot" || item.market === "on-demand" || item.market === null ? item.market : undefined;
   return {
     id: item.id,
     name: item.name,
@@ -53,6 +56,8 @@ function host(value: unknown): HostObservation | null {
     availabilityZone,
     launchedAt,
     publicIp,
+    ...(market === undefined ? {} : { market }),
+    ...(provenance === undefined ? {} : { provenance }),
   };
 }
 
@@ -141,7 +146,9 @@ export function recoveryTarget(
   lifecycles: readonly LifecycleRecord[],
   nowEpochSeconds: number,
 ): RecoveryTarget | null {
-  if (hosts.length !== 1 || hosts[0]?.state !== "stopped" || operations.length !== 0) return null;
+  // Hosts launched for fleet worlds are not this safety net's concern.
+  const configured = hosts.filter((host) => host.provenance !== "launched");
+  if (configured.length !== 1 || configured[0]?.state !== "stopped" || operations.length !== 0) return null;
   const candidates = lifecycles.filter((record) =>
     record.observedState !== "stopped" &&
     record.activeSessionId !== null && record.activeWorldId !== null &&
@@ -152,7 +159,7 @@ export function recoveryTarget(
     serverId: record.serverId,
     sessionId: record.activeSessionId!,
     worldId: record.activeWorldId!,
-    instanceId: hosts[0].providerRef,
+    instanceId: configured[0].providerRef,
   };
 }
 
@@ -160,4 +167,33 @@ export function hostOwnsSession(record: unknown, hostId: string, sessionId: stri
   const hostRecord = object(record);
   if (hostRecord?.hostId !== hostId || !Array.isArray(hostRecord.reservations)) return false;
   return hostRecord.reservations.some((value) => object(value)?.sessionId === sessionId);
+}
+
+/** A Step Functions status change, as the projector reads it. */
+export type ExecutionChange = Readonly<{ executionArn: string; status: string }>;
+
+export function executionChange(event: ControlPlaneEvent): ExecutionChange | null {
+  if (event.source !== "aws.states") return null;
+  const detail = object(event.detail);
+  if (detail === null || typeof detail.executionArn !== "string" || typeof detail.status !== "string") return null;
+  return { executionArn: detail.executionArn, status: detail.status };
+}
+
+/**
+ * The running list with the event's own word on its run. ListExecutions is
+ * eventually consistent, so a run that has just ended can still be listed,
+ * and one that has just started can be missing. An ended status is final;
+ * a missing run is added only when a consistent read confirms it runs.
+ */
+export async function withExecutionChange(
+  operations: readonly OperationObservation[],
+  change: ExecutionChange | null,
+  confirmRunning: (executionArn: string) => Promise<OperationObservation | null>,
+): Promise<readonly OperationObservation[]> {
+  if (change === null) return operations;
+  const listed = operations.some((operation) => operation.providerRef === change.executionArn);
+  if (change.status !== "RUNNING") return listed ? operations.filter((operation) => operation.providerRef !== change.executionArn) : operations;
+  if (listed) return operations;
+  const running = await confirmRunning(change.executionArn);
+  return running === null ? operations : [running, ...operations].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }

@@ -8,9 +8,9 @@
   "stopTiming": {
     "instancePollSeconds": 10,
     "ssmPollSeconds": 10,
-    "commandPollSeconds": 15,
+    "commandPollSeconds": 5,
     "maxInstancePolls": 30,
     "maxSsmPolls": 30,
-    "maxCommandPolls": 160
+    "maxCommandPolls": 480
   }
 }

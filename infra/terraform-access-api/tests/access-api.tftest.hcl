@@ -566,9 +566,9 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   assert {
     condition = (
       jsondecode(aws_cloudwatch_event_rule.control_plane_projection_updated.event_pattern).source == ["spawnpoint.control-plane"] &&
-      jsondecode(aws_cloudwatch_event_rule.control_plane_projection_updated.event_pattern)["detail-type"] == ["Projection Updated"]
+      jsondecode(aws_cloudwatch_event_rule.control_plane_projection_updated.event_pattern)["detail-type"] == ["Projection Updated", "Session Changed"]
     )
-    error_message = "Only normalized projection invalidations may reach browser subscriptions."
+    error_message = "Only normalized projection and session invalidations may reach browser subscriptions."
   }
 
   assert {

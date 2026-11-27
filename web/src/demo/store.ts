@@ -270,7 +270,8 @@ export function snapshot(): ControlPlaneSnapshot {
       if (item.placement === "configured") item.session = owner.lifecycle?.activeWorldId === item.id ? { ...owner.lifecycle } : null;
     }
   }
-  return state.snapshot;
+  // A copy, as the API sends: the panel must not see a change before it reads again.
+  return structuredClone(state.snapshot);
 }
 
 /** Refuses a start the world cannot take: it already runs, or the shared host is busy. */

@@ -2,7 +2,7 @@ import { ApiGatewayManagementApiClient } from "@aws-sdk/client-apigatewaymanagem
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
-import { controlPlaneConnectionItem, subscriptionTicketKey } from "../control-plane/subscriptions.ts";
+import { controlPlaneConnectionItem, invalidatesPanels, postToConnections, subscriptionTicketKey } from "../control-plane/subscriptions.ts";
 import { websocketConnections } from "../control-plane/aws-websocket-connections.ts";
 import { dynamoTable } from "../control-plane/dynamo-table.ts";
 
@@ -80,6 +80,7 @@ async function publishInvalidation(event: ProjectionEvent): Promise<void> {
   if (typeof observedAt !== "number" || !Number.isSafeInteger(observedAt)) return;
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
   let exclusiveStartKey: Record<string, unknown> | undefined;
+  const failures: unknown[] = [];
   do {
     const page = await table.query({ // NOSONAR paginated: the next token comes from the previous page
       TableName: viewTable,
@@ -88,15 +89,15 @@ async function publishInvalidation(event: ProjectionEvent): Promise<void> {
       ExpressionAttributeValues: { ":pk": "SUBSCRIPTIONS#CONTROL_PLANE", ":now": nowEpochSeconds },
       ExclusiveStartKey: exclusiveStartKey,
     });
-    await Promise.all((page.Items ?? []).map(async (item) => { // NOSONAR one page of items at a time, within the paginated scan
-      const connectionId = item.connection_id;
-      if (typeof connectionId !== "string") return;
-      if (await connections.post(connectionId, { type: "control-plane-invalidated", observedAt }) === "gone") {
-        await removeConnection(connectionId);
-      }
-    }));
+    const connectionIds = (page.Items ?? []).flatMap((item) => (typeof item.connection_id === "string" ? [item.connection_id] : []));
+    try {
+      await postToConnections(connectionIds, (connectionId) => connections.post(connectionId, { type: "control-plane-invalidated", observedAt }), removeConnection);
+    } catch (error) {
+      failures.push(error);
+    }
     exclusiveStartKey = page.LastEvaluatedKey;
   } while (exclusiveStartKey !== undefined);
+  if (failures.length > 0) throw new AggregateError(failures, "some connections were not told");
 }
 
 export async function handler(event: WebSocketEvent | ProjectionEvent): Promise<Response | void> {
@@ -106,7 +107,7 @@ export async function handler(event: WebSocketEvent | ProjectionEvent): Promise<
     if (routeKey === "$disconnect") return disconnect(event);
     return response(400, "Unsupported route");
   }
-  if ("source" in event && event.source === "spawnpoint.control-plane" && event["detail-type"] === "Projection Updated") {
+  if ("source" in event && invalidatesPanels(event)) {
     await publishInvalidation(event);
   }
 }

@@ -76,8 +76,8 @@ test("off is the default the template carries, and off skips straight to the old
   assert.equal(state(start, "Route Session Volume Release After Failed Start").Default, "Mark Compensated Session Stopped");
 
   const stop = await load("stop-server-v2.asl.json.tftpl", { ...TAGS, session_volume: "disabled" });
-  assert.equal(state(stop, "Stop Accepted V1").Next, "Route Session Volume Release");
-  assert.equal(state(stop, "Route Session Volume Release").Default, "Mark Session Stopped");
+  assert.equal(state(stop, "Stop Accepted V1").Next, "Mark Session Stopped");
+  assert.equal(state(stop, "Route Session Volume Release").Default, "Release Placement");
 });
 
 test("only a cold fleet session with the switch on gets a volume", async () => {
@@ -153,9 +153,9 @@ test("a volume that cannot be made ready fails the start into its compensation",
   assert.equal(state(start, "Session Volume Unavailable").ResultPath, "$.startFailure");
 });
 
-test("the release never fails a verified stop: every way out goes on to mark it stopped", async () => {
+test("the release never fails a verified stop: every way out goes on to release the placement", async () => {
   const stop = await load("stop-server-v2.asl.json.tftpl", { ...TAGS, session_volume: "enabled" });
-  assert.deepEqual([...exits(stop, RELEASE)], ["Mark Session Stopped"]);
+  assert.deepEqual([...exits(stop, RELEASE)], ["Release Placement"]);
 
   const start = await load("start-server-v2.asl.json.tftpl", { ...TAGS, session_volume: "enabled", session_volume_size_gib: "30" });
   const compensation = RELEASE.map((name) => `${name} After Failed Start`);
@@ -170,7 +170,7 @@ test("the release finds the volume by its session tag and unmounts only on a hos
     { Name: "tag:SessionId", "Values.$": "States.Array($.request.sessionId)" },
   ]);
   const routes = state(stop, "Route Found Session Volume");
-  assert.deepEqual(routes.Choices!.map((choice) => choice.Next), ["Mark Session Stopped", "Delete Session Volume", "Unmount Session Volume"]);
+  assert.deepEqual(routes.Choices!.map((choice) => choice.Next), ["Release Placement", "Delete Session Volume", "Unmount Session Volume"]);
   assert.equal(routes.Choices![2]!.Variable, "$.hostStop.Output.status");
   assert.equal(routes.Choices![2]!.StringEquals, "session_stopped_host_busy");
   assert.equal(routes.Default, "Detach Session Volume");

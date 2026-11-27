@@ -5,7 +5,7 @@ import { afterEach, mock, test } from "node:test";
 
 import type { OperationProgress } from "../src/api/contract.ts";
 import type { OperationProgressModel } from "../src/core/models.ts";
-import { endedBadly, MAX_FAILURES, MAX_POLLS, newestRunning, owesFinalRead, POLL_MS, progressDetails, progressModel, startPolling } from "../src/core/operation-progress.ts";
+import { endedBadly, MAX_BACKOFF_MS, MAX_POLLS, newestRunning, owesFinalRead, POLL_MS, pollDelay, progressDetails, progressModel, startPolling } from "../src/core/operation-progress.ts";
 import type { Operation } from "../src/model.ts";
 
 /*
@@ -173,20 +173,31 @@ test("it holds no read while the page is hidden and reads at once when it shows 
   poller.stop();
 });
 
-test("a failed read keeps the last good value and tries again; three in a row end it", async () => {
-  const { seen, reads } = poll([ok(), bad, ok(), bad, bad, bad, ok()]);
+test("a failed read keeps the last good value and backs off, and never ends the poll", async () => {
+  assert.deepEqual([0, 1, 2, 3, 9].map(pollDelay), [POLL_MS, POLL_MS * 2, POLL_MS * 4, MAX_BACKOFF_MS, MAX_BACKOFF_MS]);
+  const { seen, reads } = poll([ok(), bad, bad, bad, bad, bad, ok()]);
   await flush();
-  for (let index = 0; index < 8; index += 1) await after(POLL_MS);
-  // The good, the failure and the good that follows reset the count; the three that follow end it.
-  assert.equal(reads(), 6);
-  assert.equal(seen.length, 2);
-  assert.equal(MAX_FAILURES, 3);
+  await after(POLL_MS);
+  assert.equal(reads(), 2, "the first failure");
+  await after(POLL_MS * 2);
+  assert.equal(reads(), 3, "waits twice as long");
+  await after(POLL_MS * 4);
+  await after(MAX_BACKOFF_MS);
+  await after(MAX_BACKOFF_MS);
+  assert.equal(reads(), 6, "five failures in a row and still reading");
+  await after(MAX_BACKOFF_MS);
+  assert.equal(reads(), 7);
+  assert.equal(seen.length, 2, "the good read after them is seen");
+  await after(POLL_MS);
+  assert.equal(reads(), 8, "a good read brings the cadence back");
 });
 
-test("a read that finds no operation counts as a failure", async () => {
+test("a read that finds no operation counts as a failure and backs off", async () => {
   const { seen, reads } = poll([() => Promise.resolve(null)]);
   await flush();
-  for (let index = 0; index < 6; index += 1) await after(POLL_MS);
+  await after(POLL_MS * 2);
+  assert.equal(reads(), 2, "the first read found nothing, so the second waited twice as long");
+  await after(POLL_MS * 4);
   assert.equal(reads(), 3);
   assert.equal(seen.length, 0);
 });
@@ -209,4 +220,18 @@ test("a last read is owed when the operation left the snapshot, unless a poll sa
 test("the model carries nothing a skin has to compute", () => {
   const model: OperationProgressModel = progressModel(null, failed)!;
   assert.deepEqual(Object.keys(model).sort(), ["caught", "child", "expectation", "failure", "id", "known", "log", "logged", "nests", "ranSeconds", "running", "startedAt", "status", "step", "title"]);
+});
+
+test("it says once that the operation ended, so the snapshot is read again", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  let ends = 0;
+  const answers = [ok(), ok(failed)];
+  let reads = 0;
+  startPolling({ read: () => answers[Math.min(reads++, 1)]!(), onProgress: () => undefined, visible: () => true, onEnded: () => { ends += 1; } });
+  await flush();
+  assert.equal(ends, 0);
+  await after(POLL_MS);
+  assert.equal(ends, 1);
+  await after(POLL_MS * 5);
+  assert.equal(ends, 1);
 });

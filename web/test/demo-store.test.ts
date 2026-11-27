@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
 import * as store from "../src/demo/store.ts";
+import { changeWatcher } from "../src/demo/api.ts";
 import type { ControlPlaneSnapshot } from "../src/model.ts";
 import { configuredHosts, deriveSharedHostSession, worldState } from "../src/session.ts";
 
@@ -260,4 +261,26 @@ test("the demo's assistant reads, proposes a start, and runs it only once the Ow
   assert.throws(() => store.sendMessage(started.id, "haiku", "and?"), { code: "conversation_busy" });
   assert.throws(() => store.decideProposal(started.id, "nope", "apply"), { code: "unknown_proposal" });
   assert.throws(() => store.conversation("missing"), { code: "unknown_conversation" });
+});
+
+test("the demo hands out a copy, so the panel sees a change only when it reads again", () => {
+  const first = store.snapshot();
+  const again = store.snapshot();
+  assert.notEqual(first, again);
+  assert.deepEqual(first, again);
+  (first.operations as unknown[]).push({ id: "local" });
+  assert.equal(store.snapshot().operations.some((operation) => operation.id === "local"), false);
+});
+
+test("the demo's socket says something only when the store changed", () => {
+  let value = "a";
+  let messages = 0;
+  const watch = changeWatcher(() => value, () => { messages += 1; });
+  watch();
+  watch();
+  assert.equal(messages, 0, "nothing changed");
+  value = "b";
+  watch();
+  watch();
+  assert.equal(messages, 1);
 });

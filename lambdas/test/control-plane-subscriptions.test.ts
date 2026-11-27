@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   controlPlaneConnectionItem,
+  invalidatesPanels,
+  postToConnections,
   subscriptionConnectionLifetimeSeconds,
   subscriptionTicketItem,
   subscriptionTicketKey,
@@ -28,4 +30,25 @@ test("control-plane connections share a queryable partition and expire", () => {
     identity_id: "identity-1",
     expires_at: 2_000 + subscriptionConnectionLifetimeSeconds,
   });
+});
+
+test("projection updates and session changes reach the panels; nothing else does", () => {
+  assert.equal(invalidatesPanels({ source: "spawnpoint.control-plane", "detail-type": "Projection Updated" }), true);
+  assert.equal(invalidatesPanels({ source: "spawnpoint.control-plane", "detail-type": "Session Changed" }), true);
+  assert.equal(invalidatesPanels({ source: "spawnpoint.control-plane", "detail-type": "Something Else" }), false);
+  assert.equal(invalidatesPanels({ source: "aws.states", "detail-type": "Session Changed" }), false);
+});
+
+test("one failed post does not keep the message from the other connections", async () => {
+  const told: string[] = [];
+  const removed: string[] = [];
+  const post = async (id: string) => {
+    if (id === "broken") throw new Error("throttled");
+    told.push(id);
+    return id === "closed" ? "gone" as const : "sent" as const;
+  };
+  await assert.rejects(postToConnections(["a", "broken", "closed", "b"], post, async (id) => { removed.push(id); }), AggregateError);
+  assert.deepEqual(told.sort(), ["a", "b", "closed"]);
+  assert.deepEqual(removed, ["closed"]);
+  await postToConnections(["a", "b"], post, async () => undefined);
 });

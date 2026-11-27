@@ -81,6 +81,21 @@ export function operationsBlockingWorld(snapshot: ControlPlaneSnapshot | null, w
     (world.placement !== "fleet" && placementOf(snapshot, operation.worldId) !== "fleet"));
 }
 
+function gameOfWorld(snapshot: ControlPlaneSnapshot | null, worldId: string): Game | undefined {
+  return snapshot?.games.find((game) => game.worlds.some((world) => world.id === worldId));
+}
+
+/**
+ * A listed operation starts a transition and the record ends it: a start is
+ * over once the record is ready, a stop once it is stopped, even while a
+ * stale listing still shows the run. Without a record the operation decides.
+ */
+export function operationTransition(operation: Operation | undefined, observed: WorldSession["observedState"] | null | undefined): "starting" | "stopping" | null {
+  if (operation?.type === "start" && observed !== "ready") return "starting";
+  if (operation?.type === "stop" && observed !== "stopped") return "stopping";
+  return null;
+}
+
 export function deriveSharedHostSession(snapshot: ControlPlaneSnapshot | null): SharedHostSession {
   // A fleet world's operation runs on its own host, never on the configured one.
   const operations = (snapshot?.operations ?? []).filter((operation) => operation.worldId == null || placementOf(snapshot, operation.worldId) !== "fleet");
@@ -93,8 +108,9 @@ export function deriveSharedHostSession(snapshot: ControlPlaneSnapshot | null): 
   const recoveryPending = hostStates.length === 1 && hostStates[0] === "stopped" &&
     activeGame?.lifecycle?.activeSessionId != null && activeGame.lifecycle.observedState !== "stopped";
 
-  if (operation?.type === "start") return { state: "starting", activeGame, activeWorld, operationRunning: true, recoveryPending: false };
-  if (operation?.type === "stop") return { state: "stopping", activeGame, activeWorld, operationRunning: true, recoveryPending: false };
+  // activeGame is null once a stop has ended, so the record is found through the operation's world.
+  const transition = operationTransition(operation, operation?.worldId == null ? undefined : gameOfWorld(snapshot, operation.worldId)?.lifecycle?.observedState);
+  if (transition !== null) return { state: transition, activeGame, activeWorld, operationRunning: true, recoveryPending: false };
   if (activeSessionAmbiguous) return { state: "unknown", activeGame: null, activeWorld: null, operationRunning: operations.length > 0, recoveryPending: false };
   if (recoveryPending) return { state: "stopping", activeGame, activeWorld, operationRunning: operations.length > 0, recoveryPending: true };
 

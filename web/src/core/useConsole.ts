@@ -10,7 +10,7 @@ import { capitalize, formatDateTime } from "../lib/format";
 import { useAccessDirectory, type AccessDirectory } from "./access-directory";
 import type { ControlPlaneSnapshot, Game, OwnerBootstrap, Page, Preset, ServerState, SettingValue, World } from "../model";
 import { routeHash, type AppRoute } from "../routing";
-import { configuredHosts, deriveSharedHostSession, gameOperations, nextReadingExpiry, worldSessionActive, type SharedHostSession } from "../session";
+import { configuredHosts, deriveSharedHostSession, gameOperations, nextReadingExpiry, operationTransition, worldSessionActive, type SharedHostSession } from "../session";
 import { NO_PENDING, pendingOf, withoutPending, withPending, type Confirmation, type Pending, type PendingMap, type SessionAction, type WorldActionKind } from "../shell/actions";
 import { useAppearance, useBootCard, useRoute, useStoredState } from "../shell/hooks";
 import { initializeTelegram, openInBrowser, type ViewerProfile } from "../telegram";
@@ -24,6 +24,7 @@ import { visibleNavigation } from "./navigation";
 import { presetOf, stopDisconnect, type WorldCallbacks } from "./worlds";
 import { t } from "../i18n";
 import { operationNoun } from "../lib/operation-words";
+import { owesShowReload, SETTLE_EXPECT_MS, settleSignature, startSettlePoll, unsettled } from "./live-state";
 
 /*
  * The console's bones: what is loaded, what is pending, what is open, and
@@ -59,8 +60,8 @@ function hostServerState(snapshot: ControlPlaneSnapshot | null): ServerState {
 export function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {
   if (snapshot?.deployment?.placement === "fleet") return fleetServerState(game);
   const operation = gameOperations(game, snapshot)[0];
-  if (operation?.type === "start") return "starting";
-  if (operation?.type === "stop") return "stopping";
+  const transition = operationTransition(operation, operation?.worldId == null ? undefined : game?.lifecycle?.observedState);
+  if (transition !== null) return transition;
   const observed = game?.lifecycle?.observedState;
   if (observed === "ready") return "running";
   return observed ?? hostServerState(snapshot);
@@ -244,7 +245,9 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
 
   useEffect(() => initializeTelegram(), []);
 
+  const lastLoadStarted = useRef(0);
   const refresh = useCallback(async (silent = false) => {
+    lastLoadStarted.current = Date.now();
     const mine: Pending = { kind: "refresh" };
     if (!silent) setPending((current) => withPending(current, mine));
     setControlPlane((current) => (silent || current.snapshot ? { status: "loading", snapshot: current.snapshot, error: "" } : { status: "loading", snapshot: null, error: "" }));
@@ -262,18 +265,40 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
 
   useEffect(() => { void refresh(true); }, [refresh]);
 
-  const building = games.some((item) => item.presets.some((preset) => preset.buildStatus === "building"));
+  // The socket is the fast path; this poll holds the bound when a message is lost.
+  // An accepted request polls too until its operation is listed: the first
+  // read after it usually comes before the projection has the run.
+  const [expectingUntil, setExpectingUntil] = useState(0);
+  const transitions = settleSignature(snapshot, expectingUntil, Date.now());
+  useEffect(() => { if (unsettled(snapshot)) setExpectingUntil(0); }, [snapshot]);
+  const refreshExpecting = async () => {
+    setExpectingUntil(Date.now() + SETTLE_EXPECT_MS);
+    await refresh(true);
+  };
   useEffect(() => {
-    if (!building) return;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      await refresh(true);
-      if (!stopped) timer = setTimeout(() => void poll(), 5000);
+    if (transitions === "") return;
+    const poll = startSettlePoll({ reload: () => refresh(true), visible: () => document.visibilityState !== "hidden" });
+    const onVisibility = () => (document.visibilityState === "hidden" ? poll.hide() : poll.show());
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      poll.stop();
     };
-    timer = setTimeout(() => void poll(), 5000);
-    return () => { stopped = true; clearTimeout(timer); };
-  }, [building, refresh]);
+  }, [transitions, refresh]);
+
+  // Showing the tab or coming back online reads once: nothing read while hidden or offline.
+  useEffect(() => {
+    const reload = () => {
+      if (document.visibilityState !== "hidden" && owesShowReload(lastLoadStarted.current, Date.now())) void refresh(true);
+    };
+    const onVisibility = () => { if (document.visibilityState !== "hidden") reload(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", reload);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", reload);
+    };
+  }, [refresh]);
 
   // The browser painted from its own cache; the identity's choice outranks it.
   // A failure here is silent on purpose: a palette is not worth a banner.
@@ -287,6 +312,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   // EventBridge updates the projection and the socket carries only an
   // invalidation. Permission-filtered state still comes from the HTTP API.
   useEffect(() => api.subscribeControlPlane(() => {
+    lastLoadStarted.current = Date.now();
     const ticket = loads.current.begin();
     api.loadControlPlane().then((next) => { if (loads.current.keep(ticket)) setControlPlane({ status: "ready", snapshot: next, error: "" }); }).catch(() => undefined);
   }), []);
@@ -305,7 +331,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       const expected = releaseBuildExpectation(preset);
       const result = await api.requestReleaseBuild(target.id, preset.id, expected.profileDigest, expected.retryRelease);
       notify({ tone: "success", message: t("app.releaseReleaseBuildAttempt", { release: result.release, attempt: result.attempt }) });
-      await refresh(true);
+      await refreshExpecting();
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : t("app.buildCouldNotRequested") });
       await refresh(true);
@@ -318,7 +344,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     try {
       const result = await api.requestSessionOperation(target.id, targetWorld.id, sessionAction, players);
       notify({ tone: "success", message: sessionAcceptedMessage(targetWorld, sessionAction, result.result) });
-      await refresh(true);
+      await refreshExpecting();
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : t("app.sessionActionRequestFailed", { sessionAction: operationNoun(sessionAction) }) });
     } finally {
@@ -332,7 +358,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     try {
       await api.requestWorldLifecycle(target.id, targetWorld.id, kind === "wipe" ? "regenerate" : kind, backupKey, release);
       notify({ tone: "success", message: t("common.valueWorldDisplayNameAcceptedAppears", { value: capitalize(operationNoun(kind)), worldDisplayName: targetWorld.displayName }) });
-      await refresh(true);
+      await refreshExpecting();
       if (kind === "purge") navigate({ page: "worlds", gameId: target.id, worldId: null });
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : t("app.sessionActionRequestFailed", { sessionAction: operationNoun(kind) }) });
@@ -349,7 +375,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       notify({ tone: "success", message: result === "switched"
         ? t("app.targetWorldDisplayNameWillStartRelease", { targetWorldDisplayName: targetWorld.displayName, release })
         : t("app.updateTargetWorldDisplayNameReleaseRelease", { targetWorldDisplayName: targetWorld.displayName, release }) });
-      await refresh(true);
+      await refreshExpecting();
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : t("app.releaseUpdateRequestFailed") });
     } finally {
@@ -361,7 +387,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
     try {
       await api.requestHostDeletion(host.providerRef, snapshot);
       notify({ tone: "success", message: snapshot ? t("host.deletingWithSnapshot", { hostName: host.name }) : t("host.deleting", { hostName: host.name }) });
-      await refresh(true);
+      await refreshExpecting();
     } catch (error) {
       notify({ tone: "error", message: error instanceof Error ? error.message : t("host.couldNotDelete") });
     }

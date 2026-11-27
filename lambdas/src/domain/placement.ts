@@ -337,7 +337,8 @@ export function release(host: HostRecord, sessionId: string, nowEpochSeconds: nu
   const leaving = host.reservations.find((reservation) => reservation.sessionId === sessionId);
   if (!leaving) throw new PlacementConflict(`session ${sessionId} is not placed on ${host.hostId}`);
   const reservations = host.reservations.filter((reservation) => reservation.sessionId !== sessionId);
-  if (reservations.length > 0) return bump(host, { reservations }, nowEpochSeconds);
+  // A reclaimed host stays terminating: draining would let placement reuse it (ADR-0102).
+  if (reservations.length > 0 || host.state === "terminating") return bump(host, { reservations }, nowEpochSeconds);
   return bump(host, {
     state: "draining",
     reservations,
@@ -392,6 +393,15 @@ export function drainDecision(
 export function markStopped(host: HostRecord, nowEpochSeconds: number): HostRecord {
   if (host.state !== "draining" || host.reservations.length > 0) throw new PlacementConflict(`host ${host.hostId} is not an empty draining host`);
   return bump(host, { state: "stopped", drainingSinceEpochSeconds: null }, nowEpochSeconds);
+}
+
+/**
+ * A Spot host that AWS is taking back (ADR-0102). It takes no new session from
+ * the warning on, and keeps its reservations until each session is moved.
+ */
+export function markReclaimed(host: HostRecord, nowEpochSeconds: number): HostRecord {
+  if (host.state === "terminating") return host;
+  return bump(host, { state: "terminating", drainingSinceEpochSeconds: null, keptWorldId: null }, nowEpochSeconds);
 }
 
 export function markTerminating(host: HostRecord, nowEpochSeconds: number): HostRecord {

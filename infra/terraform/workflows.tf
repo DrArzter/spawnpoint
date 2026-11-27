@@ -239,4 +239,3 @@ resource "aws_sfn_state_machine" "stop_server" {
     Purpose = "verified-session-stop"
   }
 }
-

@@ -83,8 +83,9 @@ operation id, so the progress route's id does not change. A nested run has a nam
 | `expires_at` | N | accepted | 30 days after `started_at` (TTL) |
 
 An attribute the run cannot know is absent; `result` and the caught fields are an empty string when the workflow gave
-none, and a reader reads an empty string as none. All attribute names are snake_case (stored); the API's JSON stays camelCase (`contract/operations.ts`). The panel's
-words for a step come from the message catalogue by the step key, as now.
+none, and a reader reads an empty string as none. All attribute names are snake_case (stored); the API's JSON stays
+camelCase (`contract/operations.ts`). The panel's words for a step come from the message catalogue by the step key, as
+now.
 
 ### Who writes it
 
@@ -97,9 +98,9 @@ words for a step come from the message catalogue by the step key, as now.
    them apart from the workflow's own states.
 2. **Writes:** accepted (the first state); each step that the panel shows, on every edge that enters it from another
    step; the host and the command once they are known; and every end. Each `Fail` and `Succeed` state, and each state
-   with `End`, is reached only through a write that sets the final status. A state that ended the run now leads to
-   its end write, which ends it; when that write fails, a `Succeed` named `Report … Missed` ends the run instead. A `Catch` path that goes on writes the
-   caught error.
+   with `End`, is reached only through a write that sets the final status. A state that ended the run now leads to its
+   end write, which ends it; when that write fails, a `Succeed` named `Report … Missed` ends the run instead. A `Catch`
+   path that goes on writes the caught error.
 3. **A nested run** gets `operationParent` (`$$.Execution.Name`) and `operationRoot` in its input from the state that
    starts it. The accepted write keeps the root in a workflow variable, `$operationRoot`, so the run can pass it on.
    The child's accepted write also sets the parent's `child_id`.

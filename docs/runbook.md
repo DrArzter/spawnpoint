@@ -456,9 +456,12 @@ so neither the host nor this project needs a Steam account; the people joining n
 lives in [`my-docker-zomboid-server-config`](https://github.com/DrArzter/my-docker-zomboid-server-config), pinned per
 world in the catalog.
 
-Two operator secrets belong in the host `.env` before its first session, because this image takes them from the
-environment rather than generating them: `ZOMBOID_RCON_PASSWORD` (how the probe reads the player count and the stop
-saves the world) and `ZOMBOID_ADMIN_PASSWORD`. The image pins `latest` today; **pin a digest before the first AWS
+Two operator secrets must exist before the first session, because this image takes them from the environment rather
+than generating them: `ZOMBOID_RCON_PASSWORD` (how the probe reads the player count and the stop saves the world) and
+`ZOMBOID_ADMIN_PASSWORD`. A fleet host renders its `.env` from the SecureString parameters under
+`/spawnpoint/host/env/`, so create each one there under its own name; a host launched before that has to be replaced. A
+missing one ends the start with `Compose configuration is invalid (… required variable … is missing a value …)` in the
+host log. The image pins `latest` today; **pin a digest before the first AWS
 session** ([ADR-0005](adr/0005-containerised-game-server.md)).
 
 What that first session verifies is the one fact no documentation states: the exact wording of the `players` RCON

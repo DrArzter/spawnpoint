@@ -195,6 +195,7 @@ const STOP_HOST: Table = {
     "Stop Command Complete", "Increment Command Poll", "Command Poll Limit Reached",
   ],
   "stop.stopping_host": [
+    "Describe Host Market", "Host Is Spot", "Spot Host Left For Drain",
     "Stop Instance", "Wait Before Instance Poll", "Describe Instance", "Instance Stopped", "Increment Instance Poll", "Instance Poll Limit Reached",
   ],
   [ENDED]: [

@@ -236,7 +236,7 @@
               ]
             }
           ],
-          "Next": "Stop Instance"
+          "Next": "Describe Host Market"
         },
         {
           "And": [
@@ -335,6 +335,44 @@
         }
       ],
       "Default": "Wait Before Command Poll"
+    },
+    "Describe Host Market": {
+      "Type": "Task",
+      "Comment": "ADR-0102: a launched Spot host is a one-time request, and EC2 refuses to stop one. The world is already backed up here, so its host is left running empty for the V2 stop to release and the drain to let go.",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:describeInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.instanceId)"
+      },
+      "ResultSelector": {
+        "lifecycle.$": "$.Reservations[0].Instances[0]"
+      },
+      "ResultPath": "$.observed.market",
+      "Next": "Host Is Spot"
+    },
+    "Host Is Spot": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.observed.market.lifecycle.InstanceLifecycle", "IsPresent": true },
+            { "Variable": "$.observed.market.lifecycle.InstanceLifecycle", "StringEquals": "spot" }
+          ],
+          "Next": "Spot Host Left For Drain"
+        }
+      ],
+      "Default": "Stop Instance"
+    },
+    "Spot Host Left For Drain": {
+      "Type": "Pass",
+      "Comment": "The session stopped and its world is backed up; the Spot host keeps running until the drain terminates it.",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "status": "session_stopped_spot_host",
+        "instanceId.$": "$.request.instanceId",
+        "commandId.$": "$.observed.command.Command.CommandId",
+        "commandOutput.$": "$.observed.invocation.StandardOutputContent"
+      },
+      "End": true
     },
     "Stop Instance": {
       "Type": "Task",

@@ -171,8 +171,11 @@ test("the release finds the volume by its session tag and unmounts only on a hos
   ]);
   const routes = state(stop, "Route Found Session Volume");
   assert.deepEqual(routes.Choices!.map((choice) => choice.Next), ["Release Placement", "Delete Session Volume", "Unmount Session Volume"]);
-  assert.equal(routes.Choices![2]!.Variable, "$.hostStop.Output.status");
-  assert.equal(routes.Choices![2]!.StringEquals, "session_stopped_host_busy");
+  // A host that keeps running, for another session or because it is Spot, still has the volume mounted.
+  assert.deepEqual(routes.Choices![2]!.Or, [
+    { Variable: "$.hostStop.Output.status", StringEquals: "session_stopped_host_busy" },
+    { Variable: "$.hostStop.Output.status", StringEquals: "session_stopped_spot_host" },
+  ]);
   assert.equal(routes.Default, "Detach Session Volume");
   const unmount = state(stop, "Unmount Session Volume").Parameters!;
   assert.equal(unmount.DocumentName, "spawnpoint-unmount-session-volume");

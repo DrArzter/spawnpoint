@@ -130,7 +130,7 @@ html[data-skin="console"] .c-scope-row-name {
   white-space: nowrap;
 }
 
-@media (max-width: 1199px) {
+@media (max-width: 1319px) {
   html[data-skin="console"] .c-scope-state-label {
     display: none;
   }

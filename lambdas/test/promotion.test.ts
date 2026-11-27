@@ -131,6 +131,16 @@ function scenario(t: TestContext, options: Readonly<{ operations?: OperationObse
 
 const owner = { id: "owner", displayName: "Owner", roleId: "owner", directGrants: [] } as const;
 
+test("a promotion of a game that has not run here is the Owner's alone (ADR-0109)", async (t) => {
+  const { machines } = scenario(t);
+  t.mock.method(awsControlPlaneSources as Required<ControlPlaneSources>, "listProvenGames", async () => new Set<string>());
+  const promoter = { id: "promoter", displayName: "Promoter", roleId: "operator", directGrants: ["release.promote" as const] };
+  const refused = await promoteWorld(promoter, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }));
+  assert.deepEqual([refused.statusCode, JSON.parse(refused.body)], [403, { error: "game_not_proven" }]);
+  assert.deepEqual(machines, []);
+  assert.equal((await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }))).statusCode, 202);
+});
+
 test("the API starts the promote machine with the fleet world's own record, placement and warm choice", async (t) => {
   const { inputs, machines, lifecycleKeys } = scenario(t);
   const result = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }));

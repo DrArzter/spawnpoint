@@ -30,6 +30,8 @@ export type ScopeModel = Readonly<{
   game: Game | undefined;
   games: readonly Game[];
   statusOf: (game: Game) => StatusDescriptor;
+  /** A short note on a game an Owner may try before it has run here (ADR-0109); null for any other. */
+  noteOf: (game: Game) => string | null;
   open: boolean;
   show: Action;
   close: Action;

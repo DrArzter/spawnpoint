@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { gameProofNote, offeredGames } from "./game-proof";
 
 import { failureKind, type ActiveSession, type ApiFailureKind, type BackupEntry, type ReleaseMod, type ReleasePackName, type StopPlayersPolicy } from "../api/contract";
 import { browserAvatarEnvironment, prepareAvatar } from "./avatar-image";
@@ -227,7 +228,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   const granted = useMemo(() => new Set([...(session.role?.permissions ?? []), ...session.identity.directGrants]), [session]);
   const capabilities = useMemo(() => new Set(session.capabilities), [session]);
   const snapshot = controlPlane.snapshot;
-  const games = snapshot?.games ?? [];
+  const games = offeredGames(snapshot?.games ?? [], granted);
   const game = games.find((item) => item.id === route.gameId) ?? games.find((item) => item.id === storedGame) ?? games[0];
   const world = route.page === "worlds" && route.worldId ? game?.worlds.find((item) => item.id === route.worldId) : undefined;
   const fleet = world?.placement === "fleet";
@@ -506,6 +507,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       game,
       games,
       statusOf: (item) => sessionStatus(deriveServerState(item, snapshot)),
+      noteOf: gameProofNote,
       open: scopeOpen,
       show: action("scope.show", game?.displayName ?? t("app.noGame"), () => setScopeOpen(true), { disabled: games.length === 0, hint: t("common.selectGame") }),
       close: action("scope.close", t("common.cancel"), () => setScopeOpen(false)),

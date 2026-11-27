@@ -4,6 +4,7 @@ import type { ScopeModel } from "../../core/models";
 import { Icon } from "../../icons";
 import { Dialog } from "./ui/Dialog";
 import { GameGlyph } from "./ui/GameGlyph";
+import { Indicator } from "./ui/Indicator";
 import { Status, StatusIcon } from "./ui/Status";
 import { t } from "../../i18n";
 
@@ -24,10 +25,11 @@ export function ScopeSwitcher({ model }: Readonly<{ model: ScopeModel }>) {
       <div aria-label={t("common.game")} className="c-scope" role="group" /* NOSONAR a labelled set of game buttons; <fieldset> adds a frame and a legend */>
         {games.map((game) => {
           const status = model.statusOf(game);
+          const note = model.noteOf(game);
           return (
             <button
               aria-current={game.id === current.id || undefined}
-              aria-label={`${game.displayName}, ${status.label}`}
+              aria-label={[game.displayName, status.label, note].filter(Boolean).join(", ")}
               className="c-scope-game"
               key={game.id}
               onClick={() => model.select(game.id)}
@@ -35,6 +37,7 @@ export function ScopeSwitcher({ model }: Readonly<{ model: ScopeModel }>) {
             >
               <GameGlyph game={game} size="sm" />
               <span className="c-scope-name">{game.displayName}</span>
+              {note && <Indicator icon="help" inControl label={note} />}
               <span className="c-scope-state">
                 <StatusIcon kind={status.kind} size={15} />
                 <span className="c-scope-state-label">{status.label}</span>
@@ -78,11 +81,13 @@ export function ScopeDialog({ model }: Readonly<{ model: ScopeModel }>) {
       <div aria-label={t("common.game")} className="c-scope-list" onKeyDown={moveFocus} role="radiogroup" /* NOSONAR roving tabindex: the chosen row carries the tab stop */>
         {model.games.map((game) => {
           const checked = game.id === model.game?.id;
+          const note = model.noteOf(game);
           return (
             <button aria-checked={checked} className="c-scope-row" key={game.id} onClick={() => model.select(game.id)} role="radio" tabIndex={checked || !model.game ? 0 : -1} type="button">
               <Icon className="c-scope-ring" name={checked ? "check_circle" : "radio_button_unchecked"} size={20} />
               <GameGlyph game={game} size="sm" />
               <span className="c-scope-row-name">{game.displayName}</span>
+              {note && <Indicator icon="help" inControl label={note} />}
               <Status status={model.statusOf(game)} />
             </button>
           );

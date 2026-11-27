@@ -148,6 +148,7 @@ export const API_ERROR_TEXT: Readonly<Record<ApiErrorCode, string>> = {
   console_unavailable: t("error.console_unavailable"),
   game_has_no_settings: t("error.game_has_no_settings"),
   game_has_no_whitelist: t("error.game_has_no_whitelist"),
+  game_not_proven: t("error.game_not_proven"),
   invalid_game_settings: t("error.invalid_game_settings"),
   invalid_game_setting: t("error.invalid_game_setting"),
   unknown_game_setting: t("error.unknown_game_setting"),

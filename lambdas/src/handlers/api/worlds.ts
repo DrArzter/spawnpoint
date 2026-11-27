@@ -1,5 +1,6 @@
 import { type Identity } from "../../access/domain.ts";
 import { type SessionMachines } from "../../control-plane/session-machines.ts";
+import { refuseUnprovenGame } from "./game-proof.ts";
 import { type WorldRecords } from "../../control-plane/world-records.ts";
 import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan, type FleetSessionPlan } from "../../control-plane/session-control.ts";
 import { catalogWithPresets, gameCatalog } from "../../control-plane/catalog.ts";
@@ -204,6 +205,10 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     if (plan.kind === "reject") return errorResponse(plan.reason === "unknown_world" ? 404 : 409, plan.reason);
     const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
     if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
+    if (action === "start") {
+      const unproven = await refuseUnprovenGame(identity, gameId, sources);
+      if (unproven) return unproven;
+    }
     // A fleet world kept warm asks placement to keep its launched host after the stop (ADR-0048).
     const own = worldRecords.find((record) => record.worldId === worldId);
     const warm = fleet && own?.warm === true;
@@ -253,6 +258,8 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     const presets = await (sources.listPresets?.() ?? Promise.resolve([]));
     const preset = presets.find((candidate) => candidate.gameId === gameId && candidate.id === presetId);
     if (preset === undefined) return errorResponse(404, "unknown_preset");
+    const unproven = await refuseUnprovenGame(identity, gameId, sources);
+    if (unproven) return unproven;
     if (preset.releases.length === 0) return errorResponse(409, "preset_release_not_ready");
     if (!preset.releases.includes(release)) return errorResponse(409, "release_not_available");
     if (!usableByNewWipe(preset, release)) return errorResponse(409, "release_outdated");

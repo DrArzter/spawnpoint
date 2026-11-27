@@ -70,6 +70,8 @@ export type ControlPlaneSources = Readonly<{
   /** The hosts a world's sessions ran on since a time, from the stored history and, before it, the workflows. */
   readWorldSessionHosts?: (worldId: string, sinceMs: number) => Promise<readonly SessionHost[]>;
   listWorldRecords?: () => Promise<readonly WorldRecord[]>;
+  /** The games a session of which became ready in this deployment (ADR-0109). Absent: every game counts as proven. */
+  listProvenGames?: () => Promise<ReadonlySet<string>>;
   /** Which host and slot a session holds (ADR-0054); null when no host reserves it. */
   findSessionPlacement?: (sessionId: string) => Promise<Readonly<{ hostId: string; slot: number }> | null>;
 }>;
@@ -137,7 +139,7 @@ export async function readControlPlaneSnapshot(
   const worlds = effectiveCatalog.flatMap((game) => game.worlds);
   // A fleet world keeps its sessions on a record of its own (ADR-0062).
   const fleetWorlds = effectiveCatalog.flatMap((game) => game.worlds.filter((world) => world.placement === "fleet").map((world) => ({ game, world })));
-  const [observedAt, hosts, operations, lifecycles, ownRecords, pointers] = await Promise.all([
+  const [observedAt, hosts, operations, lifecycles, ownRecords, pointers, proven] = await Promise.all([
     sources.readObservedAt?.() ?? Promise.resolve(null),
     sources.listHosts(),
     sources.listRunningOperations(),
@@ -147,6 +149,7 @@ export async function readControlPlaneSnapshot(
       world.id,
       recordByWorld.get(world.id)?.currentGeneration.id ?? null,
     ))),
+    sources.listProvenGames?.() ?? Promise.resolve(null),
   ]);
   // Ephemeral by design: the address a public world publishes is whatever the
   // running instance holds right now, and nothing between sessions. Only the
@@ -167,6 +170,7 @@ export async function readControlPlaneSnapshot(
       playerName: game.playerName ?? null,
       consoleSuggestions: game.consoleSuggestions ?? [],
       presentation: game.presentation ?? { tint: null, glyph: null, scene: null },
+      proven: proven === null || proven.has(game.id),
       presets: (game.presets ?? []).map((preset) => ({
         id: preset.id,
         displayName: preset.displayName,

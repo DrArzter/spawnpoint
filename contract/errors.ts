@@ -44,6 +44,7 @@ export const API_ERROR_CODES = [
   "game_has_no_config_files",
   "game_has_no_settings",
   "game_has_no_whitelist",
+  "game_not_proven",
   "host_already_running",
   "host_in_use",
   "host_is_launched",

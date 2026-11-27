@@ -10,14 +10,14 @@ const tableName = process.env.LIFECYCLE_TABLE_NAME;
 if (!tableName) throw new Error("LIFECYCLE_TABLE_NAME is required");
 
 // The composition root: the client, then the stores over it.
-const { store, placementStore, sessionHistoryStore } = dynamoLifecycleStores(
+const { store, placementStore, sessionHistoryStore, gameProofStore } = dynamoLifecycleStores(
   DynamoDBDocumentClient.from(new DynamoDBClient({}), { marshallOptions: { removeUndefinedValues: true } }),
   tableName,
 );
 
 const lifecycle = createLifecycleCoordinator(store);
 const placement = createPlacementCoordinator(placementStore);
-const sessionHistory = createSessionHistoryCoordinator(sessionHistoryStore);
+const sessionHistory = createSessionHistoryCoordinator(sessionHistoryStore, undefined, gameProofStore);
 
 export const handler = async (input: CoordinatorInput | PlacementInput | SessionHistoryInput) => {
   if (isSessionHistoryInput(input)) return sessionHistory(input);

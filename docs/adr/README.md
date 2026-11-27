@@ -173,6 +173,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0106](0106-a-skin-can-be-switched-off.md) | A skin can be switched off, and the terminal skin is off | Accepted | M6 |
 | [0107](0107-feature-flags-in-parameter-store.md) | Feature flags in Parameter Store | Accepted | M6 |
 | [0108](0108-a-game-declares-what-its-launch-needs.md) | A game declares what its launch needs | Accepted | M6 |
+| [0109](0109-a-game-is-offered-once-it-has-run-here.md) | A game is offered once it has run here | Accepted | M6 |
 
 ## Decisions still to record
 

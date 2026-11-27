@@ -1663,7 +1663,7 @@
     },
     "Record Session Host": {
       "Type": "Task",
-      "Comment": "Which host this session ran on, for the metrics history (ADR-0015). Best effort: a session that cannot be recorded still runs.",
+      "Comment": "Which host this session ran on, for the metrics history (ADR-0015), and that its game has run here (ADR-0109). Best effort: a session that cannot be recorded still runs.",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
         "FunctionName": "${coordinator_function_arn}",
@@ -1671,7 +1671,8 @@
           "action": "openSessionHistory",
           "worldId.$": "$.request.worldId",
           "sessionId.$": "$.request.sessionId",
-          "hostId.$": "$.request.placed.hostId"
+          "hostId.$": "$.request.placed.hostId",
+          "gameId.$": "$.request.gameId"
         }
       },
       "ResultPath": null,

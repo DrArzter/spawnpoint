@@ -25,6 +25,8 @@ import { switchBeforeFirstStart, type SwitchOutcome, type SwitchRequest } from "
 import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 import { createSessionHostReader } from "./aws-session-history.ts";
+import { createProvenGamesReader } from "./aws-proven-games.ts";
+import { gameModules } from "./game-modules.ts";
 import { createCommandLogReader, createOperationProgressReader, createHostLogReader } from "./aws-operation-progress.ts";
 import { dynamoOperationRecordStore } from "./dynamo-operation-records.ts";
 import { dynamoTable } from "./dynamo-table.ts";
@@ -513,6 +515,9 @@ export const awsControlPlaneSources: ControlPlaneSources = {
     expectation: expectedDuration,
   }),
   readWorldSessionHosts: createSessionHostReader({ sfn, document, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines }),
+  listProvenGames: createProvenGamesReader({
+    document, sfn, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines, gameIds: () => gameModules.map((module) => module.id),
+  }),
   listWorldRecords,
   findSessionPlacement: (sessionId) => findSessionPlacement(sessionId),
 };

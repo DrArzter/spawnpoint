@@ -30,7 +30,7 @@ const game = aGame({ presets: [aPreset()], worlds: [world] });
 
 const shell = aShell(game, {
   navigation: [{ id: "worlds", label: "Worlds", href: "#/worlds", current: true }, { id: "profile", label: "Profile", href: "#/profile", current: false }],
-  scope: { game, games: [game], statusOf: () => ({ kind: "ok", label: "Online" }), open: true, show: spy("scope.show", "Minecraft"), close: spy("scope.close", "Cancel"), select: noop },
+  scope: { game, games: [game], statusOf: () => ({ kind: "ok", label: "Online" }), noteOf: () => null, open: true, show: spy("scope.show", "Minecraft"), close: spy("scope.close", "Cancel"), select: noop },
   appearance: { preference: "system", theme: "light", accent: "#1a73e8", label: "System theme (light)", setPreference: async () => undefined, setAccent: async () => undefined },
   viewer: { displayName: "DrArzter", inTelegram: true },
   observedAt: "Sep 23, 2026, 2:01 PM",

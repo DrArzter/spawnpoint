@@ -10,6 +10,7 @@ import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
 import { type SessionMachines } from "../../control-plane/session-machines.ts";
 import { type WorldRecords } from "../../control-plane/world-records.ts";
 import { parseJsonObject, response, type Response, errorResponse } from "./http.ts";
+import { refuseUnprovenGame } from "./game-proof.ts";
 import { worldPlacements } from "./world-state.ts";
 
 /** What a promotion needs, injected so that it depends on no cloud API. */
@@ -67,6 +68,8 @@ export function promotionFeature({ sources, machines, worlds }: PromotionDepende
     });
     if (plan.kind === "reject") return errorResponse(plan.status, plan.error);
     if (plan.kind === "switch") return switchResponse(plan, worldId, identity, switchRelease);
+    const unproven = await refuseUnprovenGame(identity, gameId, sources);
+    if (unproven) return unproven;
     const operationId = `panel-promote-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
     await machines.promote({
       operationId, serverId, gameId, presetId: plan.record.preset.id, worldId, worldName: plan.record.displayName,

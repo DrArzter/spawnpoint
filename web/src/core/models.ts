@@ -295,28 +295,18 @@ export type ConfigFilesModel = Readonly<{
 /** One model the owner may ask, with what it is good for as its tooltip (ADR-0094). */
 export type AssistantChoice = Readonly<{ value: AssistantModel; label: string; hint: string }>;
 
-/** The owner's log assistant: a model, an optional question, and the answer to the last one. */
-export type AssistantPanelModel = Readonly<{
-  choices: readonly AssistantChoice[];
-  model: AssistantModel;
-  setModel: (value: AssistantModel) => void;
-  question: string;
-  setQuestion: (value: string) => void;
-  /** Explains the log read last; refused until a read has finished. */
-  ask: Action;
-  /** The answer to the last question; null before the first. */
-  answer: Loading<Readonly<{ text: string; at: string }>> | null;
-}>;
-
-/** A world's recent log (ADR-0094), read on demand, with its addresses and player names replaced by tokens. */
+/**
+ * A world's recent log (ADR-0094), with its addresses and player names replaced
+ * by tokens. While the world runs it is the game's own log; before that, the
+ * host's lines of its last start.
+ */
 export type WorldLogModel = Readonly<{
   world: World;
-  /** Reads the newest lines; refused while the world is not running. */
+  source: "game" | "start";
+  /** Reads the game's newest lines again; refused while the world is not running. */
   read: Action;
-  /** The lines read last, oldest first; null before the first read. */
-  log: Loading<Readonly<{ at: string; rows: readonly HostLogRow[] }>> | null;
-  /** Null unless the person is an Owner and the deployment switched the assistant on. */
-  assistant: AssistantPanelModel | null;
+  /** The lines, oldest first; null when there are none to show yet. */
+  log: Loading<Readonly<{ rows: readonly HostLogRow[] }>> | null;
 }>;
 
 /** One mod of the release a world starts with, of either side, and its download (ADR-0065, ADR-0069). `source` is null for a release built before sources were recorded. */

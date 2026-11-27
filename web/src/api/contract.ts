@@ -268,9 +268,6 @@ export type SpawnpointApi = Readonly<{
   requestWorldLog(gameId: string, worldId: string): Promise<WorldLogRead>;
   /** One log read, with addresses and player names replaced by tokens; `pending` until the host answers. */
   loadWorldLog(gameId: string, worldId: string, readId: string): Promise<WorldLogRead>;
-  /** Asks the model to explain a finished log read; answered later through loadAssistantAnswer. */
-  askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>): Promise<AssistantAnswer>;
-  loadAssistantAnswer(gameId: string, worldId: string, answerId: string): Promise<AssistantAnswer>;
   /** The Owner's conversations with the assistant, newest first (ADR-0096). */
   listConversations(): Promise<readonly ConversationSummary[]>;
   startConversation(model: AssistantModel, message: string): Promise<AssistantConversation>;

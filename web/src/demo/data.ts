@@ -52,11 +52,9 @@ export type DemoState = {
   serverWhitelists: Record<string, string[]>;
   /** What each world edited or added in its config files (ADR-0093), by world then path; `base` is the release digest the edit started from. */
   configEdits: Record<string, Record<string, { text: string; base: string | null; updatedAt: string; updatedBy: string }>>;
-  /** Log reads and assistant answers by id (ADR-0094); `world` keys each to its world. */
+  /** Log reads by id (ADR-0094); `world` keys each to its world. */
   worldLogs: Record<string, { world: string; read: WorldLogRead }>;
-  answers: Record<string, { world: string; answer: AssistantAnswer }>;
   /** Questions asked today, for the assistant's daily limit. */
-  questionsToday: number;
   /** The Owner's conversations with the assistant (ADR-0096), by id. */
   conversations: Record<string, AssistantConversation>;
   /** Effects that land when their time passes; read calls settle them. */
@@ -305,8 +303,6 @@ export function initialState(): DemoState {
       "minecraft/minecraft-creative-5e1c9a07": ["DrArzter", "Mira"],
     },
     worldLogs: {},
-    answers: {},
-    questionsToday: 0,
     conversations: {},
     configEdits: {
       // The release's claims.toml has changed since this edit started from it.

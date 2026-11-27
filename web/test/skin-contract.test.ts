@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { actionsOf } from "../src/core/actions.ts";
 import { roleChoice } from "../src/core/roles.ts";
-import type { AccessModel, AssistantChatModel, AssistantPanelModel, WorldLogModel, ConfigEditorModel, ConfigFilesModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
+import type { AccessModel, AssistantChatModel, WorldLogModel, ConfigEditorModel, ConfigFilesModel, ConfirmationModel, ConsoleModel, CreateWorldModel, GameSettingsModel, InvitationModel, MetricsModel, ModsModel, ProfileModel, ReleasesModel, WhitelistModel, WorldModel, WorldSettingsModel } from "../src/core/models.ts";
 import { SKINS } from "../src/skins/index.ts";
 import { aGame, aMember, aPermission, aPreset, aRole, aRolesModel, aShell, aWorld, aWorlds, noop, spy } from "./support/fixtures.ts";
 
@@ -217,24 +217,15 @@ const configEditor: ConfigEditorModel = {
   reload: spy("config.reload", "Reload"),
   close: spy("config.close", "Close"),
 };
-const assistantPanel: AssistantPanelModel = {
-  choices: [{ value: "haiku", label: "Haiku", hint: "Fast and cheap" }, { value: "sonnet", label: "Sonnet", hint: "Slower and dearer" }],
-  model: "haiku",
-  setModel: noop,
-  question: "Why the lag?",
-  setQuestion: noop,
-  ask: spy("assistant.ask", "Explain"),
-  answer: { status: "ready", value: { text: "A Create crafter at 120 64 -88 throws every tick.\n\n- Remove it.", at: "2026-11-24T12:00:00Z" } },
-};
 const worldLog: WorldLogModel = {
   world,
+  source: "game",
   read: spy("log.read", "Read log"),
-  log: { status: "ready", value: { at: "2026-11-24T11:59:00Z", rows: [
+  log: { status: "ready", value: { rows: [
     { id: "r:0", at: null, text: "[18:41:03] player-1 joined the game", tone: "plain" },
     { id: "r:1", at: null, text: "[18:43:17] [Server thread/WARN]: Can't keep up!", tone: "warning" },
     { id: "r:2", at: null, text: "[18:44:40] [Server thread/ERROR]: Exception ticking block entity", tone: "error" },
   ] } },
-  assistant: assistantPanel,
 };
 const gameSettings: GameSettingsModel = {
   game, world, running: true,
@@ -456,7 +447,7 @@ for (const skin of SKINS) {
     assert.doesNotMatch(unread, /<textarea/);
   });
 
-  test(`${skin.name}: a world's log draws its lines with their tones and Read log, and the Owner's assistant its models, question and answer (ADR-0094)`, () => {
+  test(`${skin.name}: a world's log draws the game's lines with their tones and Read log, and before the game runs the start's lines (ADR-0094)`, () => {
     const tab = (model: WorldLogModel) => renderToStaticMarkup(createElement(skin.World, { model: { ...worldPage, tab: "log", log: model } }));
     const read = tab(worldLog);
     checkSurface("World log", read, worldLog);
@@ -464,18 +455,14 @@ for (const skin of SKINS) {
     assert.match(read, /Warning: /, "a warning says so in text");
     assert.match(read, /Error: /);
     assert.doesNotMatch(read, /<time/, "a game's line keeps its own time");
-    assert.match(read, /Haiku/);
-    assert.match(read, /Sonnet/);
-    assert.match(read, /Fast and cheap/, "a model's meaning is its tooltip");
-    assert.match(read, /Why the lag\?/);
-    assert.match(read, /throws every tick/);
+    assert.doesNotMatch(read, /Haiku|Sonnet|Explain/, "the log tab carries no assistant");
     assert.match(tab({ ...worldLog, log: null }), /No log read/);
     const failed = tab({ ...worldLog, log: { status: "error", error: "boom", kind: "failed", retry: spy("log.retry", "Try again") } });
     assert.match(failed, /data-action="log\.retry"/);
-    const unanswered = tab({ ...worldLog, assistant: { ...assistantPanel, answer: { status: "error", error: "boom", kind: "failed", retry: spy("assistant.retry", "Try again") } } });
-    assert.match(unanswered, /data-action="assistant\.retry"/);
-    const notOwner = tab({ ...worldLog, assistant: null });
-    assert.doesNotMatch(notOwner, /data-action="assistant\.ask"|Sonnet/, "only an Owner sees the assistant");
+    const starting = tab({ ...worldLog, source: "start", log: { status: "ready", value: { rows: [{ id: "s:0", at: "2026-11-27T12:00:00Z", text: "Compose configuration is invalid", tone: "error" }] } } });
+    assert.match(starting, /Start log/);
+    assert.match(starting, /Compose configuration is invalid/);
+    assert.match(tab({ ...worldLog, source: "start", log: null }), /The world is not running/);
   });
 
   test(`${skin.name}: the game settings sheet draws every kind of setting, its errors, save, defaults and cancel (ADR-0064)`, () => {

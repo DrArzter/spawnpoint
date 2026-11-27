@@ -9,7 +9,7 @@ import { GOOGLE_CLIENT_ID } from "../lib/signin";
 import type { Game, Member, OwnerBootstrap, Role, World } from "../model";
 import { action, type Action } from "./actions";
 import type { Notify } from "./notify";
-import type { AssistantChoice, AssistantPanelModel, BackupsModel, CandidateRow, HostLogRow, WorldLogModel, ConfigEditorModel, ConfigFileRow, ConfigFilesModel, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RoleEditorModel, RolesModel, UsersModel, WhitelistModel } from "./models";
+import type { AssistantChoice, BackupsModel, CandidateRow, HostLogRow, WorldLogModel, ConfigEditorModel, ConfigFileRow, ConfigFilesModel, ConfirmationModel, InvitationModel, InvitationsModel, Loading, LoginAccountsModel, MetricsModel, ModsModel, ModsPage, NotificationsModel, ReleaseChangesModel, RequestSummary, RoleEditorModel, RolesModel, UsersModel, WhitelistModel } from "./models";
 import { releaseChangeRows } from "./release-diff";
 import { candidateKey, type AccessDirectory } from "./access-directory";
 import { defaultRoleChoice, offeredPermissions, ROLE_ID_PATTERN, roleChoice, roleDeleteRefusal, roleEditRefusal, roleIdFor } from "./roles";
@@ -237,12 +237,10 @@ export function useConfigFiles(gameId: string, world: World, open: boolean, noti
   return { world, list, editor };
 }
 
-// --- a world's recent log and the owner's assistant (ADR-0094) ---------------
+// --- a world's recent log (ADR-0094) ------------------------------------------
 
 const LOG_POLL_MS = 1500;
 const LOG_POLL_LIMIT = 40;
-const ANSWER_POLL_MS = 2000;
-const ANSWER_POLL_LIMIT = 90;
 
 type Polled<T> = { status: "idle" } | LoadState<T>;
 
@@ -309,7 +307,7 @@ function logState(polled: Polled<WorldLogRead>, retry: Action): WorldLogModel["l
   if (polled.status === "error") return { ...polled, retry };
   const read = polled.value;
   if (read.status === "succeeded" && read.lines !== null) {
-    return { status: "ready", value: { at: read.at, rows: read.lines.map((text, index) => ({ id: `${read.id}:${index}`, at: null, text, tone: logLineTone(text) })) } };
+    return { status: "ready", value: { rows: read.lines.map((text, index) => ({ id: `${read.id}:${index}`, at: null, text, tone: logLineTone(text) })) } };
   }
   return { status: "error", error: readFailure(read.status), kind: "failed", retry };
 }
@@ -319,64 +317,33 @@ export const ASSISTANT_CHOICES: readonly AssistantChoice[] = [
   { value: "sonnet", label: "Sonnet", hint: t("assistant.slowerDearerCloserReading") },
 ];
 
-function answerState(polled: Polled<AssistantAnswer>, retry: Action): AssistantPanelModel["answer"] {
-  if (polled.status === "idle") return null;
-  if (polled.status === "loading") return polled;
-  if (polled.status === "error") return { ...polled, retry };
-  const answer = polled.value;
-  if (answer.status === "succeeded" && answer.text !== null) return { status: "ready", value: { text: answer.text, at: answer.at } };
-  return { status: "error", error: t("assistant.modelCouldNotAnswer"), kind: "failed", retry };
-}
-
 /**
- * A world's recent log, read when asked while its tab is open, and the
- * owner's assistant beside it. Nothing is read until the person asks, so an
- * open tab costs the host nothing.
+ * A world's recent log while its tab is open. Once the world runs, the game's
+ * own lines, read when the tab opens and again on request; before that, the
+ * host's lines of the last start, which the operation's progress already reads.
+ * A closed tab costs the host nothing.
  */
-export function useWorldLog(gameId: string, world: World, running: boolean, assistantOffered: boolean, notify: Notify): WorldLogModel {
+export function useWorldLog(gameId: string, world: World, open: boolean, running: boolean, startRows: readonly HostLogRow[] | null): WorldLogModel {
   const api = useApi();
   const key = `${gameId}/${world.id}`;
   const [read, startRead] = usePolled<WorldLogRead>(key, LOG_POLL_MS, LOG_POLL_LIMIT, (value) => value.status !== "pending", (value) => api.loadWorldLog(gameId, world.id, value.id));
-  const [answer, startAnswer] = usePolled<AssistantAnswer>(key, ANSWER_POLL_MS, ANSWER_POLL_LIMIT, (value) => value.status !== "pending", (value) => api.loadAssistantAnswer(gameId, world.id, value.id));
-  const [model, setModel] = useState<AssistantModel>("haiku");
-  const [question, setQuestion] = useState("");
-  useEffect(() => { setQuestion(""); }, [key]);
+  const readLog = () => startRead(() => api.requestWorldLog(gameId, world.id));
+  const latest = useRef(readLog);
+  latest.current = readLog;
+  useEffect(() => {
+    if (open && running) latest.current();
+  }, [open, running, key]);
 
   const reading = read.status === "loading";
-  const readLog = () => startRead(() => api.requestWorldLog(gameId, world.id));
   const readAction = action("log.read", t("log.readLog"), readLog, {
     icon: "refresh",
     disabled: !running || reading,
     busy: reading,
     hint: running ? undefined : t("log.worldNotRunning"),
   });
-
-  const finished = read.status === "ready" && read.value.status === "succeeded" ? read.value : null;
-  const asking = answer.status === "loading";
-  const ask = () => {
-    if (finished === null) return;
-    const text = question.trim();
-    startAnswer(() => api.askAssistant(gameId, world.id, { logReadId: finished.id, model, question: text === "" ? null : text }).catch((cause: unknown) => {
-      notify({ tone: "error", message: cause instanceof Error ? cause.message : t("common.questionCouldNotSent") });
-      throw cause;
-    }));
-  };
-  const assistant: AssistantPanelModel | null = assistantOffered ? {
-    choices: ASSISTANT_CHOICES,
-    model,
-    setModel,
-    question,
-    setQuestion,
-    ask: action("assistant.ask", t("log.explain"), ask, {
-      icon: "help",
-      disabled: finished === null || asking,
-      busy: asking,
-      hint: finished === null ? t("log.readLogFirst") : undefined,
-    }),
-    answer: answerState(answer, action("assistant.retry", t("common.tryAgain"), ask)),
-  } : null;
-
-  return { world, read: readAction, log: logState(read, action("log.retry", t("common.tryAgain"), readLog)), assistant };
+  if (running) return { world, source: "game", read: readAction, log: logState(read, action("log.retry", t("common.tryAgain"), readLog)) };
+  const rows = startRows ?? [];
+  return { world, source: "start", read: readAction, log: rows.length === 0 ? null : { status: "ready", value: { rows } } };
 }
 
 // --- release files (ADR-0065) -------------------------------------------------

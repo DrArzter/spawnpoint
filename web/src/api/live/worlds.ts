@@ -271,25 +271,6 @@ export const worldsApi = {
     return body.read;
   },
 
-  async askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>): Promise<AssistantAnswer> {
-    const body = await request<{ answer: AssistantAnswer }>(`${worldPath(gameId, worldId)}/assistant`, {
-      method: "POST", body: question,
-      failure: t("common.questionCouldNotSent"),
-      refusals: { forbidden: t("world.onlyOwnerCanAsk") },
-      valid: (answer) => typeof answer.answer?.id === "string",
-    });
-    return body.answer;
-  },
-
-  async loadAssistantAnswer(gameId: string, worldId: string, answerId: string): Promise<AssistantAnswer> {
-    const body = await request<{ answer: AssistantAnswer }>(`${worldPath(gameId, worldId)}/assistant/${encodeURIComponent(answerId)}`, {
-      failure: t("world.answerCouldNotRead"),
-      refusals: { forbidden: t("world.onlyOwnerCanAsk") },
-      valid: (answer) => typeof answer.answer?.status === "string",
-    });
-    return body.answer;
-  },
-
   async loadReleaseMods(gameId: string, presetId: string, release: string, query: ReleaseModQuery): Promise<ReleaseModPage> {
     // Page and size are always sent: any parameter asks for one page.
     const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize), sort: query.sort, order: query.order });

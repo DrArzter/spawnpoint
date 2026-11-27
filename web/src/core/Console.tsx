@@ -20,7 +20,7 @@ import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, use
 import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
 import { persistentHostNotice } from "./hosts";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
-import type { AccessModel, ConsoleLine, ConsoleModel, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
+import type { AccessModel, ConsoleLine, ConsoleModel, HostLogRow, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
 import { addressFacts, buildSessionOverview, buildWorldRow, operationLabel, releaseRows, releaseSummary, sessionDetails, siblingRow, withReleasePacks, worldDetails, worldLaunchedAt, worldMoreActions, worldNotices, worldPlayers, worldSessionControl, worldTabs } from "./worlds";
 import { currentLocale, LOCALE_NAMES, LOCALES, speak, t } from "../i18n";
 
@@ -201,7 +201,7 @@ function configOffered(console: ConsoleController, world: World): boolean {
 
 // The world page's tabs, and what each reads, only while it is open: a closed
 // tab costs no host a request.
-function useWorldTabs(console: ConsoleController, game: Game, world: World, notify: ReturnType<typeof useSnackbar>) {
+function useWorldTabs(console: ConsoleController, game: Game, world: World, notify: ReturnType<typeof useSnackbar>, startRows: readonly HostLogRow[] | null) {
   const { granted, capabilities, route } = console;
   const tabs = worldTabs(world, {
     releases: granted.has("release.read"),
@@ -218,8 +218,7 @@ function useWorldTabs(console: ConsoleController, game: Game, world: World, noti
   const metrics = useWorldMetrics(open("metrics") ? game.id : undefined, world.id, worldSessionId(game, world));
   const whitelist = useWhitelist(game.id, world, open("whitelist"), notify, game.playerName);
   const config = useConfigFiles(game.id, world, open("config"), notify);
-  // The assistant is an Owner's: assistant.use is reserved to the Owner role (ADR-0094).
-  const log = useWorldLog(game.id, world, running, granted.has("assistant.use") && capabilities.has("assistant"), notify);
+  const log = useWorldLog(game.id, world, open("log"), running, startRows);
   const mods = useReleaseMods(game.id, modsSource(world, open("releases") && capabilities.has("releaseFiles")), (presetId, version, mod) => console.downloadMod(game, presetId, version, mod));
   const changes = useReleaseChanges(game.id, changesSource(world, open("releases") && capabilities.has("releaseDiff")));
   return {
@@ -242,10 +241,11 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
   // The page tells this world's own session, never the game's (ADR-0062).
   const state = worldState(game, world, sharedSession);
   const operations = operationsBlockingWorld(snapshot, world);
-  const shown = useWorldTabs(console, game, world, notify);
   const offersProgress = capabilities.has("operationProgress");
   const running = newestRunning(snapshot?.operations ?? [], world.id);
   const progress = progressModel(offersProgress ? running : null, useOperationProgress(offersProgress ? { gameId: game.id, worldId: world.id } : null, running, undefined, () => void console.refresh(true)));
+  // The Log tab shows the start's host lines until the game has its own.
+  const shown = useWorldTabs(console, game, world, notify, progress?.logged ? progress.log : null);
   const canDownload = granted.has("backup.download") && capabilities.has("backupDownloads");
   const backups = useBackups(game.id, world, {
     canRead: granted.has("backup.read"),

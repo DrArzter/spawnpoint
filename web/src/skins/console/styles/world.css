@@ -238,28 +238,3 @@ html[data-skin="console"] .c-config-note {
   margin: 12px 0 0;
   font-size: var(--c-fs-s);
 }
-
-/* The Owner's log assistant (ADR-0094): the model, the question and Explain on one row, the answer under them. */
-html[data-skin="console"] .c-assistant-ask {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-
-html[data-skin="console"] .c-assistant-ask .c-input {
-  flex: 1 1 220px;
-  min-width: 0;
-}
-
-html[data-skin="console"] .c-assistant-answer {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--c-line);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.55;
-}

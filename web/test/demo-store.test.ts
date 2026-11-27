@@ -239,7 +239,7 @@ test("a game with no config rules lists no files in the demo", () => {
   assert.deepEqual(store.configFiles("factorio", "factorio"), { release: null, roots: [], maxBytes: 0, files: [] });
 });
 
-test("a running world's log is read on request, and the assistant waits for a finished read (ADR-0094)", () => {
+test("a running world's log is read on request (ADR-0094)", () => {
   const snapshot = store.snapshot();
   const worlds = snapshot.games.find((item) => item.id === GAME)!.worlds.map((item) => item.id);
   const running = worlds.find((id) => stateOf(snapshot, id) === "running");
@@ -250,8 +250,6 @@ test("a running world's log is read on request, and the assistant waits for a fi
   assert.deepEqual([read.status, read.lines], ["pending", null]);
   assert.equal(store.worldLog(GAME, running, read.id).id, read.id);
   assert.throws(() => store.worldLog(GAME, stopped, read.id), { code: "unknown_log_read" }, "a read belongs to its world");
-  assert.throws(() => store.askAssistant(GAME, running, { logReadId: read.id, model: "haiku", question: null }), { code: "log_not_ready" });
-  assert.throws(() => store.assistantAnswer(GAME, running, "answer-0"), { code: "unknown_assistant_answer" });
 });
 
 test("the demo's assistant reads, proposes a start, and runs it only once the Owner applies it (ADR-0096)", () => {

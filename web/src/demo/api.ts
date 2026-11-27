@@ -311,16 +311,6 @@ export const demoApi: SpawnpointApi = {
     return store.worldLog(gameId, worldId, readId);
   },
 
-  async askAssistant(gameId: string, worldId: string, question: Readonly<{ logReadId: string; model: AssistantModel; question: string | null }>) {
-    await demoLatency();
-    return store.askAssistant(gameId, worldId, question);
-  },
-
-  async loadAssistantAnswer(gameId: string, worldId: string, answerId: string) {
-    await demoLatency();
-    return store.assistantAnswer(gameId, worldId, answerId);
-  },
-
   async listConversations() {
     await demoLatency();
     return store.listConversations();

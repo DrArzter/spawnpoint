@@ -24,6 +24,7 @@ import { visibleNavigation } from "./navigation";
 import { presetOf, stopDisconnect, type WorldCallbacks } from "./worlds";
 import { t } from "../i18n";
 import { operationNoun } from "../lib/operation-words";
+import { startSettlePoll, unsettled } from "./live-state";
 
 /*
  * The console's bones: what is loaded, what is pending, what is open, and
@@ -262,18 +263,18 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
 
   useEffect(() => { void refresh(true); }, [refresh]);
 
-  const building = games.some((item) => item.presets.some((preset) => preset.buildStatus === "building"));
+  // The socket is the fast path; this poll holds the bound when a message is lost.
+  const live = unsettled(snapshot);
   useEffect(() => {
-    if (!building) return;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      await refresh(true);
-      if (!stopped) timer = setTimeout(() => void poll(), 5000);
+    if (!live) return;
+    const poll = startSettlePoll({ reload: () => refresh(true), visible: () => document.visibilityState !== "hidden" });
+    const onVisibility = () => (document.visibilityState === "hidden" ? poll.hide() : poll.show());
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      poll.stop();
     };
-    timer = setTimeout(() => void poll(), 5000);
-    return () => { stopped = true; clearTimeout(timer); };
-  }, [building, refresh]);
+  }, [live, refresh]);
 
   // The browser painted from its own cache; the identity's choice outranks it.
   // A failure here is silent on purpose: a palette is not worth a banner.

@@ -24,7 +24,7 @@ import { visibleNavigation } from "./navigation";
 import { presetOf, stopDisconnect, type WorldCallbacks } from "./worlds";
 import { t } from "../i18n";
 import { operationNoun } from "../lib/operation-words";
-import { owesShowReload, SETTLE_EXPECT_MS, settleWanted, startSettlePoll, unsettled } from "./live-state";
+import { owesShowReload, SETTLE_EXPECT_MS, settleSignature, startSettlePoll, unsettled } from "./live-state";
 
 /*
  * The console's bones: what is loaded, what is pending, what is open, and
@@ -269,14 +269,14 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
   // An accepted request polls too until its operation is listed: the first
   // read after it usually comes before the projection has the run.
   const [expectingUntil, setExpectingUntil] = useState(0);
-  const live = settleWanted(snapshot, expectingUntil, Date.now());
+  const transitions = settleSignature(snapshot, expectingUntil, Date.now());
   useEffect(() => { if (unsettled(snapshot)) setExpectingUntil(0); }, [snapshot]);
   const refreshExpecting = async () => {
     setExpectingUntil(Date.now() + SETTLE_EXPECT_MS);
     await refresh(true);
   };
   useEffect(() => {
-    if (!live) return;
+    if (transitions === "") return;
     const poll = startSettlePoll({ reload: () => refresh(true), visible: () => document.visibilityState !== "hidden" });
     const onVisibility = () => (document.visibilityState === "hidden" ? poll.hide() : poll.show());
     document.addEventListener("visibilitychange", onVisibility);
@@ -284,7 +284,7 @@ export function useConsole(signedIn: ActiveSession, continuesBootCard: boolean, 
       document.removeEventListener("visibilitychange", onVisibility);
       poll.stop();
     };
-  }, [live, refresh]);
+  }, [transitions, refresh]);
 
   // Showing the tab or coming back online reads once: nothing read while hidden or offline.
   useEffect(() => {

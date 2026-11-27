@@ -35,9 +35,32 @@ export function settlePollDelay(unsettledForMs: number): number | null {
   return unsettledForMs < SETTLE_SLOW_AFTER_MS ? SETTLE_POLL_MS : SETTLE_SLOW_POLL_MS;
 }
 
+/**
+ * What is in transition now, as a string: empty when nothing is. The poll
+ * starts again, with a fresh cap, whenever it changes, so a new start or stop
+ * is followed even after a stuck one used up its 30 minutes.
+ */
+export function settleSignature(snapshot: ControlPlaneSnapshot | null, expectingUntil: number, now: number): string {
+  const parts: string[] = [];
+  if (expectingUntil > now) parts.push(`request:${expectingUntil}`);
+  if (snapshot === null) return parts.join("|");
+  for (const operation of snapshot.operations) parts.push(`operation:${operation.id}`);
+  for (const host of configuredHosts(snapshot)) if (host.state === "pending" || host.state === "stopping") parts.push(`host:${host.id}:${host.state}`);
+  for (const game of snapshot.games) {
+    const observed = game.lifecycle?.observedState ?? "";
+    if (MOVING_SESSION.has(observed)) parts.push(`game:${game.id}:${observed}`);
+    for (const world of game.worlds) {
+      const state = world.session?.observedState ?? "";
+      if (MOVING_SESSION.has(state)) parts.push(`world:${world.id}:${state}`);
+    }
+    for (const preset of game.presets) if (preset.buildStatus === "building") parts.push(`build:${game.id}:${preset.id}`);
+  }
+  return parts.join("|");
+}
+
 /** Whether the poll should run: the snapshot is in transition, or a request was accepted and its operation is not listed yet. */
 export function settleWanted(snapshot: ControlPlaneSnapshot | null, expectingUntil: number, now: number): boolean {
-  return unsettled(snapshot) || expectingUntil > now;
+  return settleSignature(snapshot, expectingUntil, now) !== "";
 }
 
 /** Whether showing the tab or coming back online owes a read: not when one began a moment ago. */

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
 
 import type { ControlPlaneSnapshot, Game } from "../src/model.ts";
-import { owesShowReload, SETTLE_EXPECT_MS, SETTLE_GIVE_UP_AFTER_MS, SETTLE_POLL_MS, SETTLE_SLOW_AFTER_MS, SETTLE_SLOW_POLL_MS, settlePollDelay, settleWanted, SHOW_RELOAD_GAP_MS, startSettlePoll, unsettled } from "../src/core/live-state.ts";
+import { owesShowReload, SETTLE_EXPECT_MS, SETTLE_GIVE_UP_AFTER_MS, SETTLE_POLL_MS, SETTLE_SLOW_AFTER_MS, SETTLE_SLOW_POLL_MS, settlePollDelay, settleSignature, settleWanted, SHOW_RELOAD_GAP_MS, startSettlePoll, unsettled } from "../src/core/live-state.ts";
 import { deriveServerState } from "../src/core/useConsole.ts";
 
 afterEach(() => { mock.timers.reset(); });
@@ -128,4 +128,32 @@ test("showing the tab or coming back online reads once, unless a read began a mo
   assert.equal(owesShowReload(0, 10_000), true);
   assert.equal(owesShowReload(10_000, 10_000 + SHOW_RELOAD_GAP_MS - 1), false);
   assert.equal(owesShowReload(10_000, 10_000 + SHOW_RELOAD_GAP_MS), true);
+});
+
+test("what is in transition is named, so a new transition or request starts the poll again", () => {
+  const stuck = snapshot({ games: [{ ...game("ready"), id: "factorio", worlds: [{ id: "w9", session: { observedState: "stopping" } } as never] }] });
+  const stuckOnly = settleSignature(stuck, 0, 1_000);
+  assert.notEqual(stuckOnly, "");
+  assert.equal(settleSignature(stuck, 0, 2_000), stuckOnly, "the same stuck state keeps the same poll and its cap");
+  assert.notEqual(settleSignature(stuck, 1_000 + SETTLE_EXPECT_MS, 1_000), stuckOnly, "an accepted request starts it again");
+  const another = snapshot({ ...stuck, operations: [{ id: "start-2", type: "start", status: "running", startedAt: "2026-11-27T00:00:00.000Z" }] });
+  assert.notEqual(settleSignature(another, 0, 1_000), stuckOnly, "a new operation starts it again");
+  assert.equal(settleSignature(snapshot(), 0, 1_000), "");
+});
+
+test("a poll that hit its cap reads again once a new poll starts for a new transition", async () => {
+  mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  let reads = 0;
+  const capped = startSettlePoll({ reload: async () => { reads += 1; }, visible: () => true });
+  for (let elapsed = 0; elapsed <= SETTLE_GIVE_UP_AFTER_MS; elapsed += SETTLE_SLOW_POLL_MS) await after(SETTLE_SLOW_POLL_MS);
+  const atCap = reads;
+  capped.show();
+  await after(SETTLE_SLOW_POLL_MS * 4);
+  assert.equal(reads, atCap, "the capped poll stays quiet, even when shown");
+  // The signature changed, so the hook stops the old poll and starts a new one.
+  capped.stop();
+  const fresh = startSettlePoll({ reload: async () => { reads += 1; }, visible: () => true });
+  await after(SETTLE_POLL_MS);
+  assert.equal(reads, atCap + 1, "the new transition is read within one delay");
+  fresh.stop();
 });

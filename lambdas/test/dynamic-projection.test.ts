@@ -52,6 +52,22 @@ test("only one expired stranded session on an observed stopped host can recover"
   assert.equal(recoveryTarget([host], [], [{ ...stranded, observedState: "stopped", activeSessionId: null, activeWorldId: null }], 101), null);
 });
 
+test("a fleet host does not keep the configured host's stranded session from recovering", () => {
+  const stranded = {
+    ...initialLifecycleRecord("factorio", 1),
+    observedState: "stopping" as const,
+    activeSessionId: "session-1",
+    activeWorldId: "factorio-test",
+    lease: null,
+  };
+  const fleet: HostObservation = { ...host, id: "fleet-1", providerRef: "i-fleet", state: "running", provenance: "launched" };
+  assert.deepEqual(recoveryTarget([fleet, host], [], [stranded], 101), {
+    serverId: "factorio", sessionId: "session-1", worldId: "factorio-test", instanceId: "i-123",
+  });
+  assert.equal(recoveryTarget([fleet], [], [stranded], 101), null);
+  assert.equal(recoveryTarget([fleet, host, { ...host, id: "second", providerRef: "i-456" }], [], [stranded], 101), null);
+});
+
 test("a manually stopped ready session is reconciled without a special UI command", () => {
   const ready = {
     ...initialLifecycleRecord("factorio", 1),

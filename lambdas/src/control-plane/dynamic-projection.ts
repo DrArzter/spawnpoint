@@ -146,7 +146,9 @@ export function recoveryTarget(
   lifecycles: readonly LifecycleRecord[],
   nowEpochSeconds: number,
 ): RecoveryTarget | null {
-  if (hosts.length !== 1 || hosts[0]?.state !== "stopped" || operations.length !== 0) return null;
+  // Hosts launched for fleet worlds are not this safety net's concern.
+  const configured = hosts.filter((host) => host.provenance !== "launched");
+  if (configured.length !== 1 || configured[0]?.state !== "stopped" || operations.length !== 0) return null;
   const candidates = lifecycles.filter((record) =>
     record.observedState !== "stopped" &&
     record.activeSessionId !== null && record.activeWorldId !== null &&
@@ -157,7 +159,7 @@ export function recoveryTarget(
     serverId: record.serverId,
     sessionId: record.activeSessionId!,
     worldId: record.activeWorldId!,
-    instanceId: hosts[0].providerRef,
+    instanceId: configured[0].providerRef,
   };
 }
 

@@ -27,6 +27,25 @@ resource "aws_dynamodb_table" "control_plane_view" {
     type = "S"
   }
 
+  attribute {
+    name = "open_key"
+    type = "S"
+  }
+
+  attribute {
+    name = "started_at"
+    type = "S"
+  }
+
+  # The operations that run now (ADR-0105). Only a running record carries
+  # `open_key`; its end write removes it, so the index stays a few items.
+  global_secondary_index {
+    name            = "open_operations"
+    hash_key        = "open_key"
+    range_key       = "started_at"
+    projection_type = "ALL"
+  }
+
   point_in_time_recovery {
     enabled = true
   }

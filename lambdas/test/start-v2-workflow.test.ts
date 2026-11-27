@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 type State = {
   Type: string;
@@ -31,7 +32,7 @@ async function loadDefinition(): Promise<Definition> {
   const rendered = template
     .replaceAll("${allowed_instance_types}", JSON.stringify(["m7i-flex.*", "r7i.*"]))
     .replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource");
-  return JSON.parse(rendered) as Definition;
+  return withoutOperationRecord(JSON.parse(rendered) as Definition);
 }
 
 function targets(state: State): string[] {
@@ -244,7 +245,7 @@ test("a start fills what its caller left out: the game from the server id, no wo
 test("the stop releases the session's reservation after the verified stop, and tolerates one that never existed", async () => {
   const url = new URL("../../workflows/stop-server-v2.asl.json.tftpl", import.meta.url);
   const template = await readFile(url, "utf8");
-  const definition = JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition;
+  const definition = withoutOperationRecord(JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition);
   assert.equal(state(definition, "Mark Session Stopped").Next, "Close Session History");
   assert.equal(state(definition, "Close Session History").Next, "Route Session Volume Release");
   const release = state(definition, "Release Placement");

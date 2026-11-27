@@ -1,8 +1,20 @@
 {
   "Comment": "Promote one world's current wipe through Lifecycle V2, on the configured host or, for a fleet world, on a host placed for it (ADR-0054, ADR-0062). Release storage and session coordination remain behind their adapters.",
   "QueryLanguage": "JSONPath",
-  "StartAt": "Initialize",
+  "StartAt": "Report Accepted",
   "States": {
+    "Report Accepted": {
+      "Type": "Task",
+      "Comment": "The run's record: accepted, and running (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": "{% ($f := $merge([{'operation_id': {'S': $states.context.Execution.Name}, 'execution_arn': {'S': $states.context.Execution.Id}, 'type': {'S': 'promote'}, 'workflow': {'S': 'promote'}, 'status': {'S': 'running'}, 'root_id': {'S': ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name)}, 'started_at': {'S': $states.context.Execution.StartTime}, 'updated_at': {'S': $states.context.State.EnteredTime}, 'open_key': {'S': 'open'}, 'expires_at': {'N': $string($floor($toMillis($states.context.Execution.StartTime) / 1000) + 2592000)}, 'step': {'S': 'promote.checking_release'}}, $type($states.context.Execution.Input.worldId) = 'string' ? {'world_id': {'S': $states.context.Execution.Input.worldId}} : {}, $type($states.context.Execution.Input.gameId) = 'string' ? {'game_id': {'S': $states.context.Execution.Input.gameId}} : {}, $type($states.context.Execution.Input.serverId) = 'string' ? {'server_id': {'S': $states.context.Execution.Input.serverId}} : {}, $type($states.context.Execution.Input.operationParent) = 'string' ? {'parent_id': {'S': $states.context.Execution.Input.operationParent}} : {}]); {'TableName': '${operation_table_name}', 'Key': {'pk': {'S': 'OPERATION#' & $states.context.Execution.Name}, 'sk': {'S': 'RECORD'}}, 'UpdateExpression': 'SET ' & $join($map($keys($f), function($k) { '#' & $k & ' = :' & $k }), ', '), 'ExpressionAttributeNames': $merge($map($keys($f), function($k) { {'#' & $k: $k} })), 'ExpressionAttributeValues': $merge($map($keys($f), function($k) { {':' & $k: $lookup($f, $k)} }))}) %}",
+      "Assign": { "operationRoot": "{% ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name) %}" },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Assign": { "operationRoot": "{% ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name) %}" }, "Output": "{% $states.input %}", "Next": "Initialize" }],
+      "Next": "Initialize"
+    },
     "Initialize": {
       "Type": "Pass",
       "Parameters": {
@@ -43,7 +55,7 @@
         "Key.$": "States.Format('releases/{}/{}/{}/manifest.json', $.request.gameId, $.request.presetId, $.request.release)"
       },
       "ResultPath": null,
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.manifestError", "Next": "Release Not Published" }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.manifestError", "Next": "Report Release Not Published" }],
       "Next": "Prepare Release"
     },
     "Prepare Release": {
@@ -61,13 +73,31 @@
       },
       "ResultSelector": { "status.$": "$.Payload.status", "state.$": "$.Payload.state", "previous.$": "$.Payload.previous" },
       "ResultPath": "$.mutation",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.pointerError", "Next": "World Not Imported" }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.pointerError", "Next": "Report World Not Imported" }],
       "Next": "Already Active"
     },
     "Already Active": {
       "Type": "Choice",
       "Choices": [{ "Variable": "$.mutation.status", "StringEquals": "already_active", "Next": "Nothing To Do" }],
-      "Default": "Read Lifecycle"
+      "Default": "Report Read Lifecycle"
+    },
+    "Report Read Lifecycle": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "promote.checking_server" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Read Lifecycle" }],
+      "Next": "Read Lifecycle"
     },
     "Read Lifecycle": {
       "Type": "Task",
@@ -78,7 +108,7 @@
       },
       "ResultSelector": { "record.$": "$.Payload.record" },
       "ResultPath": "$.observed.lifecycle",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.lifecycleError", "Next": "Restore Desired After Unavailable Lifecycle" }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.lifecycleError", "Next": "Report Caught Before Restore Desired After Unavailable Lifecycle" }],
       "Next": "Route Origin State"
     },
     "Route Origin State": {
@@ -100,10 +130,28 @@
           "Next": "Mark Origin Stopped"
         }
       ],
-      "Default": "Restore Desired After Unavailable Lifecycle"
+      "Default": "Report Restore Desired After Unavailable Lifecycle"
     },
-    "Mark Origin Running": { "Type": "Pass", "Result": "running", "ResultPath": "$.origin", "Next": "Stop Origin Session" },
-    "Mark Origin Stopped": { "Type": "Pass", "Result": "stopped", "ResultPath": "$.origin", "Next": "Keep Pre-Promotion Backup" },
+    "Mark Origin Running": { "Type": "Pass", "Result": "running", "ResultPath": "$.origin", "Next": "Report Stop Origin Session" },
+    "Mark Origin Stopped": { "Type": "Pass", "Result": "stopped", "ResultPath": "$.origin", "Next": "Report Keep Pre-Promotion Backup" },
+    "Report Stop Origin Session": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "promote.stopping_server" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Stop Origin Session" }],
+      "Next": "Stop Origin Session"
+    },
     "Stop Origin Session": {
       "Type": "Task",
       "Resource": "arn:aws:states:::states:startExecution.sync:2",
@@ -117,11 +165,31 @@
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
           "worldId.$": "$.request.worldId",
-          "stopTiming.$": "$.request.stopTiming"
+          "stopTiming.$": "$.request.stopTiming",
+          "operationParent.$": "$$.Execution.Name",
+          "operationRoot.$": "$operationRoot"
         }
       },
       "ResultPath": "$.observed.stop",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Restore Desired After Refusal" }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.stopError", "Next": "Report Caught Before Restore Desired After Refusal" }],
+      "Next": "Report Keep Pre-Promotion Backup"
+    },
+    "Report Keep Pre-Promotion Backup": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "promote.keeping_backup" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Keep Pre-Promotion Backup" }],
       "Next": "Keep Pre-Promotion Backup"
     },
     "Keep Pre-Promotion Backup": {
@@ -139,8 +207,26 @@
       },
       "ResultSelector": { "status.$": "$.Payload.status", "key.$": "$.Payload.key" },
       "ResultPath": "$.observed.prePromotionBackup",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.prePromotionBackupError", "Next": "Restore Desired After Missing Backup" }],
-      "Next": "Start With Target"
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.prePromotionBackupError", "Next": "Report Caught Before Restore Desired After Missing Backup" }],
+      "Next": "Report Start With Target"
+    },
+    "Report Caught Before Restore Desired After Missing Backup": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.observed.prePromotionBackupError.Error) = 'string' ? $substring($states.input.observed.prePromotionBackupError.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.observed.prePromotionBackupError.Cause) = 'string' ? $substring($states.input.observed.prePromotionBackupError.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "promote.restoring_choice" }, ":step": { "S": "promote.restoring_choice" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Restore Desired After Missing Backup" }],
+      "Next": "Restore Desired After Missing Backup"
     },
     "Restore Desired After Missing Backup": {
       "Type": "Task",
@@ -156,7 +242,25 @@
         }
       },
       "ResultPath": "$.observed.restore",
-      "Next": "Pre-Promotion Backup Missing"
+      "Next": "Report Pre-Promotion Backup Missing"
+    },
+    "Report Caught Before Restore Desired After Refusal": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.observed.stopError.Error) = 'string' ? $substring($states.input.observed.stopError.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.observed.stopError.Cause) = 'string' ? $substring($states.input.observed.stopError.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "promote.restoring_choice" }, ":step": { "S": "promote.restoring_choice" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Restore Desired After Refusal" }],
+      "Next": "Restore Desired After Refusal"
     },
     "Restore Desired After Refusal": {
       "Type": "Task",
@@ -172,7 +276,43 @@
         }
       },
       "ResultPath": "$.observed.restore",
-      "Next": "Promotion Refused"
+      "Next": "Report Promotion Refused"
+    },
+    "Report Caught Before Restore Desired After Unavailable Lifecycle": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.observed.lifecycleError.Error) = 'string' ? $substring($states.input.observed.lifecycleError.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.observed.lifecycleError.Cause) = 'string' ? $substring($states.input.observed.lifecycleError.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "promote.restoring_choice" }, ":step": { "S": "promote.restoring_choice" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Restore Desired After Unavailable Lifecycle" }],
+      "Next": "Restore Desired After Unavailable Lifecycle"
+    },
+    "Report Restore Desired After Unavailable Lifecycle": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "promote.restoring_choice" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Restore Desired After Unavailable Lifecycle" }],
+      "Next": "Restore Desired After Unavailable Lifecycle"
     },
     "Restore Desired After Unavailable Lifecycle": {
       "Type": "Task",
@@ -188,7 +328,25 @@
         }
       },
       "ResultPath": "$.observed.restore",
-      "Next": "Lifecycle Unavailable"
+      "Next": "Report Lifecycle Unavailable"
+    },
+    "Report Start With Target": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "promote.starting_release" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Start With Target" }],
+      "Next": "Start With Target"
     },
     "Start With Target": {
       "Type": "Task",
@@ -215,11 +373,31 @@
           "worldId.$": "$.request.worldId",
           "startTiming.$": "$.request.startTiming",
           "stopTiming.$": "$.request.stopTiming",
-          "watchdogTiming.$": "$.request.watchdogTiming"
+          "watchdogTiming.$": "$.request.watchdogTiming",
+          "operationParent.$": "$$.Execution.Name",
+          "operationRoot.$": "$operationRoot"
         }
       },
       "ResultPath": "$.observed.start",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.startError", "Next": "Rollback Possible" }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.startError", "Next": "Report Caught Before Rollback Possible" }],
+      "Next": "Report Commit Active"
+    },
+    "Report Commit Active": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "promote.recording_release" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Commit Active" }],
       "Next": "Commit Active"
     },
     "Commit Active": {
@@ -243,9 +421,27 @@
       "Comment": "The world runs on the new release after the check; the idle watchdog stops it. Only startAfter: false stops a stopped origin again.",
       "Choices": [
         { "And": [{ "Variable": "$.request.startAfter", "IsPresent": true }, { "Variable": "$.request.startAfter", "BooleanEquals": true }], "Next": "Promoted Running" },
-        { "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop Target After Commit" }
+        { "Variable": "$.origin", "StringEquals": "stopped", "Next": "Report Stop Target After Commit" }
       ],
       "Default": "Promoted Running"
+    },
+    "Report Stop Target After Commit": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "promote.stopping_again" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Stop Target After Commit" }],
+      "Next": "Stop Target After Commit"
     },
     "Stop Target After Commit": {
       "Type": "Task",
@@ -260,16 +456,36 @@
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
           "worldId.$": "$.request.worldId",
-          "stopTiming.$": "$.request.stopTiming"
+          "stopTiming.$": "$.request.stopTiming",
+          "operationParent.$": "$$.Execution.Name",
+          "operationRoot.$": "$operationRoot"
         }
       },
       "ResultPath": "$.observed.restop",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.restopError", "Next": "Promoted But Running" }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.restopError", "Next": "Report Promoted But Running" }],
       "Next": "Promoted Stopped"
+    },
+    "Report Caught Before Rollback Possible": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.observed.startError.Error) = 'string' ? $substring($states.input.observed.startError.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.observed.startError.Cause) = 'string' ? $substring($states.input.observed.startError.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "promote.rolling_back" }, ":step": { "S": "promote.rolling_back" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Rollback Possible" }],
+      "Next": "Rollback Possible"
     },
     "Rollback Possible": {
       "Type": "Choice",
-      "Choices": [{ "Variable": "$.mutation.previous.activeRelease", "IsNull": true, "Next": "Promotion Failed No Rollback" }],
+      "Choices": [{ "Variable": "$.mutation.previous.activeRelease", "IsNull": true, "Next": "Report Promotion Failed No Rollback" }],
       "Default": "Write Rollback Desired"
     },
     "Write Rollback Desired": {
@@ -312,11 +528,13 @@
           "worldId.$": "$.request.worldId",
           "startTiming.$": "$.request.startTiming",
           "stopTiming.$": "$.request.stopTiming",
-          "watchdogTiming.$": "$.request.watchdogTiming"
+          "watchdogTiming.$": "$.request.watchdogTiming",
+          "operationParent.$": "$$.Execution.Name",
+          "operationRoot.$": "$operationRoot"
         }
       },
       "ResultPath": "$.observed.rollbackStart",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.rollbackError", "Next": "Rollback Failed" }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.rollbackError", "Next": "Report Rollback Failed" }],
       "Next": "Route Rollback Completion"
     },
     "Route Rollback Completion": {
@@ -324,9 +542,27 @@
       "Comment": "After a rollback the same rule: the world runs on the previous release unless startAfter is false.",
       "Choices": [
         { "And": [{ "Variable": "$.request.startAfter", "IsPresent": true }, { "Variable": "$.request.startAfter", "BooleanEquals": true }], "Next": "Rolled Back" },
-        { "Variable": "$.origin", "StringEquals": "stopped", "Next": "Stop Rollback Session" }
+        { "Variable": "$.origin", "StringEquals": "stopped", "Next": "Report Stop Rollback Session" }
       ],
       "Default": "Rolled Back"
+    },
+    "Report Stop Rollback Session": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "promote.stopping_after_rollback" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Stop Rollback Session" }],
+      "Next": "Stop Rollback Session"
     },
     "Stop Rollback Session": {
       "Type": "Task",
@@ -341,25 +577,281 @@
           "leaseTtlSeconds.$": "$.request.leaseTtlSeconds",
           "instanceId.$": "$.request.instanceId",
           "worldId.$": "$.request.worldId",
-          "stopTiming.$": "$.request.stopTiming"
+          "stopTiming.$": "$.request.stopTiming",
+          "operationParent.$": "$$.Execution.Name",
+          "operationRoot.$": "$operationRoot"
         }
       },
       "ResultPath": "$.observed.restop",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.restopError", "Next": "Rolled Back But Running" }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.observed.restopError", "Next": "Report Rolled Back But Running" }],
       "Next": "Rolled Back"
     },
-    "Nothing To Do": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "already_active", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release" }, "End": true },
-    "Promoted Running": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "running", "sessionId.$": "$.sessions.target" }, "End": true },
-    "Promoted Stopped": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "stopped" }, "End": true },
-    "Rolled Back": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "rolled_back", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "failedRelease.$": "$.request.release", "activeRelease.$": "$.mutation.previous.activeRelease", "server.$": "$.origin" }, "End": true },
+    "Report Nothing To Do": {
+      "Type": "Task",
+      "Comment": "The record ends as succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #result = :result, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#result": "result", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "succeeded" }, ":result": { "S": "{% $type($states.input.status) = 'string' ? $substring($states.input.status, 0, 1000) : '' %}" }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Report Nothing To Do Missed" }],
+      "End": true
+    },
+    "Report Nothing To Do Missed": {
+      "Type": "Succeed",
+      "Comment": "The record could not be written; the run still succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata"
+    },
+    "Nothing To Do": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "status": "already_active", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release" }, "Next": "Report Nothing To Do" },
+    "Report Promoted Running": {
+      "Type": "Task",
+      "Comment": "The record ends as succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #result = :result, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#result": "result", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "succeeded" }, ":result": { "S": "{% $type($states.input.status) = 'string' ? $substring($states.input.status, 0, 1000) : '' %}" }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Report Promoted Running Missed" }],
+      "End": true
+    },
+    "Report Promoted Running Missed": {
+      "Type": "Succeed",
+      "Comment": "The record could not be written; the run still succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata"
+    },
+    "Promoted Running": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "running", "sessionId.$": "$.sessions.target" }, "Next": "Report Promoted Running" },
+    "Report Promoted Stopped": {
+      "Type": "Task",
+      "Comment": "The record ends as succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #result = :result, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#result": "result", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "succeeded" }, ":result": { "S": "{% $type($states.input.status) = 'string' ? $substring($states.input.status, 0, 1000) : '' %}" }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Report Promoted Stopped Missed" }],
+      "End": true
+    },
+    "Report Promoted Stopped Missed": {
+      "Type": "Succeed",
+      "Comment": "The record could not be written; the run still succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata"
+    },
+    "Promoted Stopped": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "promoted", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "release.$": "$.request.release", "server": "stopped" }, "Next": "Report Promoted Stopped" },
+    "Report Rolled Back": {
+      "Type": "Task",
+      "Comment": "The record ends as succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #result = :result, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#result": "result", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "succeeded" }, ":result": { "S": "{% $type($states.input.status) = 'string' ? $substring($states.input.status, 0, 1000) : '' %}" }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Report Rolled Back Missed" }],
+      "End": true
+    },
+    "Report Rolled Back Missed": {
+      "Type": "Succeed",
+      "Comment": "The record could not be written; the run still succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata"
+    },
+    "Rolled Back": { "Type": "Pass", "Parameters": { "operationId.$": "$.request.operationId", "prePromotionBackup.$": "$.observed.prePromotionBackup.key", "status": "rolled_back", "worldId.$": "$.request.worldId", "generationId.$": "$.request.generationId", "failedRelease.$": "$.request.release", "activeRelease.$": "$.mutation.previous.activeRelease", "server.$": "$.origin" }, "Next": "Report Rolled Back" },
+    "Report World Not Imported": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.WorldNotImported" }, ":cause": { "S": "No release state exists for this world's current wipe." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "World Not Imported" }],
+      "Next": "World Not Imported"
+    },
     "World Not Imported": { "Type": "Fail", "Error": "Spawnpoint.WorldNotImported", "Cause": "No release state exists for this world's current wipe." },
+    "Report Release Not Published": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.ReleaseNotPublished" }, ":cause": { "S": "The target release has no manifest for this game and preset." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Release Not Published" }],
+      "Next": "Release Not Published"
+    },
     "Release Not Published": { "Type": "Fail", "Error": "Spawnpoint.ReleaseNotPublished", "Cause": "The target release has no manifest for this game and preset." },
+    "Report Lifecycle Unavailable": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.LifecycleUnavailable" }, ":cause": { "S": "The server lifecycle is absent or transitional. The previous desired release was restored." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Lifecycle Unavailable" }],
+      "Next": "Lifecycle Unavailable"
+    },
     "Lifecycle Unavailable": { "Type": "Fail", "Error": "Spawnpoint.LifecycleUnavailable", "Cause": "The server lifecycle is absent or transitional. The previous desired release was restored." },
+    "Report Pre-Promotion Backup Missing": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.PrePromotionBackupMissing" }, ":cause": { "S": "This wipe ran a release but has no verified archive to keep before the promotion. The previous desired release was restored." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Pre-Promotion Backup Missing" }],
+      "Next": "Pre-Promotion Backup Missing"
+    },
     "Pre-Promotion Backup Missing": { "Type": "Fail", "Error": "Spawnpoint.PrePromotionBackupMissing", "Cause": "This wipe ran a release but has no verified archive to keep before the promotion. The previous desired release was restored." },
+    "Report Promotion Refused": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.PromotionRefused" }, ":cause": { "S": "The fenced, verified stop failed. The previous desired release was restored." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Promotion Refused" }],
+      "Next": "Promotion Refused"
+    },
     "Promotion Refused": { "Type": "Fail", "Error": "Spawnpoint.PromotionRefused", "Cause": "The fenced, verified stop failed. The previous desired release was restored." },
+    "Report Promotion Failed No Rollback": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.PromotionFailedNoRollback" }, ":cause": { "S": "The target start failed and this wipe has no active release to roll back to." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Promotion Failed No Rollback" }],
+      "Next": "Promotion Failed No Rollback"
+    },
     "Promotion Failed No Rollback": { "Type": "Fail", "Error": "Spawnpoint.PromotionFailedNoRollback", "Cause": "The target start failed and this wipe has no active release to roll back to." },
+    "Report Rollback Failed": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.RollbackFailed" }, ":cause": { "S": "The rollback start failed too; lifecycle state identifies the exact recovery point." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Rollback Failed" }],
+      "Next": "Rollback Failed"
+    },
     "Rollback Failed": { "Type": "Fail", "Error": "Spawnpoint.RollbackFailed", "Cause": "The rollback start failed too; lifecycle state identifies the exact recovery point." },
+    "Report Promoted But Running": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.PromotedButRunning" }, ":cause": { "S": "The release was promoted, but its exact target session could not be stopped. The watchdog and running-hours alarm are backstops." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Promoted But Running" }],
+      "Next": "Promoted But Running"
+    },
     "Promoted But Running": { "Type": "Fail", "Error": "Spawnpoint.PromotedButRunning", "Cause": "The release was promoted, but its exact target session could not be stopped. The watchdog and running-hours alarm are backstops." },
+    "Report Rolled Back But Running": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.RolledBackButRunning" }, ":cause": { "S": "Rollback succeeded, but its exact session could not be stopped. The watchdog and running-hours alarm are backstops." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Rolled Back But Running" }],
+      "Next": "Rolled Back But Running"
+    },
     "Rolled Back But Running": { "Type": "Fail", "Error": "Spawnpoint.RolledBackButRunning", "Cause": "Rollback succeeded, but its exact session could not be stopped. The watchdog and running-hours alarm are backstops." }
   }
 }

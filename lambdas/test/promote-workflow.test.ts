@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 type State = {
   Type: string;
@@ -20,7 +21,7 @@ type Definition = {
 
 async function loadDefinition(): Promise<Definition> {
   const url = new URL("../../workflows/promote-release.asl.json", import.meta.url);
-  return JSON.parse(await readFile(url, "utf8")) as Definition;
+  return withoutOperationRecord(JSON.parse(await readFile(url, "utf8")) as Definition);
 }
 
 function state(definition: Definition, name: string): State {

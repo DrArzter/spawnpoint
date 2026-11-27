@@ -4,6 +4,18 @@ Amazon States Language definitions for operations that take minutes and can fail
 Functions workflows. TypeScript implements synchronous handlers and domain decisions; it does not hide orchestration
 loops inside Lambda.
 
+## The operation record
+
+Every operation workflow (start, stop, promotion, world lifecycle, host deletion, and the host start and host stop)
+writes one record of its own run to `spawnpoint-control-plane-view`
+([ADR-0105](../docs/adr/0105-every-operation-writes-its-own-record.md)). The panel reads only that record. The states that write it are named `Report …` and are the workflows' only JSONata
+states: `Report Accepted` first, a step write on each edge into a step the panel shows, `Report Caught Before …` on a
+`Catch` path that goes on, and an end write before each `Fail` and `Succeed` and after each state that ends the run.
+A record write never fails the run: it retries, then goes on.
+
+When you add a state, give it a step in `lambdas/src/control-plane/operation-steps.ts` (or list it as not shown) and
+add the record write the guard asks for. `lambdas/test/operation-workflows.test.ts` fails until both are there.
+
 ## Build release
 
 `build-release.asl.json.tftpl` accepts exactly the release identity and its source: profile ID, full configuration Git

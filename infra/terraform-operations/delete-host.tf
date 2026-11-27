@@ -38,6 +38,19 @@ resource "aws_iam_role" "delete_host" {
 }
 
 data "aws_iam_policy_document" "delete_host" {
+  # The record of its own run, and of its parent and root (ADR-0105); only record keys.
+  statement {
+    sid       = "WriteOperationRecords"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [local.control_plane_view_table_arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
   statement {
     sid       = "ObserveHostsVolumesAndSnapshots"
     actions   = ["ec2:DescribeInstances", "ec2:DescribeSnapshots", "cloudwatch:DescribeAlarmsForMetric"]
@@ -103,7 +116,7 @@ resource "aws_sfn_state_machine" "delete_host" {
   name       = "spawnpoint-delete-host"
   role_arn   = aws_iam_role.delete_host.arn
   type       = "STANDARD"
-  definition = templatefile("${path.module}/../../workflows/delete-host.asl.json.tftpl", {})
+  definition = templatefile("${path.module}/../../workflows/delete-host.asl.json.tftpl", { operation_table_name = var.control_plane_view_table_name })
 
   tags = {
     Name    = "spawnpoint-delete-host"

@@ -48,6 +48,19 @@ resource "aws_iam_role_policy_attachment" "control_plane_projector_logs" {
 }
 
 data "aws_iam_policy_document" "control_plane_projector" {
+  # It ends a record whose run ended without its own end write (ADR-0105); only record keys.
+  statement {
+    sid       = "WriteOperationRecords"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [local.control_plane_view_table_arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
   statement {
     sid       = "WriteControlPlaneProjection"
     actions   = ["dynamodb:PutItem"]
@@ -221,7 +234,9 @@ resource "aws_cloudwatch_event_rule" "control_plane_execution_state" {
     source        = ["aws.states"]
     "detail-type" = ["Step Functions Execution Status Change"]
     detail = {
-      stateMachineArn = [for machine in local.control_plane_operation_machines : machine.arn]
+      # The host start and stop too: the projector ends their records when they end
+      # without their own end write (ADR-0105).
+      stateMachineArn = concat([for machine in local.control_plane_operation_machines : machine.arn], [local.start_state_machine_arn, local.stop_state_machine_arn])
       status          = ["RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"]
     }
   })

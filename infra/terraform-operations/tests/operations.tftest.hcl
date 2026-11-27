@@ -468,10 +468,10 @@ run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
   }
 
   assert {
-    condition = toset(jsondecode(aws_cloudwatch_event_rule.control_plane_execution_state.event_pattern).detail.stateMachineArn) == toset([
+    condition = toset(jsondecode(aws_cloudwatch_event_rule.control_plane_execution_state.event_pattern).detail.stateMachineArn) == toset(concat([
       for machine in local.control_plane_operation_machines : machine.arn
-    ])
-    error_message = "Operation projection events must cover only the supported control-plane workflows."
+    ], [local.start_state_machine_arn, local.stop_state_machine_arn]))
+    error_message = "Operation projection events must cover only the supported control-plane workflows, and the host start and stop whose records the projector ends (ADR-0105)."
   }
 
   assert {

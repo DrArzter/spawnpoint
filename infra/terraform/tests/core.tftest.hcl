@@ -275,7 +275,9 @@ run "stop_workflow_is_standard_and_stops_only_after_backup_step" {
 
   assert {
     condition = alltrue([
-      jsondecode(aws_sfn_state_machine.stop_server.definition).States["Stop Command Complete"].Choices[0].Next == "Describe Host Market",
+      # The record names the step first (ADR-0105).
+      jsondecode(aws_sfn_state_machine.stop_server.definition).States["Stop Command Complete"].Choices[0].Next == "Report Describe Host Market",
+      jsondecode(aws_sfn_state_machine.stop_server.definition).States["Report Describe Host Market"].Next == "Describe Host Market",
       jsondecode(aws_sfn_state_machine.stop_server.definition).States["Describe Host Market"].Next == "Host Is Spot",
       jsondecode(aws_sfn_state_machine.stop_server.definition).States["Host Is Spot"].Default == "Stop Instance",
     ])

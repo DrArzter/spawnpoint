@@ -601,6 +601,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
     condition = (
       [for filter in aws_lambda_event_source_mapping.panel_streams["view"].filter_criteria[0].filter : jsondecode(filter.pattern)] == [
         { dynamodb = { Keys = { pk = { S = ["PROJECTION#CONTROL_PLANE"] }, sk = { S = ["DYNAMIC"] } } } },
+        { dynamodb = { Keys = { pk = { S = [{ prefix = "OPERATION#" }] }, sk = { S = ["RECORD"] } } } },
       ] &&
       alltrue([
         for filter in aws_lambda_event_source_mapping.panel_streams["lifecycle"].filter_criteria[0].filter :
@@ -609,7 +610,7 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
         )
       ])
     )
-    error_message = "Only the projection item and session records pass the filters; tickets, connections, journal entries and host records send nothing."
+    error_message = "Only the projection item, operation records and session records pass the filters; tickets, connections, journal entries and host records send nothing."
   }
 
   assert {

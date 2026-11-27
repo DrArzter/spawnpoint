@@ -1,8 +1,20 @@
 {
   "Comment": "Delete a persistent host (ADR-0100): snapshot its data volumes when asked, terminate it, delete its data volumes and the alarms on it. The API refuses the request while a world is placed on the host or it is not stopped; the grants admit only a host and volumes with Spawnpoint's Name tags.",
   "QueryLanguage": "JSONPath",
-  "StartAt": "Initialize",
+  "StartAt": "Report Accepted",
   "States": {
+    "Report Accepted": {
+      "Type": "Task",
+      "Comment": "The run's record: accepted, and running (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": "{% ($f := $merge([{'operation_id': {'S': $states.context.Execution.Name}, 'execution_arn': {'S': $states.context.Execution.Id}, 'type': {'S': 'host'}, 'workflow': {'S': 'delete-host'}, 'status': {'S': 'running'}, 'root_id': {'S': ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name)}, 'started_at': {'S': $states.context.Execution.StartTime}, 'updated_at': {'S': $states.context.State.EnteredTime}, 'open_key': {'S': 'open'}, 'expires_at': {'N': $string($floor($toMillis($states.context.Execution.StartTime) / 1000) + 2592000)}}, $type($states.context.Execution.Input.worldId) = 'string' ? {'world_id': {'S': $states.context.Execution.Input.worldId}} : {}, $type($states.context.Execution.Input.gameId) = 'string' ? {'game_id': {'S': $states.context.Execution.Input.gameId}} : {}, $type($states.context.Execution.Input.serverId) = 'string' ? {'server_id': {'S': $states.context.Execution.Input.serverId}} : {}, $type($states.context.Execution.Input.operationParent) = 'string' ? {'parent_id': {'S': $states.context.Execution.Input.operationParent}} : {}]); {'TableName': '${operation_table_name}', 'Key': {'pk': {'S': 'OPERATION#' & $states.context.Execution.Name}, 'sk': {'S': 'RECORD'}}, 'UpdateExpression': 'SET ' & $join($map($keys($f), function($k) { '#' & $k & ' = :' & $k }), ', '), 'ExpressionAttributeNames': $merge($map($keys($f), function($k) { {'#' & $k: $k} })), 'ExpressionAttributeValues': $merge($map($keys($f), function($k) { {':' & $k: $lookup($f, $k)} }))}) %}",
+      "Assign": { "operationRoot": "{% ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name) %}" },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Assign": { "operationRoot": "{% ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name) %}" }, "Output": "{% $states.input %}", "Next": "Initialize" }],
+      "Next": "Initialize"
+    },
     "Initialize": {
       "Type": "Pass",
       "Parameters": {
@@ -162,13 +174,31 @@
       "Choices": [
         { "Variable": "$.alarms.names[0]", "IsPresent": true, "Next": "Delete Host Alarms" }
       ],
-      "Default": "Host Deleted"
+      "Default": "Report Host Deleted"
     },
     "Delete Host Alarms": {
       "Type": "Task",
       "Resource": "arn:aws:states:::aws-sdk:cloudwatch:deleteAlarms",
       "Parameters": { "AlarmNames.$": "$.alarms.names" },
       "ResultPath": null,
+      "Next": "Report Host Deleted"
+    },
+    "Report Host Deleted": {
+      "Type": "Task",
+      "Comment": "The record ends as succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #result = :result, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#result": "result", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "succeeded" }, ":result": { "S": "{% $type($states.input.status) = 'string' ? $substring($states.input.status, 0, 1000) : '' %}" }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Host Deleted" }],
       "Next": "Host Deleted"
     },
     "Host Deleted": { "Type": "Succeed" }

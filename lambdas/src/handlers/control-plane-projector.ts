@@ -10,9 +10,12 @@ import { gameCatalog } from "../control-plane/catalog.ts";
 import { parkDnsRecord } from "../control-plane/aws-dns-ledger.ts";
 import { dnsLedgerRecords, terminalHostInstanceId } from "../control-plane/dns-ledger.ts";
 import { dynamoTable } from "../control-plane/dynamo-table.ts";
+import { endOperationRecord } from "../control-plane/dynamo-operation-records.ts";
+import { executionEndOf } from "../control-plane/operation-record.ts";
 
 const viewTable = process.env.CONTROL_PLANE_VIEW_TABLE;
 if (!viewTable) throw new Error("CONTROL_PLANE_VIEW_TABLE is required");
+const operationRecordTable: string = viewTable;
 
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
@@ -111,6 +114,9 @@ export async function handler(event: ControlPlaneEvent): Promise<void> {
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
   await cleanTerminalHostDns(event);
   await recordEvent(event, nowEpochSeconds);
+  // A run that ended without its own end write still ends its record (ADR-0105).
+  const end = executionEndOf(event);
+  if (end !== null) await endOperationRecord(table, operationRecordTable, end);
   // A written projection reaches open panels through the view table's stream (ADR-0104).
   const { hosts, operations } = await writeProjection({
     listHosts: awsControlPlaneSources.listHosts,

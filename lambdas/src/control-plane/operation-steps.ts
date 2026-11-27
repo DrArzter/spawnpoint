@@ -136,6 +136,7 @@ const START: Table = {
     "Force Stop Failed Start Host", "Wait Before Forced Stop Poll", "Describe Forced Stop Host", "Forced Stop Host Stopped",
     "Increment Forced Stop Poll", "Forced Stop Poll Limit Reached", "Mark Forced Session Stopped", "Close Forced Session History",
     "Release Forced Placement", "Release Forced Compensation Lease", "Route Forced Fleet Drain", "Start Forced Host Drain",
+    "Route Unstoppable Host", "Terminate Unstoppable Fleet Host",
   ],
   [ENDED]: [
     "Ready", "Start Refused Unplaced", "Start Failed Host Forced Stopped", "Start Failed And Compensated", "Start Compensation Failed",

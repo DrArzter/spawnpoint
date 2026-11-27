@@ -927,7 +927,7 @@
     "Attach Session Volume": {
       "Type": "Task",
       "Resource": "arn:aws:states:::aws-sdk:ec2:attachVolume",
-      "Comment": "The device name comes from the session's slot, so two sessions on one host never ask for the same one. The host finds the volume by its id, not by this name.",
+      "Comment": "The device name comes from the session's slot, so two sessions on one host never ask for the same one. The host finds the volume by its id, not by this name. A host launched a second ago is still pending and EC2 refuses the attach (IncorrectInstanceState); a move reaches this at once, with no volume to create first, so the attach is retried for up to a minute.",
       "Parameters": {
         "Device.$": "States.ArrayGetItem(States.Array('/dev/sdf', '/dev/sdg', '/dev/sdh', '/dev/sdi', '/dev/sdj', '/dev/sdk', '/dev/sdl', '/dev/sdm', '/dev/sdn', '/dev/sdo', '/dev/sdp', '/dev/sdq', '/dev/sdr', '/dev/sds', '/dev/sdt', '/dev/sdu', '/dev/sdv', '/dev/sdw', '/dev/sdx', '/dev/sdy', '/dev/sdz'), $.request.placed.slot)",
         "InstanceId.$": "$.request.placed.hostId",
@@ -943,6 +943,12 @@
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2
+        },
+        {
+          "ErrorEquals": ["Ec2.Ec2Exception"],
+          "IntervalSeconds": 6,
+          "MaxAttempts": 10,
+          "BackoffRate": 1
         }
       ],
       "Catch": [
@@ -1626,9 +1632,44 @@
       "Catch": [{
         "ErrorEquals": ["States.ALL"],
         "ResultPath": "$.forcedStopFailure",
-        "Next": "Start Compensation Failed"
+        "Next": "Route Unstoppable Host"
       }],
       "Next": "Wait Before Forced Stop Poll"
+    },
+    "Route Unstoppable Host": {
+      "Type": "Choice",
+      "Comment": "A one-time Spot host cannot be stopped (ADR-0102). A fleet host is launched and disposable, and its session volume lives apart from it, so it is terminated rather than left billing. The configured host is never terminated.",
+      "Choices": [{
+        "Variable": "$.request.placement",
+        "StringEquals": "fleet",
+        "Next": "Terminate Unstoppable Fleet Host"
+      }],
+      "Default": "Start Compensation Failed"
+    },
+    "Terminate Unstoppable Fleet Host": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:ec2:terminateInstances",
+      "Parameters": {
+        "InstanceIds.$": "States.Array($.request.placed.hostId)"
+      },
+      "ResultPath": "$.coordination.forcedTermination",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Ec2.RequestLimitExceededException",
+            "Ec2.RequestLimitExceeded"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [{
+        "ErrorEquals": ["States.ALL"],
+        "ResultPath": "$.forcedTerminationFailure",
+        "Next": "Start Compensation Failed"
+      }],
+      "Next": "Start Compensation Failed"
     },
     "Wait Before Forced Stop Poll": {
       "Type": "Wait",

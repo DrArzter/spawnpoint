@@ -172,6 +172,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0105](0105-every-operation-writes-its-own-record.md) | Every operation writes its own record | Accepted | M6 |
 | [0106](0106-a-skin-can-be-switched-off.md) | A skin can be switched off, and the terminal skin is off | Accepted | M6 |
 | [0107](0107-feature-flags-in-parameter-store.md) | Feature flags in Parameter Store | Accepted | M6 |
+| [0108](0108-a-game-declares-what-its-launch-needs.md) | A game declares what its launch needs | Accepted | M6 |
 
 ## Decisions still to record
 

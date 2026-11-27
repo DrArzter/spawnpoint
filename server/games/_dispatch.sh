@@ -31,6 +31,9 @@
 #   GAME_PROBE_PORT            the container port the player probe speaks to: RCON,
 #                              a Steam query or a REST API; the host side follows
 #                              the slot. GAME_RCON_PORT is read as its old name
+#   GAME_START_TIMEOUT_SECONDS how long start.sh waits for the game to serve: the
+#                              manifest's start_timeout_seconds, 600 when unstated
+#                              (ADR-0108). required_secrets is read before launch
 #   GAME_SLOTTABLE             true when the game can run on a slot other than zero:
 #                              its client connects to the port the address names and
 #                              the server announces no other. false refuses such a slot
@@ -153,13 +156,14 @@ load_game() {
 load_game_facts() {
   local manifest="$1" facts
   facts="$(jq -er '
-    [.connect.port, .connect.protocol, .probe_port, .slottable, .default_auth, .footprint.memory_mib, .footprint.cores]
+    [.connect.port, .connect.protocol, .probe_port, .slottable, .default_auth, .footprint.memory_mib, .footprint.cores,
+      (.start_timeout_seconds // 600)]
     | map(tostring) | join("\t")' "${manifest}")" || {
     printf 'error: game %s has no readable manifest: %s\n' "${GAME_ID}" "${manifest}" >&2
     exit 1
   }
   IFS=$'\t' read -r GAME_CONNECT_PORT GAME_CONNECT_PROTOCOL GAME_PROBE_PORT GAME_SLOTTABLE GAME_DEFAULT_AUTH \
-    GAME_FOOTPRINT_MEMORY_MIB GAME_FOOTPRINT_CORES <<<"${facts}"
+    GAME_FOOTPRINT_MEMORY_MIB GAME_FOOTPRINT_CORES GAME_START_TIMEOUT_SECONDS <<<"${facts}"
 }
 
 # Resolve which game this invocation is about: an explicit WORLD_ID consults

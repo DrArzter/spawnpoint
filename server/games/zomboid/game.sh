@@ -20,9 +20,9 @@
 GAME_COMPOSE_FILES="games/zomboid/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/zomboid/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="zomboid"
-# A new host downloads the server (about four minutes) before the world loads
-# (about five and a half), so the default ten minutes ended starts that worked.
-GAME_START_TIMEOUT_SECONDS=1500
+# start_timeout_seconds in game.json is 1500: a new host downloads the server
+# (about four minutes) before the world loads (about five and a half), so the
+# default ten minutes ended starts that worked.
 # Why the facts in game.json are what they are (ADR-0088):
 # - slottable false: the server tells a client to continue on its second port
 #   (UDPPort, 16262 by default), which a slot's host mapping would not carry.

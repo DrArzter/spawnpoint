@@ -49,6 +49,10 @@ export type GameModule = Readonly<{
   presentation: GamePresentation;
   /** The game settings a world may carry (ADR-0064), as the module's settings.json states them. */
   settings: readonly Readonly<Record<string, unknown>>[];
+  /** The .env keys the host reads from /spawnpoint/host/env/ for it; checked before a launch (ADR-0108). */
+  requiredSecrets: readonly string[];
+  /** How long the host waits for it to serve after `compose up` (ADR-0108). */
+  startTimeoutSeconds: number;
 }>;
 
 /**
@@ -63,6 +67,10 @@ export type Interruption = Readonly<{ save: "live" | "stop"; saveBudgetSeconds: 
  * announcements, the flush, the report and a margin for a late watcher poll.
  */
 export const INTERRUPTION_BUDGET_LIMIT_SECONDS = 90;
+
+/** What the host waits when a manifest states no start_timeout_seconds, and the most one may state (ADR-0108). */
+export const DEFAULT_START_TIMEOUT_SECONDS = 600;
+const START_TIMEOUT_LIMIT_SECONDS = 3000;
 
 type Manifest = Readonly<Record<string, unknown>>;
 type SettingsFile = Readonly<{ settings: readonly Readonly<Record<string, unknown>>[] }>;
@@ -135,6 +143,25 @@ function interruptionOf(manifest: Manifest, id: string): Interruption | null {
   return { save, saveBudgetSeconds: budget };
 }
 
+const ENV_KEY = /^[A-Z][A-Z0-9_]*$/;
+
+function requiredSecretsOf(manifest: Manifest, id: string): readonly string[] {
+  const keys = field(manifest.required_secrets, isStringList, `${id}.required_secrets`);
+  const bad = keys.find((key) => !ENV_KEY.test(key));
+  if (bad !== undefined) throw new Error(`${id}.required_secrets names ${bad}, which is not an .env key`);
+  return keys;
+}
+
+// The start document gives the host an hour; the start is only one part of it.
+function startTimeoutOf(manifest: Manifest, id: string): number {
+  if (manifest.start_timeout_seconds === undefined) return DEFAULT_START_TIMEOUT_SECONDS;
+  const seconds = field(manifest.start_timeout_seconds, isNumber, `${id}.start_timeout_seconds`);
+  if (!Number.isInteger(seconds) || seconds < 60 || seconds > START_TIMEOUT_LIMIT_SECONDS) {
+    throw new Error(`${id}.start_timeout_seconds must be a whole number from 60 to ${START_TIMEOUT_LIMIT_SECONDS}`);
+  }
+  return seconds;
+}
+
 // A Spot host is taken back two minutes after its notice; a game that cannot
 // say how it saves in that time does not go on one (ADR-0103).
 function spotOf(capabilities: Manifest, interruption: Interruption | null, id: string): boolean {
@@ -177,6 +204,8 @@ export function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
     configFileRules: configFileRules(manifest, id),
     buildsReleases: typeof manifest.release === "object" && manifest.release !== null,
     settings: settings?.settings ?? [],
+    requiredSecrets: requiredSecretsOf(manifest, id),
+    startTimeoutSeconds: startTimeoutOf(manifest, id),
   };
 }
 

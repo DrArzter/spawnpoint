@@ -16,6 +16,12 @@ minecraft, byte-identically.
 writes the world while the game runs, `"stop"` when only a graceful stop does, and `save_budget_seconds`, the
 measured worst case. `capabilities.spot` may be `true` only with this block, a budget of at most 90 seconds, and a
 measured section in `docs/measurements.md`.
+
+What a launch needs is in the manifest too ([ADR-0108](../../docs/adr/0108-a-game-declares-what-its-launch-needs.md)).
+`required_secrets` lists the `.env` keys the game reads from `/spawnpoint/host/env/` (`[]` when none); the API
+refuses to start a session while one is missing. `start_timeout_seconds` (default 600) is how long `start.sh` waits
+for the game to serve. `server/tests/game-requirements-test.sh` fails when a Compose file requires a variable that is
+neither declared nor set by a host script, or runs an image that is not pinned by digest.
 `GAME_REQUIRED_HOOKS` and `GAME_OPTIONAL_HOOKS` in `_dispatch.sh` are the lists, and its header describes each hook.
 
 | Kind | Hooks |

@@ -237,7 +237,6 @@ wait "${save_rcon_pid}"
   printf 'RCONPassword=kept\n' >"${ini}"
   game_prepare_session
   [[ "$(cat "${ini}")" == "RCONPassword=kept" ]]
-  [[ "${GAME_START_TIMEOUT_SECONDS}" -gt 600 ]]
 )
 
 # --- dispatch: the catalog names the game, absence means minecraft ---

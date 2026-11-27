@@ -140,6 +140,30 @@ test("a fleet stop has no path to the requested host; a configured stop keeps it
   assert.equal(state(definition, "Placement Lookup Failed").Type, "Fail");
 });
 
+test("an unplaced fleet session is marked stopped and its lease released before the stop fails", async () => {
+  const definition = await loadDefinition();
+  const route = state(definition, "Route Unplaced Session");
+  assert.equal(route.Choices?.[0]?.Next, "Mark Unplaced Session Stopped");
+
+  const mark = state(definition, "Mark Unplaced Session Stopped") as Record<string, any>;
+  assert.equal(mark.Parameters.Payload.action, "markStopped");
+  assert.equal(mark.Parameters.Payload["sessionId.$"], "$.request.sessionId");
+  assert.equal(mark.Next, "Release Unplaced Stop Lease");
+
+  const release = state(definition, "Release Unplaced Stop Lease") as Record<string, any>;
+  assert.equal(release.Parameters.Payload.action, "releaseLease");
+  assert.equal(release.Next, "Fleet Session Unplaced");
+  assert.equal(state(definition, "Fleet Session Unplaced").Type, "Fail");
+
+  // No session was placed: nothing to close in the history, no placement to release.
+  const path = ["Mark Unplaced Session Stopped", "Release Unplaced Stop Lease", "Fleet Session Unplaced"];
+  for (const name of path) {
+    for (const target of targets(state(definition, name))) {
+      assert.equal(["Close Session History", "Release Placement"].includes(target), false, `${name} leads to ${target}`);
+    }
+  }
+});
+
 test("a failed placement lookup is retried, then ends the stop instead of guessing a host", async () => {
   const definition = await loadDefinition();
   const lookup = state(definition, "Find Placement") as Record<string, any>;

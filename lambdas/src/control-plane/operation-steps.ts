@@ -148,7 +148,10 @@ const STOP: Table = {
   "stop.locking": ["Acquire Stop Lease", "Begin Stopping Session"],
   "stop.finding_host": ["Find Placement", "Route Found Placement", "Route Unplaced Session", "Adopt Found Placement", "Adopt Requested Host"],
   "stop.saving": ["Stop Accepted V1"],
-  "stop.recording": ["Mark Session Stopped", "Close Session History", "Release Placement", "Release Stop Lease"],
+  "stop.recording": [
+    "Mark Session Stopped", "Close Session History", "Release Placement", "Release Stop Lease",
+    "Mark Unplaced Session Stopped", "Release Unplaced Stop Lease",
+  ],
   "stop.releasing_host": [
     "Route Emptied Host", "Route Emptied Host State", "Start Drain",
     "Route Session Volume Release", "Find Session Volume", "Route Found Session Volume", "Unmount Session Volume",

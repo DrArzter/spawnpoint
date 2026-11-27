@@ -191,10 +191,66 @@
         {
           "Variable": "$.request.serverId",
           "StringMatches": "world#*",
-          "Next": "Fleet Session Unplaced"
+          "Next": "Mark Unplaced Session Stopped"
         }
       ],
       "Default": "Adopt Requested Host"
+    },
+    "Mark Unplaced Session Stopped": {
+      "Type": "Task",
+      "Comment": "A fleet session with no placement never reached a host: its start reserves a placement before it runs anything there, and a stop releases the placement only after marking the session stopped. Nothing ran, so nothing needs archiving.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "markStopped",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership",
+          "sessionId.$": "$.request.sessionId"
+        }
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Release Unplaced Stop Lease"
+    },
+    "Release Unplaced Stop Lease": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${coordinator_function_arn}",
+        "Payload": {
+          "action": "releaseLease",
+          "serverId.$": "$.request.serverId",
+          "ownership.$": "$.coordination.lease.ownership"
+        }
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Fleet Session Unplaced"
     },
     "Adopt Found Placement": {
       "Type": "Pass",
@@ -852,7 +908,7 @@
     "Fleet Session Unplaced": {
       "Type": "Fail",
       "Error": "Spawnpoint.V2FleetSessionUnplaced",
-      "Cause": "A fleet session has no placement, so no host can verify its archive. The configured host is never asked in its place. The exact session remains stopping."
+      "Cause": "A fleet session has no placement, so it never ran on a host and has nothing to archive. The configured host is never asked in its place. The session was marked stopped and its lease released."
     },
     "Verified Stop Failed": {
       "Type": "Fail",

@@ -226,6 +226,19 @@ wait "${save_rcon_pid}"
   source "${GAMES}/valheim/game.sh"
   if declare -F game_announce >/dev/null; then exit 1; fi
 )
+# Zomboid's first start: the ini exists with the keys the image patches, so
+# RCON comes up with its password; a world's own ini is never overwritten.
+(
+  source "${GAMES}/zomboid/game.sh"
+  export SPAWNPOINT_WORLD_DATA_DIRECTORY="${fixture}/zomboid-world"
+  game_prepare_session
+  ini="${fixture}/zomboid-world/Server/dedicated.ini"
+  grep -qx 'RCONPassword=' "${ini}" && grep -qx 'RCONPort=' "${ini}"
+  printf 'RCONPassword=kept\n' >"${ini}"
+  game_prepare_session
+  [[ "$(cat "${ini}")" == "RCONPassword=kept" ]]
+  [[ "${GAME_START_TIMEOUT_SECONDS}" -gt 600 ]]
+)
 
 # --- dispatch: the catalog names the game, absence means minecraft ---
 cat >"${fixture}/catalog.json" <<'EOF'

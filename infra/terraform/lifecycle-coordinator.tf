@@ -55,6 +55,12 @@ data "aws_iam_policy_document" "lifecycle_coordinator" {
     ]
     resources = ["${aws_cloudwatch_log_group.lifecycle_coordinator.arn}:*"]
   }
+
+  statement {
+    sid       = "TellPanelsASessionChanged"
+    actions   = ["events:PutEvents"]
+    resources = ["arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"]
+  }
 }
 
 resource "aws_iam_role_policy" "lifecycle_coordinator" {

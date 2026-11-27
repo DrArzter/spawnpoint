@@ -174,10 +174,10 @@ resource "aws_lambda_permission" "control_plane_subscriptions_websocket" {
 
 resource "aws_cloudwatch_event_rule" "control_plane_projection_updated" {
   name        = "spawnpoint-control-plane-projection-updated"
-  description = "Fan out sanitized dashboard projection invalidations."
+  description = "Fan out sanitized dashboard projection and session-record invalidations."
   event_pattern = jsonencode({
     source      = ["spawnpoint.control-plane"]
-    detail-type = ["Projection Updated"]
+    detail-type = ["Projection Updated", "Session Changed"]
   })
 }
 
@@ -192,4 +192,31 @@ resource "aws_lambda_permission" "control_plane_projection_updated" {
   function_name = aws_lambda_function.control_plane_subscriptions.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.control_plane_projection_updated.arn
+}
+
+# A failed fan-out leaves open panels on the old state until their poll reads
+# again. EventBridge retries the invocation; this says when that was not enough.
+resource "aws_cloudwatch_metric_alarm" "control_plane_subscriptions_errors" {
+  alarm_name        = "spawnpoint-control-plane-subscriptions-errors"
+  alarm_description = "The control-plane subscriptions Lambda failed: open panels may not have been told to reload. Check /aws/lambda/${aws_lambda_function.control_plane_subscriptions.function_name}."
+
+  namespace   = "AWS/Lambda"
+  metric_name = "Errors"
+  dimensions = {
+    FunctionName = aws_lambda_function.control_plane_subscriptions.function_name
+  }
+
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  alarm_actions = [data.aws_sns_topic.alerts.arn]
+  ok_actions    = [data.aws_sns_topic.alerts.arn]
+
+  tags = {
+    Name = "spawnpoint-control-plane-subscriptions-errors"
+  }
 }

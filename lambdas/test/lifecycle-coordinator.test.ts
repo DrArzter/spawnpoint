@@ -180,3 +180,19 @@ test("coordinator cancels a player-race stop without changing session identity",
   assert.equal(cancelled.record.observedState, "ready");
   assert.equal(cancelled.record.activeSessionId, "session-1");
 });
+
+test("a state change tells the panels once per write, and nothing else does", async () => {
+  const store = new MemoryStore();
+  const told: string[] = [];
+  const coordinate = createLifecycleCoordinator(store, () => 1_786_665_600, async (serverId) => { told.push(serverId); });
+  await coordinate({ action: "initialize", serverId: "world#alpha" });
+  const { ownership } = await coordinate({ action: "acquireLease", serverId: "world#alpha", operationId: "start-op", ttlSeconds: 300 });
+  assert.deepEqual(told, [], "a lease is not a state");
+  await coordinate({ action: "beginSession", serverId: "world#alpha", ownership: ownership!, sessionId: "s1", worldId: "alpha" });
+  assert.deepEqual(told, ["world#alpha"], "starting");
+  await coordinate({ action: "markSessionReady", serverId: "world#alpha", ownership: ownership!, sessionId: "s1" });
+  assert.deepEqual(told, ["world#alpha", "world#alpha"], "ready");
+  await coordinate({ action: "markSessionReady", serverId: "world#alpha", ownership: ownership!, sessionId: "s1" }).catch(() => undefined);
+  await coordinate({ action: "recordPlayerObservation", serverId: "world#alpha", sessionId: "s1", watchdogExecutionId: "none", observationId: "o1", playersOnline: 1 }).catch(() => undefined);
+  assert.equal(told.length, 2, "a repeated write and a player count tell no one");
+});

@@ -46,7 +46,7 @@ while (( SECONDS - started_at < timeout_seconds )); do
     fi
   elif [[ "${state}" == "exited" ]] || [[ "${state}" == "dead" ]]; then
     log "${GAME_ID} container entered state ${state} while starting"
-    compose logs --tail 80 "${SERVICE}" >&2 || true
+    { compose logs --tail 80 "${SERVICE}" || true; } | redact_secrets >&2
     exit 1
   fi
 
@@ -54,5 +54,5 @@ while (( SECONDS - started_at < timeout_seconds )); do
 done
 
 log "${GAME_ID} did not become ready within ${timeout_seconds} seconds"
-compose logs --tail 80 "${SERVICE}" >&2 || true
+{ compose logs --tail 80 "${SERVICE}" || true; } | redact_secrets >&2
 exit 1

@@ -20,6 +20,8 @@ services:
       # Workshop items, so this world is vanilla until the mod list can be
       # rendered into the server's own ini file. See docs/prior-art.md.
       RCON_PASSWORD: ${ZOMBOID_RCON_PASSWORD:?set ZOMBOID_RCON_PASSWORD in .env}
+      # Build 42 exits when the admin name is empty, and the image passes this one as is.
+      ADMIN_USERNAME: "${ZOMBOID_ADMIN_USERNAME:-admin}"
       ADMIN_PASSWORD: ${ZOMBOID_ADMIN_PASSWORD:?set ZOMBOID_ADMIN_PASSWORD in .env}
       MEMORY_XMX_GB: "${ZOMBOID_MEMORY_GB:-6}"
     volumes:

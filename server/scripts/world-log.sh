@@ -39,4 +39,4 @@ if ! log="$(compose logs --no-color --no-log-prefix --tail "${MAX_LINES}" "${SER
   exit 3
 fi
 # The newest lines matter most, so a long log loses its oldest bytes.
-printf '%s\n' "${log}" | tail -c "${MAX_BYTES}"
+printf '%s\n' "${log}" | redact_secrets | tail -c "${MAX_BYTES}"

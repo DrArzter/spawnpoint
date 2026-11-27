@@ -29,6 +29,7 @@ for argument in "$@"; do
       fi
       printf 'time="2026-11-24T10:00:00Z" level=warning msg="compose noise"\n' >&2
       seq -f 'line %g' 1 "${FAKE_LOG_LINES:-3}"
+      [[ -z "${FAKE_LOG_TAIL:-}" ]] || printf '%s\n' "${FAKE_LOG_TAIL}"
       exit 0
       ;;
   esac
@@ -53,6 +54,12 @@ joined=" ${words[*]} "
   printf 'unexpected compose call:%s\n' "${joined}" >&2
   exit 1
 }
+
+# A game that prints its own arguments does not hand its secrets on: every
+# secret of the .env is redacted, other values are not.
+printf 'ZOMBOID_ADMIN_PASSWORD="s3cret-Value1"\nRCON_PASSWORD=another-secret\nAWS_REGION=eu-central-1\n' >"${fixture}/secret.env"
+output="$(SERVER_ENV_FILE="${fixture}/secret.env" FAKE_LOG_TAIL='arg: s3cret-Value1 then another-secret in eu-central-1' "${world_log}" 2>/dev/null)"
+[[ "${output}" == *'arg: [redacted] then [redacted] in eu-central-1' ]] || { printf 'secrets were not redacted:\n%s\n' "${output}" >&2; exit 1; }
 
 # A long log keeps its newest bytes, within what SSM returns whole.
 output="$(FAKE_LOG_LINES=5000 "${world_log}" 2>/dev/null)"

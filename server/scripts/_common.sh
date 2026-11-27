@@ -98,6 +98,34 @@ compose() {
   docker compose "${args[@]}" "$@"
 }
 
+# Standard input with every secret of the .env replaced, for any game log that
+# leaves the host: an image may print its own arguments, passwords included.
+redact_secrets() {
+  if [[ ! -r "${ENV_FILE}" ]]; then
+    cat
+    return 0
+  fi
+  awk -v env_file="${ENV_FILE}" '
+    BEGIN {
+      while ((getline line < env_file) > 0) {
+        at = index(line, "=")
+        if (at < 2) continue
+        key = substr(line, 1, at - 1)
+        value = substr(line, at + 1)
+        if (value ~ /^".*"$/ || value ~ /^\x27.*\x27$/) value = substr(value, 2, length(value) - 2)
+        if (key ~ /(PASSWORD|SECRET|TOKEN|_KEY)$/ && length(value) >= 6) secrets[++count] = value
+      }
+    }
+    {
+      for (i = 1; i <= count; i++) {
+        while ((found = index($0, secrets[i])) > 0) {
+          $0 = substr($0, 1, found - 1) "[redacted]" substr($0, found + length(secrets[i]))
+        }
+      }
+      print
+    }'
+}
+
 validate_compose() {
   require_command docker
   local compose_file

@@ -84,6 +84,16 @@ export function blockingOperations<Operation extends AttributedOperation>(
   });
 }
 
+/**
+ * The runs a person started, without the ones they started in turn. A workflow
+ * names a nested run after itself (`panel-promote-…-target-start`), and the
+ * panel follows the outer run: its id is the one the progress route can find.
+ */
+export function outerOperations<Operation extends AttributedOperation & Readonly<{ id: string }>>(operations: readonly Operation[]): Operation[] {
+  return operations.filter((operation) => !operations.some((outer) =>
+    outer !== operation && outer.worldId === operation.worldId && operation.id.startsWith(`${outer.id}-`)));
+}
+
 export type WorldHost = Readonly<{ hostId: string; slot: string }>;
 
 /**

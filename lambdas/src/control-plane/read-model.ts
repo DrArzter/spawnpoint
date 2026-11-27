@@ -4,7 +4,7 @@ import type { ReleaseStateReader } from "./release-usable.ts";
 import type { OperationProgress } from "./operation-progress.ts";
 import type { SessionHost } from "../domain/session-history.ts";
 import { catalogWithPresets, displayAddress, gameCatalog, gameSpot, type CatalogGame, worldAddress } from "./catalog.ts";
-import { locateWorldSession, sessionLifecycleKey } from "./world-session.ts";
+import { locateWorldSession, outerOperations, sessionLifecycleKey } from "./world-session.ts";
 import type { PresetObservation } from "./preset-catalog.ts";
 import type { WorldRecord } from "./world-registry.ts";
 import { gameSettingDefinitions } from "./game-settings.ts";
@@ -243,7 +243,7 @@ export async function readControlPlaneSnapshot(
         launchedAt: host.launchedAt,
       } : {}),
     })),
-    operations: operations.map((operation) => ({
+    operations: outerOperations(operations).map((operation) => ({
       id: operation.id,
       type: operation.type,
       status: operation.status,

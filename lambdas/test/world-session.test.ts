@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { acquireLease, beginSession, beginStopping, initialLifecycleRecord, markSessionReady, type LifecycleRecord } from "../src/domain/lifecycle.ts";
-import { blockingOperations, holdsWorld, locateWorldSession, operationWorldId, sessionLifecycleKey, worldHost } from "../src/control-plane/world-session.ts";
+import { blockingOperations, holdsWorld, outerOperations, locateWorldSession, operationWorldId, sessionLifecycleKey, worldHost } from "../src/control-plane/world-session.ts";
 
 // ADR-0062: a fleet world's sessions live on a record of its own, so two
 // worlds of one game run at once; configured worlds share their game's.
@@ -94,4 +94,13 @@ test("a world's host is the one its own session runs on, never another world's",
   assert.equal(worldHost("fleet", a, null, ["i-configured"]), null, "an unplaced fleet session is never the configured host's");
   assert.equal(worldHost("fleet", null, null, ["i-configured"]), null);
   assert.equal(worldHost("configured", rostik, null, ["i-one", "i-two"]), null, "two configured hosts leave no single answer");
+});
+
+test("the panel follows the outer run, never the run it started", () => {
+  const promote = { id: "panel-promote-20261127T111509-9b59f455", worldId: "prominence" };
+  const nested = { id: "panel-promote-20261127T111509-9b59f455-target-start", worldId: "prominence" };
+  const other = { id: "panel-promote-20261127T111509-9b59f455-target-start", worldId: "vanilla" };
+  const sibling = { id: "panel-start-20261127T111600-1a2b3c4d", worldId: "prominence" };
+  assert.deepEqual(outerOperations([nested, promote, sibling, other]), [promote, sibling, other]);
+  assert.deepEqual(outerOperations([nested]), [nested], "a nested run whose outer run has ended stays visible");
 });

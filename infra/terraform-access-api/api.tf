@@ -314,6 +314,17 @@ data "aws_iam_policy_document" "access_api" {
     ]
   }
 
+  # The start preflight (ADR-0108) lists the host .env's parameter names. No
+  # decryption and no kms:Decrypt: the API never reads a value.
+  statement {
+    sid     = "ListHostEnvParameterNames"
+    actions = ["ssm:GetParametersByPath"]
+    resources = [
+      "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/spawnpoint/host/env",
+      "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/spawnpoint/host/env/*",
+    ]
+  }
+
   statement {
     sid       = "ReadFeatureFlags"
     actions   = ["ssm:GetParameter"]

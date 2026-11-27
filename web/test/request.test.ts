@@ -86,3 +86,16 @@ test("a role without the permission has nothing to retry; an API that did not an
   assert.deepEqual(failureView("unavailable", "Backups could not be loaded", "read backups", "No answer."), { kind: "unavailable", title: "Unavailable", message: "No answer.", retry: true });
   assert.equal(failureView("failed", "Backups could not be loaded", "read backups", "x").retry, true);
 });
+
+// ADR-0108: a start or an update refused for missing secrets names them.
+test("a start refused for missing game secrets names the keys", async () => {
+  const { worldsApi } = await import("../src/api/live/worlds.ts");
+  answer(409, { error: "missing_game_secrets", keys: ["ZOMBOID_RCON_PASSWORD", "ZOMBOID_ADMIN_PASSWORD"] });
+  const started = await failure(worldsApi.requestSessionOperation("zomboid", "world-a", "start"));
+  assert.equal(started.code, "missing_game_secrets");
+  assert.match(started.message, /ZOMBOID_RCON_PASSWORD, ZOMBOID_ADMIN_PASSWORD/);
+  mock.restoreAll();
+  answer(409, { error: "missing_game_secrets" });
+  const promoted = await failure(worldsApi.requestPromotion("zomboid", "world-a", "1.2"));
+  assert.doesNotMatch(promoted.message, /\{keys\}/);
+});

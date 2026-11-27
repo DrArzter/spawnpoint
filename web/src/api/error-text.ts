@@ -115,6 +115,7 @@ export const API_ERROR_TEXT: Readonly<Record<ApiErrorCode, string>> = {
   not_a_spawnpoint_host: t("error.not_a_spawnpoint_host"),
   invalid_snapshot_choice: t("error.invalid_snapshot_choice"),
   fleet_unavailable: t("error.fleet_unavailable"),
+  missing_game_secrets: t("error.missing_game_secrets"),
   metrics_unavailable: t("error.metrics_unavailable"),
   invalid_range: t("error.invalid_range"),
   invalid_start_after: t("error.invalid_start_after"),

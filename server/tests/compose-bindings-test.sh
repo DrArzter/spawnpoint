@@ -311,4 +311,24 @@ for module in "${server_directory}"/games/*/game.sh; do
   done
 done
 
+# A host whose .env lacks a variable the game requires: the one error line names
+# it, so the panel's host log tells the owner what to add.
+missing_env="$(mktemp)"
+printf 'SPAWNPOINT_GAME_BIND=127.0.0.1\n' >"${missing_env}"
+if reason="$(
+  SERVER_PROJECT_DIRECTORY="${server_directory}" \
+  SERVER_ENV_FILE="${missing_env}" \
+  SERVER_COMPOSE_FILES="${server_directory}/games/zomboid/compose.yaml" \
+  bash -c 'source "$1/scripts/_common.sh"; validate_compose' _ "${server_directory}" 2>&1
+)"; then
+  printf 'validate_compose accepted a missing required variable\n' >&2
+  exit 1
+fi
+rm -f -- "${missing_env}" "${missing_env}.compose"
+grep -q 'error: Compose configuration is invalid (.*required variable ZOMBOID_[A-Z]*_PASSWORD' <<<"${reason}" || {
+  printf 'the error does not name the missing variable:\n%s\n' "${reason}" >&2
+  exit 1
+}
+[[ "$(grep -c 'error:' <<<"${reason}")" == 1 ]] || { printf 'expected one error line:\n%s\n' "${reason}" >&2; exit 1; }
+
 printf 'result=passed\n'

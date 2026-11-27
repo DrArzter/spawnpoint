@@ -167,3 +167,31 @@ export function hostOwnsSession(record: unknown, hostId: string, sessionId: stri
   return hostRecord.reservations.some((value) => object(value)?.sessionId === sessionId);
 }
 
+/** A Step Functions status change, as the projector reads it. */
+export type ExecutionChange = Readonly<{ executionArn: string; status: string }>;
+
+export function executionChange(event: ControlPlaneEvent): ExecutionChange | null {
+  if (event.source !== "aws.states") return null;
+  const detail = object(event.detail);
+  if (detail === null || typeof detail.executionArn !== "string" || typeof detail.status !== "string") return null;
+  return { executionArn: detail.executionArn, status: detail.status };
+}
+
+/**
+ * The running list with the event's own word on its run. ListExecutions is
+ * eventually consistent, so a run that has just ended can still be listed,
+ * and one that has just started can be missing. An ended status is final;
+ * a missing run is added only when a consistent read confirms it runs.
+ */
+export async function withExecutionChange(
+  operations: readonly OperationObservation[],
+  change: ExecutionChange | null,
+  confirmRunning: (executionArn: string) => Promise<OperationObservation | null>,
+): Promise<readonly OperationObservation[]> {
+  if (change === null) return operations;
+  const listed = operations.some((operation) => operation.providerRef === change.executionArn);
+  if (change.status !== "RUNNING") return listed ? operations.filter((operation) => operation.providerRef !== change.executionArn) : operations;
+  if (listed) return operations;
+  const running = await confirmRunning(change.executionArn);
+  return running === null ? operations : [running, ...operations].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}

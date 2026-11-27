@@ -402,6 +402,23 @@ async function expectedDuration(stateMachineArn: string, worldId: string) {
   return expectationFromRuns((await recentRuns(stateMachineArn, Date.now())).runs, worldId);
 }
 
+/** One run, read consistently: the operation when it still runs, or null. */
+async function describeRunningOperation(executionArn: string): Promise<OperationObservation | null> {
+  const described = await sfn.send(new DescribeExecutionCommand({ executionArn }));
+  const machine = operationMachines().find((candidate) => candidate.arn === described.stateMachineArn);
+  if (described.status !== "RUNNING" || !machine || !isSessionOperation(machine.type) || !described.name || !described.startDate) return null;
+  const worldId = operationWorldId(described.input);
+  worldByExecution.set(executionArn, worldId);
+  return {
+    id: described.name,
+    type: machine.type,
+    status: "running",
+    startedAt: described.startDate.toISOString(),
+    providerRef: executionArn,
+    worldId,
+  };
+}
+
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
   const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
   const now = Date.now();
@@ -441,7 +458,7 @@ async function hasGenerationBackup(worldId: string, generationId: string): Promi
   return (listing.KeyCount ?? listing.Contents?.length ?? 0) > 0;
 }
 
-export { operationMachines };
+export { describeRunningOperation, operationMachines };
 
 export const awsControlPlaneSources: ControlPlaneSources = {
   listHosts,

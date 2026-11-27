@@ -3,7 +3,8 @@ import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 import { Route53Client } from "@aws-sdk/client-route-53";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
-import { awsControlPlaneSources } from "../control-plane/aws.ts";
+import { awsControlPlaneSources, describeRunningOperation } from "../control-plane/aws.ts";
+import { writeProjection, type StoredProjection } from "../control-plane/projection-writer.ts";
 import { awsSessionMachines } from "../control-plane/aws-session-machines.ts";
 import { eventJournalItem, hostOwnsSession, recoveryTarget, type ControlPlaneEvent } from "../control-plane/dynamic-projection.ts";
 import { gameCatalog } from "../control-plane/catalog.ts";
@@ -41,16 +42,7 @@ async function recordEvent(event: ControlPlaneEvent, nowEpochSeconds: number): P
   }
 }
 
-async function writeProjection(eventId: string, observedAtEpochMilliseconds: number): Promise<{
-  hosts: Awaited<ReturnType<typeof awsControlPlaneSources.listHosts>>;
-  operations: Awaited<ReturnType<typeof awsControlPlaneSources.listRunningOperations>>;
-  written: boolean;
-}> {
-  const [hosts, operations] = await Promise.all([
-    awsControlPlaneSources.listHosts(),
-    awsControlPlaneSources.listRunningOperations(),
-  ]);
-  let written = true;
+async function putProjection(projection: StoredProjection): Promise<boolean> {
   try {
     await table.put({
       TableName: viewTable,
@@ -58,20 +50,20 @@ async function writeProjection(eventId: string, observedAtEpochMilliseconds: num
         pk: "PROJECTION#CONTROL_PLANE",
         sk: "DYNAMIC",
         schema_version: 1,
-        observed_at_epoch_ms: observedAtEpochMilliseconds,
-        observed_at: new Date(observedAtEpochMilliseconds).toISOString(),
-        source_event_id: eventId,
-        hosts,
-        operations,
+        observed_at_epoch_ms: projection.observedAtEpochMilliseconds,
+        observed_at: new Date(projection.observedAtEpochMilliseconds).toISOString(),
+        source_event_id: projection.sourceEventId,
+        hosts: projection.hosts,
+        operations: projection.operations,
       },
       ConditionExpression: "attribute_not_exists(pk) OR observed_at_epoch_ms < :observed_at",
-      ExpressionAttributeValues: { ":observed_at": observedAtEpochMilliseconds },
+      ExpressionAttributeValues: { ":observed_at": projection.observedAtEpochMilliseconds },
     });
+    return true;
   } catch (error) {
     if (!conditionalFailure(error)) throw error;
-    written = false;
+    return false;
   }
-  return { hosts, operations, written };
 }
 
 async function publishProjectionInvalidation(
@@ -130,11 +122,16 @@ async function cleanTerminalHostDns(event: ControlPlaneEvent): Promise<void> {
 }
 
 export async function handler(event: ControlPlaneEvent): Promise<void> {
-  const observedAtEpochMilliseconds = Date.now();
-  const nowEpochSeconds = Math.floor(observedAtEpochMilliseconds / 1000);
+  const nowEpochSeconds = Math.floor(Date.now() / 1000);
   await cleanTerminalHostDns(event);
   await recordEvent(event, nowEpochSeconds);
-  const { hosts, operations, written } = await writeProjection(event.id, observedAtEpochMilliseconds);
+  const { hosts, operations, written, observedAtEpochMilliseconds } = await writeProjection({
+    listHosts: awsControlPlaneSources.listHosts,
+    listRunningOperations: awsControlPlaneSources.listRunningOperations,
+    describeRunningOperation,
+    putProjection,
+    now: Date.now,
+  }, event);
   if (written) await publishProjectionInvalidation(event.id, observedAtEpochMilliseconds);
   await reconcileStoppedHost(event.id, hosts, operations, nowEpochSeconds);
 }

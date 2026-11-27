@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { eventJournalItem, hostOwnsSession, parseDynamicProjection, recoveryTarget } from "../src/control-plane/dynamic-projection.ts";
+import { eventJournalItem, executionChange, hostOwnsSession, parseDynamicProjection, recoveryTarget, withExecutionChange } from "../src/control-plane/dynamic-projection.ts";
 import { initialLifecycleRecord } from "../src/domain/lifecycle.ts";
 import type { HostObservation } from "../src/control-plane/read-model.ts";
 
@@ -101,4 +101,35 @@ test("a launched host keeps its provenance and market when the projection is rea
   assert.equal(parsed?.hosts[1]?.provenance, "launched");
   assert.equal(parsed?.hosts[1]?.market, "spot");
   assert.equal(parseDynamicProjection({ schema_version: 1, observed_at_epoch_ms: 1_000, hosts: [{ ...launched, provenance: "borrowed" }], operations: [] }, 1_500)?.hosts[0]?.provenance, undefined);
+});
+
+const running = (id: string, startedAt = "2026-09-15T00:00:00.000Z") =>
+  ({ id, type: "start" as const, status: "running" as const, startedAt, providerRef: `arn:${id}`, worldId: "w1" });
+const statusEvent = (executionArn: string, status: string) =>
+  ({ id: "event-1", source: "aws.states", "detail-type": "Step Functions Execution Status Change", time: "2026-09-15T00:00:00.000Z", detail: { executionArn, status } });
+
+test("an ended run leaves the list even when the stale listing still has it", async () => {
+  const listed = [running("a"), running("b")];
+  const never = async () => { throw new Error("no read for an ended run"); };
+  for (const status of ["SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"]) {
+    const result = await withExecutionChange(listed, executionChange(statusEvent("arn:a", status)), never);
+    assert.deepEqual(result.map((operation) => operation.id), ["b"], status);
+  }
+});
+
+test("a started run missing from the listing is added only when a consistent read confirms it", async () => {
+  const listed = [running("b", "2026-09-15T00:00:00.000Z")];
+  const late = running("a", "2026-09-15T00:01:00.000Z");
+  assert.deepEqual((await withExecutionChange(listed, executionChange(statusEvent("arn:a", "RUNNING")), async () => late)).map((o) => o.id), ["a", "b"]);
+  assert.deepEqual((await withExecutionChange(listed, executionChange(statusEvent("arn:a", "RUNNING")), async () => null)).map((o) => o.id), ["b"]);
+  let reads = 0;
+  await withExecutionChange([late], executionChange(statusEvent("arn:a", "RUNNING")), async () => { reads += 1; return late; });
+  assert.equal(reads, 0);
+});
+
+test("an event that is not a run's status change leaves the list as read", async () => {
+  const ec2 = { id: "event-2", source: "aws.ec2", "detail-type": "EC2 Instance State-change Notification", time: "2026-09-15T00:00:00.000Z", detail: { "instance-id": "i-1", state: "stopped" } };
+  assert.equal(executionChange(ec2), null);
+  const listed = [running("a")];
+  assert.equal(await withExecutionChange(listed, null, async () => null), listed);
 });

@@ -92,6 +92,13 @@ data "aws_iam_policy_document" "access_api" {
     resources = [local.control_plane_view_table_arn]
   }
 
+  # The operations that run now, from the records the workflows write (ADR-0105).
+  statement {
+    sid       = "ListOpenOperationRecords"
+    actions   = ["dynamodb:Query"]
+    resources = ["${local.control_plane_view_table_arn}/index/open_operations"]
+  }
+
   statement {
     sid       = "DiscoverGameHosts"
     actions   = ["ec2:DescribeInstances"]

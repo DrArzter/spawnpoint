@@ -25,7 +25,10 @@ import { switchBeforeFirstStart, type SwitchOutcome, type SwitchRequest } from "
 import { newWorldRecord, withGameSettings, withWhitelist, withWorldAccess, type WorldGameSettings, type WorldRecord, type WorldWhitelist } from "./world-registry.ts";
 import { parseDynamicProjection } from "./dynamic-projection.ts";
 import { createSessionHostReader } from "./aws-session-history.ts";
-import { createOperationProgressReader, createHostLogReader } from "./aws-operation-progress.ts";
+import { createCommandLogReader, createOperationProgressReader, createHostLogReader } from "./aws-operation-progress.ts";
+import { dynamoOperationRecordStore } from "./dynamo-operation-records.ts";
+import { dynamoTable } from "./dynamo-table.ts";
+import { runningOperations } from "./operation-record-progress.ts";
 import { createHostShapeReader } from "./aws-host-shapes.ts";
 
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
@@ -74,6 +77,10 @@ const readHostShapes = createHostShapeReader(ec2);
 
 const ssm = new SSMClient({});
 const logs = new CloudWatchLogsClient({});
+
+// The records the workflows write (ADR-0105); absent where the view table is not configured.
+const operationRecordTable = process.env.CONTROL_PLANE_VIEW_TABLE;
+const operationRecords = operationRecordTable ? dynamoOperationRecordStore(dynamoTable(document), operationRecordTable) : null;
 
 function tag(instance: Instance, key: string): string | undefined {
   return instance.Tags?.find((candidate) => candidate.Key === key)?.Value;
@@ -419,7 +426,32 @@ async function describeRunningOperation(executionArn: string): Promise<Operation
   };
 }
 
+/**
+ * The operations that run now: the open records (ADR-0105), and a run the
+ * executions list that has no record at all, which started before the records
+ * did. Such a run is logged, once per listing; a run whose record exists is the
+ * record's to tell, also when the record says it has ended.
+ */
 async function listRunningOperations(): Promise<readonly OperationObservation[]> {
+  const records = operationRecords;
+  if (records === null) return listRunningExecutions();
+  const [open, executions] = await Promise.all([records.listOpen(), listRunningExecutions()]);
+  const { recorded, unrecorded } = await runningOperations(open, executions, async (id) => await records.get(id) !== null);
+  if (unrecorded.length > 0) console.info("operation_record_fallback", JSON.stringify({ reader: "list", operationIds: unrecorded.map((execution) => execution.id) }));
+  const now = Date.now();
+  const timed = await Promise.all(recorded.map((observation) => withExpectation(observation, now)));
+  return [...timed, ...unrecorded].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}
+
+// The usual duration still comes from the finished runs of the operation's machine.
+async function withExpectation(observation: OperationObservation, now: number): Promise<OperationObservation> {
+  const machine = operationMachines().find((candidate) => candidate.type === observation.type);
+  if (machine === undefined || observation.worldId === null) return observation;
+  const expected = expectationFromRuns((await recentRuns(machine.arn, now)).runs, observation.worldId);
+  return { ...observation, ...expected };
+}
+
+async function listRunningExecutions(): Promise<readonly OperationObservation[]> {
   const machines = operationMachines().filter((machine) => isSessionOperation(machine.type));
   const now = Date.now();
   const groups = await Promise.all(machines.map(async (machine) => {
@@ -472,7 +504,14 @@ export const awsControlPlaneSources: ControlPlaneSources = {
   readReleasePlan,
   readHostMetrics,
   readHostsMetrics,
-  readOperationProgress: createOperationProgressReader({ sfn, hostLog: createHostLogReader({ ssm, logs }), machines: operationMachines, expectation: expectedDuration }),
+  readOperationProgress: createOperationProgressReader({
+    sfn,
+    hostLog: createHostLogReader({ ssm, logs }),
+    records: operationRecords,
+    commandLog: createCommandLogReader({ logs }),
+    machines: operationMachines,
+    expectation: expectedDuration,
+  }),
   readWorldSessionHosts: createSessionHostReader({ sfn, document, tableName: () => process.env.LIFECYCLE_TABLE_NAME, machines: operationMachines }),
   listWorldRecords,
   findSessionPlacement: (sessionId) => findSessionPlacement(sessionId),

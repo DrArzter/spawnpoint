@@ -6,6 +6,7 @@ import { filterHostLog, type HostLogLine, type RawLogEvent } from "./host-log.ts
 import type { OperationExpectation } from "./operation-eta.ts";
 import { HISTORY_PAGE_SIZE, readOperationProgress, type HostRun, type ExecutionPort, type ExecutionStatus, type HistoryEvent, type OperationProgress } from "./operation-progress.ts";
 import { workflowOfMachine } from "./operation-steps.ts";
+import { progressOfRecord, type HostCommand, type OperationRecordStore } from "./operation-record-progress.ts";
 
 type Machine = Readonly<{ type: OperationProgress["type"]; arn: string }>;
 
@@ -109,37 +110,81 @@ export function createHostLogReader(deps: Readonly<{ ssm: Pick<SSMClient, "send"
       if (commands.size >= 200) commands.clear();
       commands.set(key, command);
     }
-    const { id, step } = command;
-    const tails = await Promise.all(["stdout", "stderr"].map(async (stream) => {
-      try {
-        const page = await deps.logs.send(new GetLogEventsCommand({
-          logGroupName: SESSION_COMMAND_LOG_GROUP,
-          logStreamName: `${id}/${host.instanceId}/${step}/${stream}`,
-          startFromHead: false,
-          limit: LOG_EVENTS_PER_STREAM,
-        }));
-        return (page.events ?? []).flatMap((event): RawLogEvent[] => event.timestamp === undefined || event.message === undefined ? [] : [{ timestamp: event.timestamp, message: event.message }]);
-      } catch (error) {
-        if (error instanceof ResourceNotFoundException) return [];
-        throw error;
-      }
-    }));
-    return filterHostLog(tails.flat());
+    return commandTail(deps.logs, { commandId: command.id, instanceId: host.instanceId, step: command.step });
+  };
+}
+
+// The tail of one command's output on one host, as filtered lines. A stream that
+// does not exist yet reads as empty.
+async function commandTail(
+  logs: Pick<CloudWatchLogsClient, "send">,
+  command: Readonly<{ commandId: string; instanceId: string; step: string }>,
+): Promise<readonly HostLogLine[]> {
+  const tails = await Promise.all(["stdout", "stderr"].map(async (stream) => {
+    try {
+      const page = await logs.send(new GetLogEventsCommand({
+        logGroupName: SESSION_COMMAND_LOG_GROUP,
+        logStreamName: `${command.commandId}/${command.instanceId}/${command.step}/${stream}`,
+        startFromHead: false,
+        limit: LOG_EVENTS_PER_STREAM,
+      }));
+      return (page.events ?? []).flatMap((event): RawLogEvent[] => event.timestamp === undefined || event.message === undefined ? [] : [{ timestamp: event.timestamp, message: event.message }]);
+    } catch (error) {
+      if (error instanceof ResourceNotFoundException) return [];
+      throw error;
+    }
+  }));
+  return filterHostLog(tails.flat());
+}
+
+const INSTANCE_ID = /^i-[0-9a-f]{8,17}$/;
+
+/**
+ * The host log of a command the record names (ADR-0105): no command lookup.
+ * The host start sends `spawnpoint-start-session`, whose one step is `startSession`.
+ */
+export function createCommandLogReader(deps: Readonly<{ logs: Pick<CloudWatchLogsClient, "send"> }>): (command: HostCommand) => Promise<readonly HostLogLine[]> {
+  return async ({ instanceId, commandId }) => {
+    if (!INSTANCE_ID.test(instanceId) || !COMMAND_ID.test(commandId)) return [];
+    return commandTail(deps.logs, { commandId, instanceId, step: SESSION_COMMAND_STREAMS["spawnpoint-start-session"]! });
   };
 }
 
 export type OperationProgressReader = (request: Readonly<{ worldId: string; operationId: string }>) => Promise<OperationProgress | null>;
 
-/** Null for an id that names no workflow here, an execution that is not there, or one of another world. */
+/**
+ * Null for an id that names no operation here, or one of another world. The
+ * record answers first (ADR-0105); an operation without one started before the
+ * records did, and is read from its execution, with one log line per read.
+ */
 export function createOperationProgressReader(deps: Readonly<{
   sfn: Pick<SFNClient, "send">;
   hostLog?: HostLogReader;
+  records?: OperationRecordStore | null;
+  commandLog?: (command: HostCommand) => Promise<readonly HostLogLine[]>;
   machines: () => readonly Machine[];
   expectation: (machineArn: string, worldId: string) => Promise<OperationExpectation | null>;
   now?: () => Date;
 }>): OperationProgressReader {
   const port = sfnExecutionPort(deps.sfn);
+  const now = () => (deps.now ?? (() => new Date()))();
   return async ({ worldId, operationId }) => {
+    const record = deps.records ? await deps.records.get(operationId) : null;
+    if (record !== null) {
+      if (record.worldId !== worldId || record.parentId !== null) return null;
+      const machine = deps.machines().find((candidate) => candidate.type === record.type);
+      return progressOfRecord(deps.records!, record, {
+        now: now(),
+        ...(machine === undefined ? {} : { expectation: () => deps.expectation(machine.arn, worldId) }),
+        ...(deps.commandLog === undefined ? {} : { hostLog: deps.commandLog }),
+      });
+    }
+    const progress = await readFromExecution(worldId, operationId);
+    if (deps.records && progress !== null) console.info("operation_record_fallback", JSON.stringify({ reader: "progress", operationId, status: progress.status }));
+    return progress;
+  };
+
+  async function readFromExecution(worldId: string, operationId: string): Promise<OperationProgress | null> {
     const type = operationTypeOfId(operationId);
     const machine = type === null ? undefined : deps.machines().find((candidate) => candidate.type === type);
     const workflow = machine === undefined ? null : workflowOfMachine(machine.arn);
@@ -150,9 +195,9 @@ export function createOperationProgressReader(deps: Readonly<{
       executionArn: `${machine.arn.replace(":stateMachine:", ":execution:")}:${operationId}`,
       workflow,
       worldId,
-      now: (deps.now ?? (() => new Date()))(),
+      now: now(),
       expectation: () => deps.expectation(machine.arn, worldId),
       ...(deps.hostLog === undefined ? {} : { hostLog: deps.hostLog }),
     });
-  };
+  }
 }

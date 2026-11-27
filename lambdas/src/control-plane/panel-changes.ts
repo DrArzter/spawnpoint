@@ -5,6 +5,8 @@
  * a filter cannot do, comparing the old item with the new one.
  */
 
+import { operationIdOfKey, operationRecordKey } from "./operation-record.ts";
+
 /** One item change, read from a table's change stream by an adapter. */
 export type TableChange = Readonly<{
   table: string;
@@ -17,7 +19,7 @@ export type TableChange = Readonly<{
 
 export type StreamedTables = Readonly<{ lifecycle: string; view: string }>;
 
-/** What to reload: the dashboard projection, or one session record by its key (a game id or `world#<id>`). */
+/** What to reload: the dashboard projection, one session record by its key (a game id or `world#<id>`), or one operation record by its key. */
 export type PanelReloads = Readonly<{ targets: readonly string[]; observedAtEpochMilliseconds: number | null }>;
 
 export const PROJECTION_TARGET = "projection";
@@ -43,7 +45,10 @@ function lifecycleTarget(change: TableChange): string | null {
 }
 
 function viewTarget(change: TableChange): string | null {
-  return change.keys.pk === PROJECTION_KEY.pk && change.keys.sk === PROJECTION_KEY.sk ? PROJECTION_TARGET : null;
+  if (change.keys.pk === PROJECTION_KEY.pk && change.keys.sk === PROJECTION_KEY.sk) return PROJECTION_TARGET;
+  // A workflow wrote its step, host or end (ADR-0105).
+  const operationId = operationIdOfKey(change.keys);
+  return operationId === null ? null : operationRecordKey(operationId).pk;
 }
 
 function reloadTarget(change: TableChange, tables: StreamedTables): string | null {

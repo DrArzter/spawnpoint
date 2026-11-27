@@ -249,12 +249,14 @@ locals {
         jsonencode({ eventName = ["REMOVE"], dynamodb = { OldImage = { lifecycle = { M = { observedState = { S = [{ exists = true }] } } } } } }),
       ]
     }
-    # The dashboard projection: one item. Tickets, connections and the event
-    # journal share the table and pass nothing.
+    # The dashboard projection and the operation records. Tickets, connections
+    # and the event journal share the table and pass nothing.
     view = {
       arn = data.aws_dynamodb_table.control_plane_view.stream_arn
       filters = [
         jsonencode({ dynamodb = { Keys = { pk = { S = ["PROJECTION#CONTROL_PLANE"] }, sk = { S = ["DYNAMIC"] } } } }),
+        # An operation record: a workflow wrote its step, host or end (ADR-0105).
+        jsonencode({ dynamodb = { Keys = { pk = { S = [{ prefix = "OPERATION#" }] }, sk = { S = ["RECORD"] } } } }),
       ]
     }
   }

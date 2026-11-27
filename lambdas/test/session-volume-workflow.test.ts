@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 // ADR-0102, step 2b: the session volume in the start and stop workflows.
 
@@ -24,7 +25,7 @@ async function load(name: string, values: Record<string, string> = {}): Promise<
   for (const [key, value] of Object.entries({ allowed_instance_types: JSON.stringify(["m7i.*"]), ...values })) {
     template = template.replaceAll(`\${${key}}`, value);
   }
-  return JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition;
+  return withoutOperationRecord(JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition);
 }
 
 const TAGS = { session_volume_managed_by: "spawnpoint-session-volume", session_volume_session_tag: "SessionId" };

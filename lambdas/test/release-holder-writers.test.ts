@@ -87,11 +87,15 @@ test("every writer in the table still writes (no stale justification)", () => {
   assert.deepEqual(Object.keys(writers).filter((path) => !flagged.includes(path)), []);
 });
 
+const OPERATION_RECORD_WRITE = /"Resource": "arn:aws:states:::dynamodb:updateItem",\s*"Arguments": (?:\{\s*"TableName": "\$\{operation_table_name\}",\s*"Key": \{ "pk": \{ "S": "\{% 'OPERATION#' & [^"]+%\}" \}, "sk": \{ "S": "RECORD" \} \}|"\{% \(\$f := [^"]*'TableName': '\$\{operation_table_name\}', 'Key': \{'pk': \{'S': 'OPERATION#' & \$states\.context\.Execution\.Name\}, 'sk': \{'S': 'RECORD'\}\})/g;
+
 test("no workflow writes these keys itself: they call the release-state Lambda or the world-lifecycle Lambda", () => {
   const flaggedWorkflows = flagged.filter((path) => path.startsWith("workflows/"));
   assert.deepEqual(flaggedWorkflows, []);
   for (const path of scanned.filter((entry) => entry.startsWith("workflows/"))) {
-    assert.doesNotMatch(readFileSync(join(root, path), "utf8"), /aws-sdk:s3:(?:put|copy)Object|:dynamodb:/, path);
+    // The one DynamoDB write a workflow makes is its operation record (ADR-0105); operation-workflows.test.ts holds its key.
+    const source = readFileSync(join(root, path), "utf8").replaceAll(OPERATION_RECORD_WRITE, "");
+    assert.doesNotMatch(source, /aws-sdk:s3:(?:put|copy)Object|:dynamodb:/, path);
   }
 });
 

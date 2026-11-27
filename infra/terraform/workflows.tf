@@ -32,6 +32,19 @@ resource "aws_iam_role" "start_workflow" {
 }
 
 data "aws_iam_policy_document" "start_workflow" {
+  # The record of its own run, and of its parent and root (ADR-0105); only record keys.
+  statement {
+    sid       = "WriteOperationRecords"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = ["arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.control_plane_view_table_name}"]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
   statement {
     sid = "ReadHostState"
 
@@ -112,7 +125,7 @@ resource "aws_sfn_state_machine" "start_server" {
   name       = "spawnpoint-start-server"
   role_arn   = aws_iam_role.start_workflow.arn
   type       = "STANDARD"
-  definition = file("${path.module}/../../workflows/start-server.asl.json")
+  definition = templatefile("${path.module}/../../workflows/start-server.asl.json", { operation_table_name = var.control_plane_view_table_name })
 
   tags = {
     Name    = "spawnpoint-start-server"
@@ -130,6 +143,19 @@ resource "aws_iam_role" "stop_workflow" {
 }
 
 data "aws_iam_policy_document" "stop_workflow" {
+  # The record of its own run, and of its parent and root (ADR-0105); only record keys.
+  statement {
+    sid       = "WriteOperationRecords"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = ["arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.control_plane_view_table_name}"]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
   statement {
     sid = "ReadHostState"
 
@@ -206,10 +232,11 @@ resource "aws_sfn_state_machine" "stop_server" {
   name       = "spawnpoint-stop-server"
   role_arn   = aws_iam_role.stop_workflow.arn
   type       = "STANDARD"
-  definition = file("${path.module}/../../workflows/stop-server.asl.json")
+  definition = templatefile("${path.module}/../../workflows/stop-server.asl.json", { operation_table_name = var.control_plane_view_table_name })
 
   tags = {
     Name    = "spawnpoint-stop-server"
     Purpose = "verified-session-stop"
   }
 }
+

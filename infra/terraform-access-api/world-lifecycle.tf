@@ -165,6 +165,19 @@ resource "aws_iam_role" "world_lifecycle_workflow" {
 }
 
 data "aws_iam_policy_document" "world_lifecycle_workflow" {
+  # The record of its own run, and of its parent and root (ADR-0105); only record keys.
+  statement {
+    sid       = "WriteOperationRecords"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [local.control_plane_view_table_arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
   statement {
     actions   = ["lambda:InvokeFunction"]
     resources = [aws_lambda_function.world_lifecycle.arn]
@@ -196,5 +209,7 @@ resource "aws_sfn_state_machine" "world_lifecycle" {
   definition = templatefile("${path.module}/../../workflows/world-lifecycle.asl.json.tftpl", {
     stop_state_machine_arn       = local.stop_state_machine_arn
     world_lifecycle_function_arn = aws_lambda_function.world_lifecycle.arn
+    operation_table_name         = var.control_plane_view_table_name
   })
 }
+

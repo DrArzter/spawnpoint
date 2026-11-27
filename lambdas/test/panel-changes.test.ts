@@ -58,7 +58,7 @@ test("lifecycle items that are not session records reload nothing", () => {
   assert.deepEqual(panelReloads([host], TABLES).targets, []);
 });
 
-test("only the projection item of the view table reloads the panel", () => {
+test("tickets, connections and the journal of the view table do not reload the panel", () => {
   const changes = [
     viewChange("SUBSCRIPTIONS#CONTROL_PLANE", "CONNECTION#abc"),
     viewChange("TICKET#hash", "CONTROL_PLANE"),
@@ -66,6 +66,11 @@ test("only the projection item of the view table reloads the panel", () => {
   ];
   assert.deepEqual(panelReloads(changes, TABLES).targets, []);
   assert.deepEqual(panelReloads([viewChange("PROJECTION#CONTROL_PLANE", "DYNAMIC")], TABLES).targets, [PROJECTION_TARGET]);
+});
+
+test("an operation record reloads the panel, and an item that only looks like one does not (ADR-0105)", () => {
+  assert.deepEqual(panelReloads([viewChange("OPERATION#panel-start-1", "RECORD"), viewChange("OPERATION#panel-start-1", "RECORD")], TABLES).targets, ["OPERATION#panel-start-1"]);
+  assert.deepEqual(panelReloads([viewChange("OPERATION#panel-start-1", "OTHER"), viewChange("OPERATION#", "RECORD")], TABLES).targets, []);
 });
 
 test("one batch names each reload once and keeps the latest change time", () => {

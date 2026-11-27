@@ -1,16 +1,46 @@
 {
   "Comment": "Stop and back up an active session before changing the durable world generation record.",
   "QueryLanguage": "JSONPath",
-  "StartAt": "Needs Verified Stop",
+  "StartAt": "Report Accepted",
   "States": {
+    "Report Accepted": {
+      "Type": "Task",
+      "Comment": "The run's record: accepted, and running (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": "{% ($f := $merge([{'operation_id': {'S': $states.context.Execution.Name}, 'execution_arn': {'S': $states.context.Execution.Id}, 'type': {'S': 'world'}, 'workflow': {'S': 'world'}, 'status': {'S': 'running'}, 'root_id': {'S': ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name)}, 'started_at': {'S': $states.context.Execution.StartTime}, 'updated_at': {'S': $states.context.State.EnteredTime}, 'open_key': {'S': 'open'}, 'expires_at': {'N': $string($floor($toMillis($states.context.Execution.StartTime) / 1000) + 2592000)}, 'step': {'S': 'world.checking'}}, $type($states.context.Execution.Input.worldId) = 'string' ? {'world_id': {'S': $states.context.Execution.Input.worldId}} : {}, $type($states.context.Execution.Input.gameId) = 'string' ? {'game_id': {'S': $states.context.Execution.Input.gameId}} : {}, $type($states.context.Execution.Input.serverId) = 'string' ? {'server_id': {'S': $states.context.Execution.Input.serverId}} : {}, $type($states.context.Execution.Input.operationParent) = 'string' ? {'parent_id': {'S': $states.context.Execution.Input.operationParent}} : {}]); {'TableName': '${operation_table_name}', 'Key': {'pk': {'S': 'OPERATION#' & $states.context.Execution.Name}, 'sk': {'S': 'RECORD'}}, 'UpdateExpression': 'SET ' & $join($map($keys($f), function($k) { '#' & $k & ' = :' & $k }), ', '), 'ExpressionAttributeNames': $merge($map($keys($f), function($k) { {'#' & $k: $k} })), 'ExpressionAttributeValues': $merge($map($keys($f), function($k) { {':' & $k: $lookup($f, $k)} }))}) %}",
+      "Assign": { "operationRoot": "{% ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name) %}" },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Assign": { "operationRoot": "{% ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name) %}" }, "Output": "{% $states.input %}", "Next": "Needs Verified Stop" }],
+      "Next": "Needs Verified Stop"
+    },
     "Needs Verified Stop": {
       "Type": "Choice",
       "Choices": [{
         "Variable": "$.stopRequired",
         "BooleanEquals": true,
-        "Next": "Stop And Back Up"
+        "Next": "Report Stop And Back Up"
       }],
-      "Default": "Apply World Mutation"
+      "Default": "Report Apply World Mutation"
+    },
+    "Report Stop And Back Up": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "world.stopping_backing_up" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Stop And Back Up" }],
+      "Next": "Stop And Back Up"
     },
     "Stop And Back Up": {
       "Type": "Task",
@@ -26,10 +56,30 @@
           "instanceId.$": "$.instanceId",
           "worldId.$": "$.worldId",
           "requestedBy.$": "$.requestedBy",
-          "stopTiming.$": "$.stopTiming"
+          "stopTiming.$": "$.stopTiming",
+          "operationParent.$": "$$.Execution.Name",
+          "operationRoot.$": "$operationRoot"
         }
       },
       "ResultPath": "$.verifiedStop",
+      "Next": "Report Apply World Mutation"
+    },
+    "Report Apply World Mutation": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "world.applying" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Apply World Mutation" }],
       "Next": "Apply World Mutation"
     },
     "Apply World Mutation": {
@@ -62,6 +112,29 @@
       "ResultPath": "$.mutation",
       "Next": "Complete"
     },
+    "Report Complete": {
+      "Type": "Task",
+      "Comment": "The record ends as succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #result = :result, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#result": "result", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "succeeded" }, ":result": { "S": "{% $type($states.input.status) = 'string' ? $substring($states.input.status, 0, 1000) : '' %}" }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Report Complete Missed" }],
+      "End": true
+    },
+    "Report Complete Missed": {
+      "Type": "Succeed",
+      "Comment": "The record could not be written; the run still succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata"
+    },
     "Complete": {
       "Type": "Pass",
       "Parameters": {
@@ -71,7 +144,7 @@
         "generationId.$": "$.mutation.generationId",
         "result.$": "$.mutation.result"
       },
-      "End": true
+      "Next": "Report Complete"
     }
   }
 }

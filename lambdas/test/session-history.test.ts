@@ -9,6 +9,7 @@ import { createSessionHistoryCoordinator, type SessionHistoryStore } from "../sr
 import { createSessionHostReader, sessionHostsFromExecutions } from "../src/control-plane/aws-session-history.ts";
 import { joinSampledSeries, mergeWorldMetrics, worldHostRuns, type HostRun } from "../src/control-plane/world-metrics.ts";
 import type { HostMetricsWindow } from "../src/control-plane/read-model.ts";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 const T0 = Date.UTC(2026, 10, 21, 12, 0);
 const iso = (minutes: number) => new Date(T0 + minutes * 60_000).toISOString();
@@ -68,7 +69,7 @@ type Definition = { States: Record<string, { Next?: string; Parameters?: { Paylo
 
 async function definition(name: string): Promise<Definition> {
   const template = await readFile(new URL(`../../workflows/${name}.asl.json.tftpl`, import.meta.url), "utf8");
-  return JSON.parse(template.replaceAll("${allowed_instance_types}", "[]").replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition;
+  return withoutOperationRecord(JSON.parse(template.replaceAll("${allowed_instance_types}", "[]").replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition);
 }
 
 test("a start records its host once the session is ready, and a failure to record does not fail the start", async () => {

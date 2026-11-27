@@ -32,6 +32,19 @@ resource "aws_iam_role" "promote_workflow" {
 }
 
 data "aws_iam_policy_document" "promote_workflow" {
+  # The record of its own run, and of its parent and root (ADR-0105); only record keys.
+  statement {
+    sid       = "WriteOperationRecords"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [local.control_plane_view_table_arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
   statement {
     sid       = "ReadLifecycle"
     actions   = ["lambda:InvokeFunction"]
@@ -101,6 +114,7 @@ resource "aws_sfn_state_machine" "promote_release" {
     coordinator_function_arn   = local.lifecycle_v2_coordinator_arn
     start_v2_state_machine_arn = local.lifecycle_v2_start_arn
     stop_v2_state_machine_arn  = local.lifecycle_v2_stop_arn
+    operation_table_name       = var.control_plane_view_table_name
   })
 
   tags = {

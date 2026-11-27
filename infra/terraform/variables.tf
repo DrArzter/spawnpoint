@@ -85,3 +85,14 @@ variable "fleet_root_volume_gib" {
   type        = number
   default     = 24
 }
+
+variable "control_plane_view_table_name" {
+  description = "DynamoDB table that holds the operation records the workflows write (ADR-0105); infra/terraform-storage owns it."
+  type        = string
+  default     = "spawnpoint-control-plane-view"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]{3,255}$", var.control_plane_view_table_name))
+    error_message = "control_plane_view_table_name must be a valid DynamoDB table name."
+  }
+}

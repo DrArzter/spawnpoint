@@ -22,6 +22,7 @@ import {
   type InterruptionPorts,
   type SessionMove,
 } from "../src/control-plane/spot-interruption.ts";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 // ADR-0102, step 5: what a Spot interruption does to the sessions on the host.
 
@@ -202,7 +203,7 @@ type State = { Type: string; Next?: string; Default?: string; Parameters?: Recor
 
 async function load(name: string): Promise<Record<string, State>> {
   const template = await readFile(new URL(`../../workflows/${name}`, import.meta.url), "utf8");
-  return (JSON.parse(template.replaceAll("${allowed_instance_types}", "[\"m7i.*\"]").replaceAll(/\$\{[^}]+\}/g, "arn:aws:test")) as { States: Record<string, State> }).States;
+  return withoutOperationRecord((JSON.parse(template.replaceAll("${allowed_instance_types}", "[\"m7i.*\"]").replaceAll(/\$\{[^}]+\}/g, "arn:aws:test")) as { States: Record<string, State> })).States;
 }
 
 test("a move brings its volume to the new host's zone; any other start creates one", async () => {

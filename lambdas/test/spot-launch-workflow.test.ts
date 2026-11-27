@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 // ADR-0102, step 3: Spot for a cold launched host, with the on-demand fallback.
 
@@ -22,7 +23,7 @@ async function load(spot: string, sessionVolume = "enabled"): Promise<Definition
   let template = await readFile(new URL("../../workflows/start-server-v2.asl.json.tftpl", import.meta.url), "utf8");
   const values = { allowed_instance_types: JSON.stringify(["m7i.*"]), spot, session_volume: sessionVolume };
   for (const [key, value] of Object.entries(values)) template = template.replaceAll(`\${${key}}`, value);
-  return JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition;
+  return withoutOperationRecord(JSON.parse(template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource")) as Definition);
 }
 
 function state(definition: Definition, name: string): State {

@@ -1,8 +1,46 @@
 {
   "Comment": "Lifecycle V2 stop wrapper: fence the exact session across player recheck, backup verification and EC2 stop.",
   "QueryLanguage": "JSONPath",
-  "StartAt": "Initialize",
+  "StartAt": "Report Accepted",
   "States": {
+    "Report Accepted": {
+      "Type": "Task",
+      "Comment": "The run's record: accepted, and running (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": "{% ($f := $merge([{'operation_id': {'S': $states.context.Execution.Name}, 'execution_arn': {'S': $states.context.Execution.Id}, 'type': {'S': 'stop'}, 'workflow': {'S': 'stop'}, 'status': {'S': 'running'}, 'root_id': {'S': ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name)}, 'started_at': {'S': $states.context.Execution.StartTime}, 'updated_at': {'S': $states.context.State.EnteredTime}, 'open_key': {'S': 'open'}, 'expires_at': {'N': $string($floor($toMillis($states.context.Execution.StartTime) / 1000) + 2592000)}, 'step': {'S': 'stop.checking'}}, $type($states.context.Execution.Input.worldId) = 'string' ? {'world_id': {'S': $states.context.Execution.Input.worldId}} : {}, $type($states.context.Execution.Input.gameId) = 'string' ? {'game_id': {'S': $states.context.Execution.Input.gameId}} : {}, $type($states.context.Execution.Input.serverId) = 'string' ? {'server_id': {'S': $states.context.Execution.Input.serverId}} : {}, $type($states.context.Execution.Input.operationParent) = 'string' ? {'parent_id': {'S': $states.context.Execution.Input.operationParent}} : {}]); {'TableName': '${operation_table_name}', 'Key': {'pk': {'S': 'OPERATION#' & $states.context.Execution.Name}, 'sk': {'S': 'RECORD'}}, 'UpdateExpression': 'SET ' & $join($map($keys($f), function($k) { '#' & $k & ' = :' & $k }), ', '), 'ExpressionAttributeNames': $merge($map($keys($f), function($k) { {'#' & $k: $k} })), 'ExpressionAttributeValues': $merge($map($keys($f), function($k) { {':' & $k: $lookup($f, $k)} }))}) %}",
+      "Assign": { "operationRoot": "{% ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name) %}" },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Assign": { "operationRoot": "{% ($exists($states.context.Execution.Input.operationRoot) ? $states.context.Execution.Input.operationRoot : $states.context.Execution.Name) %}" }, "Output": "{% $states.input %}", "Next": "Route Operation Parent" }],
+      "Next": "Route Operation Parent"
+    },
+    "Route Operation Parent": {
+      "Type": "Choice",
+      "Comment": "A nested run names itself on its parent's record (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Choices": [{ "Condition": "{% $type($states.context.Execution.Input.operationParent) = 'string' %}", "Next": "Report Child To Parent" }],
+      "Default": "Initialize",
+      "Output": "{% $states.input %}"
+    },
+    "Report Child To Parent": {
+      "Type": "Task",
+      "Comment": "The parent's record names its newest nested run (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Input.operationParent %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #child_id = :child_id, #updated_at = :updated_at",
+        "ExpressionAttributeNames": { "#child_id": "child_id", "#updated_at": "updated_at" },
+        "ExpressionAttributeValues": { ":child_id": { "S": "{% $states.context.Execution.Name %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Initialize" }],
+      "Next": "Initialize"
+    },
     "Initialize": {
       "Type": "Pass",
       "Parameters": {
@@ -72,10 +110,28 @@
         {
           "Variable": "$.coordination.lifecycle.record.activeSessionId",
           "StringEqualsPath": "$.request.sessionId",
-          "Next": "Acquire Stop Lease"
+          "Next": "Report Acquire Stop Lease"
         }
       ],
-      "Default": "Stale Session"
+      "Default": "Report Stale Session"
+    },
+    "Report Acquire Stop Lease": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.locking" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Acquire Stop Lease" }],
+      "Next": "Acquire Stop Lease"
     },
     "Acquire Stop Lease": {
       "Type": "Task",
@@ -134,6 +190,24 @@
           "BackoffRate": 2
         }
       ],
+      "Next": "Report Find Placement"
+    },
+    "Report Find Placement": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.finding_host" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Find Placement" }],
       "Next": "Find Placement"
     },
     "Find Placement": {
@@ -168,7 +242,7 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.placementFailure",
-          "Next": "Placement Lookup Failed"
+          "Next": "Report Placement Lookup Failed"
         }
       ],
       "Next": "Route Found Placement"
@@ -191,10 +265,28 @@
         {
           "Variable": "$.request.serverId",
           "StringMatches": "world#*",
-          "Next": "Mark Unplaced Session Stopped"
+          "Next": "Report Mark Unplaced Session Stopped"
         }
       ],
       "Default": "Adopt Requested Host"
+    },
+    "Report Mark Unplaced Session Stopped": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.recording" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Mark Unplaced Session Stopped" }],
+      "Next": "Mark Unplaced Session Stopped"
     },
     "Mark Unplaced Session Stopped": {
       "Type": "Task",
@@ -250,7 +342,7 @@
           "BackoffRate": 2
         }
       ],
-      "Next": "Fleet Session Unplaced"
+      "Next": "Report Fleet Session Unplaced"
     },
     "Adopt Found Placement": {
       "Type": "Pass",
@@ -259,7 +351,7 @@
         "slot.$": "$.placementLookup.placement.slot"
       },
       "ResultPath": "$.request.placed",
-      "Next": "Stop Accepted V1"
+      "Next": "Report Stop Accepted V1"
     },
     "Adopt Requested Host": {
       "Type": "Pass",
@@ -268,6 +360,24 @@
         "slot": ""
       },
       "ResultPath": "$.request.placed",
+      "Next": "Report Stop Accepted V1"
+    },
+    "Report Stop Accepted V1": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.saving" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Stop Accepted V1" }],
       "Next": "Stop Accepted V1"
     },
     "Stop Accepted V1": {
@@ -282,7 +392,9 @@
           "slot.$": "$.request.placed.slot",
           "worldId.$": "$.request.worldId",
           "players.$": "$.request.players",
-          "timing.$": "$.request.stopTiming"
+          "timing.$": "$.request.stopTiming",
+          "operationParent.$": "$$.Execution.Name",
+          "operationRoot.$": "$operationRoot"
         }
       },
       "ResultPath": "$.hostStop",
@@ -290,10 +402,46 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.stopFailure",
-          "Next": "Route Stop Failure"
+          "Next": "Report Caught Before Route Stop Failure"
         }
       ],
-      "Next": "Mark Session Stopped"
+      "Next": "Report Mark Session Stopped"
+    },
+    "Report Route Session Volume Release": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.releasing_host" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Route Session Volume Release" }],
+      "Next": "Route Session Volume Release"
+    },
+    "Report Caught Before Route Session Volume Release": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.sessionHistoryFailure.Error) = 'string' ? $substring($states.input.sessionHistoryFailure.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.sessionHistoryFailure.Cause) = 'string' ? $substring($states.input.sessionHistoryFailure.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "stop.releasing_host" }, ":step": { "S": "stop.releasing_host" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Route Session Volume Release" }],
+      "Next": "Route Session Volume Release"
     },
     "Route Session Volume Release": {
       "Type": "Choice",
@@ -305,7 +453,7 @@
           "Next": "Find Session Volume"
         }
       ],
-      "Default": "Release Placement"
+      "Default": "Report Release Placement"
     },
     "Find Session Volume": {
       "Type": "Task",
@@ -345,7 +493,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Release Placement"
+          "Next": "Report Caught Before Release Placement"
         }
       ],
       "Next": "Route Found Session Volume"
@@ -357,7 +505,7 @@
         {
           "Variable": "$.sessionVolume.found.volumes[0]",
           "IsPresent": false,
-          "Next": "Release Placement"
+          "Next": "Report Release Placement"
         },
         {
           "Variable": "$.sessionVolume.found.volumes[0].State",
@@ -409,7 +557,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Release Placement"
+          "Next": "Report Caught Before Release Placement"
         }
       ],
       "Next": "Wait Before Unmount Poll"
@@ -446,14 +594,14 @@
             "Ssm.InvocationDoesNotExistException"
           ],
           "ResultPath": "$.sessionVolume.lookupError",
-          "Next": "Count Unmount Poll"
+          "Next": "Report Caught Before Count Unmount Poll"
         },
         {
           "ErrorEquals": [
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Release Placement"
+          "Next": "Report Caught Before Release Placement"
         }
       ],
       "Next": "Unmount Complete"
@@ -484,7 +632,25 @@
           "Next": "Count Unmount Poll"
         }
       ],
-      "Default": "Release Placement"
+      "Default": "Report Release Placement"
+    },
+    "Report Caught Before Count Unmount Poll": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.sessionVolume.lookupError.Error) = 'string' ? $substring($states.input.sessionVolume.lookupError.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.sessionVolume.lookupError.Cause) = 'string' ? $substring($states.input.sessionVolume.lookupError.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "stop.releasing_host" }, ":step": { "S": "stop.releasing_host" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Count Unmount Poll" }],
+      "Next": "Count Unmount Poll"
     },
     "Count Unmount Poll": {
       "Type": "Pass",
@@ -500,7 +666,7 @@
         {
           "Variable": "$.sessionVolume.unmountPolls.count",
           "NumericGreaterThanEquals": 30,
-          "Next": "Release Placement"
+          "Next": "Report Release Placement"
         }
       ],
       "Default": "Wait Before Unmount Poll"
@@ -530,7 +696,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Release Placement"
+          "Next": "Report Caught Before Release Placement"
         }
       ],
       "Next": "Wait Before Detach Poll"
@@ -567,7 +733,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Release Placement"
+          "Next": "Report Caught Before Release Placement"
         }
       ],
       "Next": "Session Volume Detached"
@@ -597,7 +763,7 @@
         {
           "Variable": "$.sessionVolume.detachPolls.count",
           "NumericGreaterThanEquals": 30,
-          "Next": "Release Placement"
+          "Next": "Report Release Placement"
         }
       ],
       "Default": "Wait Before Detach Poll"
@@ -626,10 +792,28 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Release Placement"
+          "Next": "Report Caught Before Release Placement"
         }
       ],
-      "Next": "Release Placement"
+      "Next": "Report Release Placement"
+    },
+    "Report Mark Session Stopped": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.recording" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Mark Session Stopped" }],
+      "Next": "Mark Session Stopped"
     },
     "Mark Session Stopped": {
       "Type": "Task",
@@ -689,10 +873,46 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.sessionHistoryFailure",
-          "Next": "Route Session Volume Release"
+          "Next": "Report Caught Before Route Session Volume Release"
         }
       ],
-      "Next": "Route Session Volume Release"
+      "Next": "Report Route Session Volume Release"
+    },
+    "Report Release Placement": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.recording" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Release Placement" }],
+      "Next": "Release Placement"
+    },
+    "Report Caught Before Release Placement": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.sessionVolumeFailure.Error) = 'string' ? $substring($states.input.sessionVolumeFailure.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.sessionVolumeFailure.Cause) = 'string' ? $substring($states.input.sessionVolumeFailure.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "stop.recording" }, ":step": { "S": "stop.recording" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Release Placement" }],
+      "Next": "Release Placement"
     },
     "Release Placement": {
       "Type": "Task",
@@ -727,9 +947,27 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.placementFailure",
-          "Next": "Release Stop Lease"
+          "Next": "Report Caught Before Release Stop Lease"
         }
       ],
+      "Next": "Report Route Emptied Host"
+    },
+    "Report Route Emptied Host": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.releasing_host" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Route Emptied Host" }],
       "Next": "Route Emptied Host"
     },
     "Route Emptied Host": {
@@ -739,7 +977,7 @@
         {
           "Variable": "$.placementRelease.host",
           "IsNull": true,
-          "Next": "Release Stop Lease"
+          "Next": "Report Release Stop Lease"
         }
       ],
       "Default": "Route Emptied Host State"
@@ -755,7 +993,7 @@
           "Next": "Start Drain"
         }
       ],
-      "Default": "Release Stop Lease"
+      "Default": "Report Release Stop Lease"
     },
     "Start Drain": {
       "Type": "Task",
@@ -773,9 +1011,63 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.drainStartFailure",
-          "Next": "Release Stop Lease"
+          "Next": "Report Caught Before Release Stop Lease 2"
         }
       ],
+      "Next": "Report Release Stop Lease"
+    },
+    "Report Caught Before Release Stop Lease": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.placementFailure.Error) = 'string' ? $substring($states.input.placementFailure.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.placementFailure.Cause) = 'string' ? $substring($states.input.placementFailure.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "stop.recording" }, ":step": { "S": "stop.recording" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Release Stop Lease" }],
+      "Next": "Release Stop Lease"
+    },
+    "Report Release Stop Lease": {
+      "Type": "Task",
+      "Comment": "The record names the step the panel shows (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":step": { "S": "stop.recording" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Release Stop Lease" }],
+      "Next": "Release Stop Lease"
+    },
+    "Report Caught Before Release Stop Lease 2": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.drainStartFailure.Error) = 'string' ? $substring($states.input.drainStartFailure.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.drainStartFailure.Cause) = 'string' ? $substring($states.input.drainStartFailure.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "stop.recording" }, ":step": { "S": "stop.recording" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Release Stop Lease" }],
       "Next": "Release Stop Lease"
     },
     "Release Stop Lease": {
@@ -805,6 +1097,24 @@
       ],
       "Next": "Stopped"
     },
+    "Report Caught Before Route Stop Failure": {
+      "Type": "Task",
+      "Comment": "The record keeps the failure the workflow caught and went on from (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #caught_error = :caught_error, #caught_cause = :caught_cause, #caught_step = :caught_step, #step = :step, #updated_at = :updated_at, #open_key = :open_key",
+        "ExpressionAttributeNames": { "#caught_error": "caught_error", "#caught_cause": "caught_cause", "#caught_step": "caught_step", "#step": "step", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":caught_error": { "S": "{% $type($states.input.stopFailure.Error) = 'string' ? $substring($states.input.stopFailure.Error, 0, 1000) : '' %}" }, ":caught_cause": { "S": "{% $type($states.input.stopFailure.Cause) = 'string' ? $substring($states.input.stopFailure.Cause, 0, 1000) : '' %}" }, ":caught_step": { "S": "stop.cancelling" }, ":step": { "S": "stop.cancelling" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":open_key": { "S": "open" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Route Stop Failure" }],
+      "Next": "Route Stop Failure"
+    },
     "Route Stop Failure": {
       "Type": "Choice",
       "Choices": [
@@ -814,7 +1124,7 @@
           "Next": "Cancel Refused Stop"
         }
       ],
-      "Default": "Verified Stop Failed"
+      "Default": "Report Verified Stop Failed"
     },
     "Cancel Refused Stop": {
       "Type": "Task",
@@ -869,12 +1179,53 @@
           "BackoffRate": 2
         }
       ],
+      "Next": "Report Stop Refused Players Online"
+    },
+    "Report Stop Refused Players Online": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.V2StopRefusedPlayersOnline" }, ":cause": { "S": "A player joined during the final recheck; the exact session returned to ready and its idle streak was reset." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Stop Refused Players Online" }],
       "Next": "Stop Refused Players Online"
     },
     "Stop Refused Players Online": {
       "Type": "Fail",
       "Error": "Spawnpoint.V2StopRefusedPlayersOnline",
       "Cause": "A player joined during the final recheck; the exact session returned to ready and its idle streak was reset."
+    },
+    "Report Stopped": {
+      "Type": "Task",
+      "Comment": "The record ends as succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #result = :result, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#result": "result", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "succeeded" }, ":result": { "S": "{% $type($states.input.status) = 'string' ? $substring($states.input.status, 0, 1000) : '' %}" }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Report Stopped Missed" }],
+      "End": true
+    },
+    "Report Stopped Missed": {
+      "Type": "Succeed",
+      "Comment": "The record could not be written; the run still succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata"
     },
     "Stopped": {
       "Type": "Pass",
@@ -885,7 +1236,30 @@
         "status": "stopped",
         "hostStop.$": "$.hostStop.Output"
       },
+      "Next": "Report Stopped"
+    },
+    "Report Already Stopped": {
+      "Type": "Task",
+      "Comment": "The record ends as succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #result = :result, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#result": "result", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "succeeded" }, ":result": { "S": "{% $type($states.input.status) = 'string' ? $substring($states.input.status, 0, 1000) : '' %}" }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Report Already Stopped Missed" }],
       "End": true
+    },
+    "Report Already Stopped Missed": {
+      "Type": "Succeed",
+      "Comment": "The record could not be written; the run still succeeded (ADR-0105).",
+      "QueryLanguage": "JSONata"
     },
     "Already Stopped": {
       "Type": "Pass",
@@ -895,22 +1269,94 @@
         "serverId.$": "$.request.serverId",
         "status": "already_stopped"
       },
-      "End": true
+      "Next": "Report Already Stopped"
+    },
+    "Report Stale Session": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.V2StaleSession" }, ":cause": { "S": "The stop request does not belong to the active server session." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Stale Session" }],
+      "Next": "Stale Session"
     },
     "Stale Session": {
       "Type": "Fail",
       "Error": "Spawnpoint.V2StaleSession",
       "Cause": "The stop request does not belong to the active server session."
     },
+    "Report Placement Lookup Failed": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.V2PlacementLookupFailed" }, ":cause": { "S": "The session's placement could not be read, so no host can be asked to verify its archive. The exact session remains stopping. Retry after the lease expires." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Placement Lookup Failed" }],
+      "Next": "Placement Lookup Failed"
+    },
     "Placement Lookup Failed": {
       "Type": "Fail",
       "Error": "Spawnpoint.V2PlacementLookupFailed",
       "Cause": "The session's placement could not be read, so no host can be asked to verify its archive. The exact session remains stopping. Retry after the lease expires."
     },
+    "Report Fleet Session Unplaced": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.V2FleetSessionUnplaced" }, ":cause": { "S": "A fleet session has no placement, so it never ran on a host and has nothing to archive. The configured host is never asked in its place. The session was marked stopped and its lease released." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Fleet Session Unplaced" }],
+      "Next": "Fleet Session Unplaced"
+    },
     "Fleet Session Unplaced": {
       "Type": "Fail",
       "Error": "Spawnpoint.V2FleetSessionUnplaced",
       "Cause": "A fleet session has no placement, so it never ran on a host and has nothing to archive. The configured host is never asked in its place. The session was marked stopped and its lease released."
+    },
+    "Report Verified Stop Failed": {
+      "Type": "Task",
+      "Comment": "The record ends as failed (ADR-0105).",
+      "QueryLanguage": "JSONata",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Arguments": {
+        "TableName": "${operation_table_name}",
+        "Key": { "pk": { "S": "{% 'OPERATION#' & $states.context.Execution.Name %}" }, "sk": { "S": "RECORD" } },
+        "ConditionExpression": "attribute_exists(pk)",
+        "UpdateExpression": "SET #status = :status, #error = :error, #cause = :cause, #ended_at = :ended_at, #updated_at = :updated_at REMOVE #open_key",
+        "ExpressionAttributeNames": { "#status": "status", "#error": "error", "#cause": "cause", "#ended_at": "ended_at", "#updated_at": "updated_at", "#open_key": "open_key" },
+        "ExpressionAttributeValues": { ":status": { "S": "failed" }, ":error": { "S": "Spawnpoint.V2VerifiedStopFailed" }, ":cause": { "S": "The exact session remains stopping because player recheck, backup verification or EC2 stop did not complete. Retry after the lease expires." }, ":ended_at": { "S": "{% $states.context.State.EnteredTime %}" }, ":updated_at": { "S": "{% $states.context.State.EnteredTime %}" } }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [{ "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"], "MaxAttempts": 0 }, { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 1, "MaxAttempts": 2, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Output": "{% $states.input %}", "Next": "Verified Stop Failed" }],
+      "Next": "Verified Stop Failed"
     },
     "Verified Stop Failed": {
       "Type": "Fail",

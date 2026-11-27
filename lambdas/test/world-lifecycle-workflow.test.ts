@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 type State = {
   Type: string;
@@ -15,9 +16,9 @@ type Definition = { StartAt: string; States: Record<string, State> };
 
 async function definition(): Promise<Definition> {
   const source = await readFile(new URL("../../workflows/world-lifecycle.asl.json.tftpl", import.meta.url), "utf8");
-  return JSON.parse(source
+  return withoutOperationRecord(JSON.parse(source
     .replace("${stop_state_machine_arn}", "arn:aws:states:eu-central-1:123456789012:stateMachine:stop")
-    .replace("${world_lifecycle_function_arn}", "arn:aws:lambda:eu-central-1:123456789012:function:world-lifecycle")) as Definition;
+    .replace("${world_lifecycle_function_arn}", "arn:aws:lambda:eu-central-1:123456789012:function:world-lifecycle")) as Definition);
 }
 
 test("world lifecycle is a closed graph", async () => {

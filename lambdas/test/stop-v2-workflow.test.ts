@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 type State = {
   Type: string;
@@ -22,7 +23,7 @@ async function loadDefinition(): Promise<Definition> {
   const url = new URL("../../workflows/stop-server-v2.asl.json.tftpl", import.meta.url);
   const template = await readFile(url, "utf8");
   const rendered = template.replaceAll(/\$\{[^}]+\}/g, "arn:aws:test:eu-central-1:123456789012:resource");
-  return JSON.parse(rendered) as Definition;
+  return withoutOperationRecord(JSON.parse(rendered) as Definition);
 }
 
 function state(definition: Definition, name: string): State {

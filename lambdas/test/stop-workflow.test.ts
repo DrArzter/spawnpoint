@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { withoutOperationRecord } from "./support/operation-record-states.ts";
 
 type State = {
   Type: string;
@@ -18,7 +19,7 @@ type Definition = {
 
 async function loadDefinition(): Promise<Definition> {
   const url = new URL("../../workflows/stop-server.asl.json", import.meta.url);
-  return JSON.parse(await readFile(url, "utf8")) as Definition;
+  return withoutOperationRecord(JSON.parse(await readFile(url, "utf8")) as Definition);
 }
 
 test("stop workflow stops EC2 only after the host command succeeds", async () => {

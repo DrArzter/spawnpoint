@@ -39,6 +39,19 @@ resource "aws_iam_role" "lifecycle_v2_start" {
 }
 
 data "aws_iam_policy_document" "lifecycle_v2_start" {
+  # The record of its own run, and of its parent and root (ADR-0105); only record keys.
+  statement {
+    sid       = "WriteOperationRecords"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [local.control_plane_view_table_arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
   statement {
     sid       = "CoordinateLifecycle"
     actions   = ["lambda:InvokeFunction"]
@@ -185,6 +198,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_start" {
     drain_state_machine_arn    = local.lifecycle_v2_drain_arn
     fleet_launch_template_name = "spawnpoint-fleet-host"
     allowed_instance_types     = jsonencode(var.launch_families)
+    operation_table_name       = var.control_plane_view_table_name
   }))
 
   tags = {
@@ -228,6 +242,19 @@ resource "aws_iam_role" "lifecycle_v2_stop" {
 }
 
 data "aws_iam_policy_document" "lifecycle_v2_stop" {
+  # The record of its own run, and of its parent and root (ADR-0105); only record keys.
+  statement {
+    sid       = "WriteOperationRecords"
+    actions   = ["dynamodb:UpdateItem"]
+    resources = [local.control_plane_view_table_arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
   statement {
     sid       = "CoordinateLifecycle"
     actions   = ["lambda:InvokeFunction"]
@@ -276,6 +303,7 @@ resource "aws_sfn_state_machine" "lifecycle_v2_stop" {
     coordinator_function_arn  = local.lifecycle_v2_coordinator_arn
     stop_v1_state_machine_arn = local.stop_state_machine_arn
     drain_state_machine_arn   = local.lifecycle_v2_drain_arn
+    operation_table_name      = var.control_plane_view_table_name
   }))
 
   tags = {

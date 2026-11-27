@@ -18,6 +18,7 @@ import {
   interruptionEvent,
   markHostSessionsMoving,
   moveHostSessions,
+  moveOperationId,
   type InterruptionPorts,
   type SessionMove,
 } from "../src/control-plane/spot-interruption.ts";
@@ -168,6 +169,16 @@ test("a moving session whose volume is gone starts again from S3", async () => {
   const { ports, started } = fakes({ "world#alpha": beginMoving(ready(), "s1", NOW - 120) }, host());
   await moveHostSessions(ports, "i-0123456789abcdef0", NOW, quiet);
   assert.equal(started[0]?.volumeId, "");
+});
+
+// Every machine a move starts appends to its id; Step Functions refuses a name over 80 characters.
+test("a move id leaves room for every name derived from it", () => {
+  const id = moveOperationId("session-3a5277a1-e30d-4754-a3e1-9d376e7369af", 1795769881);
+  assert.equal(id, "move-1795769881-3a5277a1");
+  for (const suffix of ["-watchdog-idle-32-host-stop", "-watchdog-cap-32-host-stop", "-watchdog-compensation-host-stop", "-compensate", "-host-start", "-failed-start-drain"]) {
+    assert.ok(`${id}${suffix}`.length <= 80, `${id}${suffix}`);
+  }
+  assert.notEqual(moveOperationId("session-3a5277a1-e30d", 1), moveOperationId("session-3a5277a1-e30d", 2), "two moves of one session differ");
 });
 
 test("the rules' three events are read; anything else is ignored", () => {

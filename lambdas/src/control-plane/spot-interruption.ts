@@ -124,9 +124,16 @@ export async function moveHostSessions(
   return { hostId, worlds, skipped };
 }
 
-/** A Step Functions execution name: at most 80 characters, unique per move. */
+/**
+ * A Step Functions execution name, unique per move. It stays short because the
+ * machines it starts append to it: the watchdog, then its idle stop, then that
+ * stop's host stop (`-watchdog-idle-3-host-stop`), and a name may not exceed 80
+ * characters. The whole session id did not fit (2026-11-27: every moved session
+ * was impossible to stop).
+ */
 export function moveOperationId(sessionId: string, nowEpochSeconds: number): string {
-  return `move-${nowEpochSeconds}-${sessionId}`.slice(0, 80);
+  const short = sessionId.replace(/^session-/, "").replaceAll(/[^A-Za-z0-9]/g, "").slice(0, 8);
+  return `move-${nowEpochSeconds}-${short}`;
 }
 
 async function updateLifecycle(

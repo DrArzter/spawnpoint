@@ -1,3 +1,4 @@
+import { awsHostEnvKeys } from "../../control-plane/aws-host-env-keys.ts";
 import { awsControlPlaneSources } from "../../control-plane/aws.ts";
 import { awsSessionMachines } from "../../control-plane/aws-session-machines.ts";
 import { awsConsoleGateway } from "../../control-plane/aws-ssm-console-gateway.ts";
@@ -13,4 +14,5 @@ export const deployedWorlds = worldsFeature({
   machines: awsSessionMachines,
   gateway: awsConsoleGateway,
   backupReleases: () => awsBackupArchives.releaseSources(),
+  hostEnv: awsHostEnvKeys,
 });

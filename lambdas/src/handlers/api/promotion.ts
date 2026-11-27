@@ -7,6 +7,7 @@ import { checkReleaseUsable, noReleaseState } from "../../control-plane/release-
 import type { SwitchOutcome, SwitchRequest } from "../../control-plane/release-switch.ts";
 import { blockingOperations, sessionLifecycleKey } from "../../control-plane/world-session.ts";
 import { type ControlPlaneSources } from "../../control-plane/read-model.ts";
+import { type HostEnvKeys, missingGameSecrets } from "../../control-plane/launch-preflight.ts";
 import { type SessionMachines } from "../../control-plane/session-machines.ts";
 import { type WorldRecords } from "../../control-plane/world-records.ts";
 import { parseJsonObject, response, type Response, errorResponse } from "./http.ts";
@@ -17,9 +18,11 @@ export type PromotionDependencies = Readonly<{
   sources: ControlPlaneSources;
   machines: Pick<SessionMachines, "promote">;
   worlds: Pick<WorldRecords, "switchReleaseBeforeFirstStart">;
+  /** The host .env's names: a promotion starts the world on its host (ADR-0106). */
+  hostEnv: HostEnvKeys;
 }>;
 
-export function promotionFeature({ sources, machines, worlds }: PromotionDependencies) {
+export function promotionFeature({ sources, machines, worlds, hostEnv }: PromotionDependencies) {
   // Promote a fleet world's open wipe to another ready release of its preset
   // (ADR-0078), keeping its save. The promote-release machine saves, keeps the
   // pre-promotion backup, reconciles on the host placement gives the world,
@@ -67,6 +70,8 @@ export function promotionFeature({ sources, machines, worlds }: PromotionDepende
     });
     if (plan.kind === "reject") return errorResponse(plan.status, plan.error);
     if (plan.kind === "switch") return switchResponse(plan, worldId, identity, switchRelease);
+    const missing = await missingGameSecrets(hostEnv, gameId);
+    if (missing.length > 0) return errorResponse(409, "missing_game_secrets", { keys: missing });
     const operationId = `panel-promote-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 8)}`;
     await machines.promote({
       operationId, serverId, gameId, presetId: plan.record.preset.id, worldId, worldName: plan.record.displayName,

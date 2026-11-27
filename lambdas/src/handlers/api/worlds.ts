@@ -1,4 +1,5 @@
 import { type Identity } from "../../access/domain.ts";
+import { type HostEnvKeys, missingGameSecrets } from "../../control-plane/launch-preflight.ts";
 import { type SessionMachines } from "../../control-plane/session-machines.ts";
 import { type WorldRecords } from "../../control-plane/world-records.ts";
 import { type SessionAction, planFleetSessionOperation, planSessionOperation, stoppedHostRecoverySession, type SessionPlan, type FleetSessionPlan } from "../../control-plane/session-control.ts";
@@ -179,9 +180,11 @@ export type WorldsDependencies = Readonly<{
   machines: SessionMachines;
   gateway: Pick<ConsoleGateway, "send" | "read" | "reloadWhitelist">;
   backupReleases: () => BackupReleaseSources;
+  /** The host .env's names, checked before a start (ADR-0106). */
+  hostEnv: HostEnvKeys;
 }>;
 
-export function worldsFeature({ sources, worlds, machines, gateway, backupReleases }: WorldsDependencies) {
+export function worldsFeature({ sources, worlds, machines, gateway, backupReleases, hostEnv }: WorldsDependencies) {
   async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string, body?: string): Promise<Response> {
     const players = action === "stop" ? stopPlayersPolicy(identity, body) : "refuse";
     if (typeof players !== "string") return players;
@@ -204,6 +207,10 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     if (plan.kind === "reject") return errorResponse(plan.reason === "unknown_world" ? 404 : 409, plan.reason);
     const recoverySessionId = action === "stop" && !fleet ? stoppedHostRecoverySession(worldId, configuredHosts, located.record) : null;
     if (plan.kind === "noop" && recoverySessionId === null) return response(200, { result: plan.reason });
+    if (action === "start") {
+      const missing = await missingGameSecrets(hostEnv, gameId);
+      if (missing.length > 0) return errorResponse(409, "missing_game_secrets", { keys: missing });
+    }
     // A fleet world kept warm asks placement to keep its launched host after the stop (ADR-0048).
     const own = worldRecords.find((record) => record.worldId === worldId);
     const warm = fleet && own?.warm === true;

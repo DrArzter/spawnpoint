@@ -2,7 +2,6 @@ import type { Footprint } from "../domain/placement.ts";
 import { LifecycleConflict, beginMoving, type LifecycleRecord } from "../domain/lifecycle.ts";
 import { PlacementConflict, markReclaimed, release } from "../domain/placement.ts";
 import type { LifecycleStore } from "../lifecycle/coordinator.ts";
-import type { SessionChangeNotifier } from "../lifecycle/session-changes.ts";
 import type { PlacementStore } from "../lifecycle/placement-coordinator.ts";
 import type { SessionVolumes } from "./session-volume-sweep.ts";
 import { sessionLifecycleKey } from "./world-session.ts";
@@ -47,8 +46,6 @@ export type InterruptionPorts = Readonly<{
   lifecycle: Pick<LifecycleStore, "read" | "compareAndSet">;
   volumes: Pick<SessionVolumes, "list">;
   moves: SessionMoves;
-  /** Tells the panels a record changed; a ready world turns moving with no workflow running. */
-  changed?: SessionChangeNotifier;
 }>;
 
 export type InterruptionResult = Readonly<{ hostId: string; worlds: string[]; skipped: string[] }>;
@@ -72,10 +69,7 @@ export async function markHostSessionsMoving(
   for (const reservation of host.record.reservations) {
     const serverId = sessionLifecycleKey(reservation.worldId, reservation.worldId, "fleet");
     const moved = await updateLifecycle(ports, serverId, (record) => beginMoving(record, reservation.sessionId, nowEpochSeconds));
-    if (moved) {
-      worlds.push(reservation.worldId);
-      await ports.changed?.(serverId);
-    }
+    if (moved) worlds.push(reservation.worldId);
     else {
       skipped.push(reservation.worldId);
       log.warn("session does not move", hostId, reservation.worldId, reservation.sessionId);

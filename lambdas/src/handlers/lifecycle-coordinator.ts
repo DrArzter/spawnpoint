@@ -1,14 +1,10 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
-
-import { eventBus } from "../control-plane/aws-event-bus.ts";
 
 import { createLifecycleCoordinator, type CoordinatorInput } from "../lifecycle/coordinator.ts";
 import { dynamoLifecycleStores } from "../lifecycle/dynamo-lifecycle-stores.ts";
 import { createPlacementCoordinator, isPlacementInput, type PlacementInput } from "../lifecycle/placement-coordinator.ts";
 import { createSessionHistoryCoordinator, isSessionHistoryInput, type SessionHistoryInput } from "../lifecycle/session-history.ts";
-import { sessionChangeNotifier } from "../lifecycle/session-changes.ts";
 
 const tableName = process.env.LIFECYCLE_TABLE_NAME;
 if (!tableName) throw new Error("LIFECYCLE_TABLE_NAME is required");
@@ -19,7 +15,7 @@ const { store, placementStore, sessionHistoryStore } = dynamoLifecycleStores(
   tableName,
 );
 
-const lifecycle = createLifecycleCoordinator(store, undefined, sessionChangeNotifier(eventBus(new EventBridgeClient({})), console));
+const lifecycle = createLifecycleCoordinator(store);
 const placement = createPlacementCoordinator(placementStore);
 const sessionHistory = createSessionHistoryCoordinator(sessionHistoryStore);
 

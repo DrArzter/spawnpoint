@@ -11,6 +11,12 @@ resource "aws_dynamodb_table" "control_plane_view" {
 
   deletion_protection_enabled = true
 
+  # A projection write tells open panels to reload (ADR-0104). The filter needs
+  # only the key, so the stream carries no item: no identity of a subscription
+  # ticket or connection reaches it.
+  stream_enabled   = true
+  stream_view_type = "KEYS_ONLY"
+
   attribute {
     name = "pk"
     type = "S"

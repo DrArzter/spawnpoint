@@ -2,7 +2,9 @@ import { ApiGatewayManagementApiClient } from "@aws-sdk/client-apigatewaymanagem
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
-import { controlPlaneConnectionItem, invalidatesPanels, postToConnections, subscriptionTicketKey } from "../control-plane/subscriptions.ts";
+import { controlPlaneConnectionItem, postToConnections, subscriptionTicketKey } from "../control-plane/subscriptions.ts";
+import { isStreamBatch, streamChanges } from "../control-plane/dynamo-stream-changes.ts";
+import { panelReloads } from "../control-plane/panel-changes.ts";
 import { websocketConnections } from "../control-plane/aws-websocket-connections.ts";
 import { dynamoTable } from "../control-plane/dynamo-table.ts";
 
@@ -12,18 +14,18 @@ type WebSocketEvent = Readonly<{
   queryStringParameters?: Record<string, string | undefined>;
 }>;
 
-type ProjectionEvent = Readonly<{
-  source?: string;
-  "detail-type"?: string;
-  detail?: { observedAtEpochMilliseconds?: unknown };
-}>;
-
 type Response = Readonly<{ statusCode: number; body: string }>;
 
-const viewTable = process.env.CONTROL_PLANE_VIEW_TABLE;
-if (!viewTable) throw new Error("CONTROL_PLANE_VIEW_TABLE is required");
-const callbackUrl = process.env.CONTROL_PLANE_WEBSOCKET_CALLBACK_URL;
-if (!callbackUrl) throw new Error("CONTROL_PLANE_WEBSOCKET_CALLBACK_URL is required");
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required`);
+  return value;
+}
+
+// The composition root (ADR-0092): the clients, then the adapters over them.
+const viewTable = required("CONTROL_PLANE_VIEW_TABLE");
+const lifecycleTable = required("LIFECYCLE_TABLE_NAME");
+const callbackUrl = required("CONTROL_PLANE_WEBSOCKET_CALLBACK_URL");
 
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const table = dynamoTable(document);
@@ -57,17 +59,6 @@ async function connect(event: WebSocketEvent): Promise<Response> {
   return response(200, "Connected");
 }
 
-async function disconnect(event: WebSocketEvent): Promise<Response> {
-  const connectionId = event.requestContext?.connectionId;
-  if (connectionId) {
-    await table.delete({
-      TableName: viewTable,
-      Key: { pk: "SUBSCRIPTIONS#CONTROL_PLANE", sk: `CONNECTION#${connectionId}` },
-    });
-  }
-  return response(200, "Disconnected");
-}
-
 async function removeConnection(connectionId: string): Promise<void> {
   await table.delete({
     TableName: viewTable,
@@ -75,9 +66,13 @@ async function removeConnection(connectionId: string): Promise<void> {
   });
 }
 
-async function publishInvalidation(event: ProjectionEvent): Promise<void> {
-  const observedAt = event.detail?.observedAtEpochMilliseconds;
-  if (typeof observedAt !== "number" || !Number.isSafeInteger(observedAt)) return;
+async function disconnect(event: WebSocketEvent): Promise<Response> {
+  const connectionId = event.requestContext?.connectionId;
+  if (connectionId) await removeConnection(connectionId);
+  return response(200, "Disconnected");
+}
+
+async function publishInvalidation(observedAt: number): Promise<void> {
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
   let exclusiveStartKey: Record<string, unknown> | undefined;
   const failures: unknown[] = [];
@@ -100,14 +95,19 @@ async function publishInvalidation(event: ProjectionEvent): Promise<void> {
   if (failures.length > 0) throw new AggregateError(failures, "some connections were not told");
 }
 
-export async function handler(event: WebSocketEvent | ProjectionEvent): Promise<Response | void> {
-  if ("requestContext" in event) {
-    const routeKey = event.routeKey ?? event.requestContext?.routeKey;
-    if (routeKey === "$connect") return connect(event);
-    if (routeKey === "$disconnect") return disconnect(event);
-    return response(400, "Unsupported route");
-  }
-  if ("source" in event && invalidatesPanels(event)) {
-    await publishInvalidation(event);
-  }
+// The message names nothing, so a batch that changed several records sends it once.
+async function reloadPanels(batch: Readonly<{ Records: readonly unknown[] }>): Promise<void> {
+  const reloads = panelReloads(streamChanges(batch), { lifecycle: lifecycleTable, view: viewTable });
+  if (reloads.targets.length === 0) return;
+  console.info("panel_reload", JSON.stringify({ targets: reloads.targets }));
+  await publishInvalidation(reloads.observedAtEpochMilliseconds ?? Date.now());
+}
+
+export async function handler(event: unknown): Promise<Response | void> {
+  if (isStreamBatch(event)) return reloadPanels(event);
+  const socket = event as WebSocketEvent;
+  const routeKey = socket.routeKey ?? socket.requestContext?.routeKey;
+  if (routeKey === "$connect") return connect(socket);
+  if (routeKey === "$disconnect") return disconnect(socket);
+  return response(400, "Unsupported route");
 }

@@ -217,6 +217,8 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "ses:ListTagsForResource",
       "sns:Get*",
       "sns:List*",
+      "sqs:GetQueueAttributes",
+      "sqs:ListQueueTags",
       "ssm:Describe*",
       "ssm:GetParameter",
       "states:Describe*",
@@ -279,6 +281,8 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "events:PutTargets",
       "events:TagResource",
       "lambda:AddPermission",
+      # The panel streams reach the subscriptions Lambda through mappings (ADR-0104).
+      "lambda:CreateEventSourceMapping",
       "lambda:CreateFunction",
       "lambda:CreateFunctionUrlConfig",
       # The log assistant's worker is never retried (ADR-0094).
@@ -286,6 +290,7 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "lambda:TagResource",
       "lambda:UpdateFunctionCode",
       "lambda:UpdateFunctionConfiguration",
+      "lambda:UpdateEventSourceMapping",
       "lambda:UpdateFunctionUrlConfig",
       "logs:CreateLogGroup",
       "logs:PutRetentionPolicy",
@@ -311,6 +316,19 @@ data "aws_iam_policy_document" "github_deploy_iam" {
       "states:UpdateStateMachine",
     ]
     resources = ["*"]
+  }
+
+  # The dead-letter queue of the panel streams (ADR-0104). Creating and
+  # configuring spawnpoint queues only; no queue is deletable by the pipeline.
+  statement {
+    sid    = "ManageOnlySpawnpointQueues"
+    effect = "Allow"
+    actions = [
+      "sqs:CreateQueue",
+      "sqs:SetQueueAttributes",
+      "sqs:TagQueue",
+    ]
+    resources = ["arn:aws:sqs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:spawnpoint-*"]
   }
 
   # The SES sender identity of the access-api root. Creating and tagging
@@ -683,6 +701,8 @@ data "aws_iam_policy_document" "github_plan_iam" {
       "ses:ListTagsForResource",
       "sns:Get*",
       "sns:List*",
+      "sqs:GetQueueAttributes",
+      "sqs:ListQueueTags",
       "states:Describe*",
       "states:List*",
       "states:ValidateStateMachineDefinition",

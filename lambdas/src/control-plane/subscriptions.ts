@@ -40,13 +40,6 @@ export function controlPlaneConnectionItem(
   };
 }
 
-/** The bus events that tell open panels to read the snapshot again. */
-export const INVALIDATING_DETAIL_TYPES: readonly string[] = ["Projection Updated", "Session Changed"];
-
-export function invalidatesPanels(event: Readonly<{ source?: string; "detail-type"?: string }>): boolean {
-  return event.source === "spawnpoint.control-plane" && INVALIDATING_DETAIL_TYPES.includes(event["detail-type"] ?? "");
-}
-
 /**
  * Posts to every connection of one page. One failed post does not keep the
  * message from the others; the failures are raised together at the end, so

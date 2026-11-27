@@ -3,12 +3,12 @@ import { configuredHosts } from "../session";
 
 /*
  * The snapshot is read again while anything in it is on its way somewhere, so
- * the panel follows a change even when the socket's message never arrives.
+ * the panel follows a change even when the socket's message never arrives. The
+ * tables send that message from their own change streams (ADR-0104), so this
+ * poll is only the safety net for a lost one, and reads at a safety net's pace.
  */
 
-export const SETTLE_POLL_MS = 5000;
-export const SETTLE_SLOW_POLL_MS = 15_000;
-export const SETTLE_SLOW_AFTER_MS = 10 * 60 * 1000;
+export const SETTLE_POLL_MS = 30_000;
 /** After this long the poll ends; the socket and the reload on show take over (a stuck state does not poll for ever). */
 export const SETTLE_GIVE_UP_AFTER_MS = 30 * 60 * 1000;
 /** How long an accepted request keeps the poll alive while its operation is not yet in the snapshot. */
@@ -31,8 +31,7 @@ export function unsettled(snapshot: ControlPlaneSnapshot | null): boolean {
 
 /** How long to wait before the next read, by how long the snapshot has been unsettled; null ends the poll. */
 export function settlePollDelay(unsettledForMs: number): number | null {
-  if (unsettledForMs >= SETTLE_GIVE_UP_AFTER_MS) return null;
-  return unsettledForMs < SETTLE_SLOW_AFTER_MS ? SETTLE_POLL_MS : SETTLE_SLOW_POLL_MS;
+  return unsettledForMs >= SETTLE_GIVE_UP_AFTER_MS ? null : SETTLE_POLL_MS;
 }
 
 /**

@@ -2,11 +2,8 @@ import { EC2Client } from "@aws-sdk/client-ec2";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { SFNClient } from "@aws-sdk/client-sfn";
-import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 
 import { awsSessionMoves } from "../control-plane/aws-session-moves.ts";
-import { eventBus } from "../control-plane/aws-event-bus.ts";
-import { sessionChangeNotifier } from "../lifecycle/session-changes.ts";
 import { awsSessionVolumes } from "../control-plane/aws-session-volumes.ts";
 import { interruptionEvent, markHostSessionsMoving, moveHostSessions } from "../control-plane/spot-interruption.ts";
 import { dynamoLifecycleStores } from "../lifecycle/dynamo-lifecycle-stores.ts";
@@ -22,7 +19,6 @@ function required(name: string): string {
 const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const volumes = awsSessionVolumes(new EC2Client({}));
 const sfn = new SFNClient({});
-const changed = sessionChangeNotifier(eventBus(new EventBridgeClient({})), console);
 
 export async function handler(event: unknown): Promise<unknown> {
   const parsed = interruptionEvent(event);
@@ -33,7 +29,6 @@ export async function handler(event: unknown): Promise<unknown> {
     lifecycle: store,
     volumes,
     moves: awsSessionMoves(sfn, required("START_STATE_MACHINE_ARN"), process.env.SPAWNPOINT_APP_COMMIT || "main"),
-    changed,
   };
   const now = Math.floor(Date.now() / 1000);
   switch (parsed.kind) {

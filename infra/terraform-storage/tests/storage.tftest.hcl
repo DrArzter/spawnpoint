@@ -101,6 +101,11 @@ run "persistent_storage_is_private_versioned_and_recoverable" {
     ])
     error_message = "The control-plane view must be durable, encrypted, on-demand and able to expire bounded event history."
   }
+
+  assert {
+    condition     = aws_dynamodb_table.control_plane_view.stream_enabled && aws_dynamodb_table.control_plane_view.stream_view_type == "KEYS_ONLY"
+    error_message = "A projection write reaches open panels through the view table's stream, which carries keys only, so no subscription identity enters it (ADR-0104)."
+  }
 }
 
 run "release_versions_expire_but_no_release_can_be_deleted" {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
 
 import type { ControlPlaneSnapshot, Game } from "../src/model.ts";
-import { owesShowReload, SETTLE_EXPECT_MS, SETTLE_GIVE_UP_AFTER_MS, SETTLE_POLL_MS, SETTLE_SLOW_AFTER_MS, SETTLE_SLOW_POLL_MS, settlePollDelay, settleSignature, settleWanted, SHOW_RELOAD_GAP_MS, startSettlePoll, unsettled } from "../src/core/live-state.ts";
+import { owesShowReload, SETTLE_EXPECT_MS, SETTLE_GIVE_UP_AFTER_MS, SETTLE_POLL_MS, settlePollDelay, settleSignature, settleWanted, SHOW_RELOAD_GAP_MS, startSettlePoll, unsettled } from "../src/core/live-state.ts";
 import { deriveServerState } from "../src/core/useConsole.ts";
 
 afterEach(() => { mock.timers.reset(); });
@@ -31,12 +31,10 @@ test("a snapshot is unsettled while anything in it is on its way", () => {
   assert.equal(unsettled(snapshot({ games: [{ ...game("ready"), presets: [{ buildStatus: "building" } as never] }] })), true);
 });
 
-test("the poll reads every five seconds, then every fifteen after ten minutes", () => {
+test("the poll is a safety net: it reads every thirty seconds for as long as it runs", () => {
+  assert.equal(SETTLE_POLL_MS, 30_000);
   assert.equal(settlePollDelay(0), SETTLE_POLL_MS);
-  assert.equal(SETTLE_POLL_MS, 5000);
-  assert.equal(settlePollDelay(SETTLE_SLOW_AFTER_MS - 1), SETTLE_POLL_MS);
-  assert.equal(settlePollDelay(SETTLE_SLOW_AFTER_MS), SETTLE_SLOW_POLL_MS);
-  assert.equal(SETTLE_SLOW_POLL_MS, 15_000);
+  assert.equal(settlePollDelay(SETTLE_GIVE_UP_AFTER_MS - 1), SETTLE_POLL_MS);
 });
 
 test("a start that ends with no socket message shows as running at the next tick", async () => {
@@ -71,33 +69,28 @@ test("a hidden tab makes no read, and showing it waits a full delay", async () =
   poll.stop();
 });
 
-test("a failed reload keeps the poll going, and slows after ten minutes", async () => {
+test("a failed reload keeps the poll going until it is stopped", async () => {
   mock.timers.enable({ apis: ["setTimeout", "Date"] });
   let reads = 0;
   const poll = startSettlePoll({ reload: async () => { reads += 1; throw new Error("offline"); }, visible: () => true });
   await after(SETTLE_POLL_MS);
   await after(SETTLE_POLL_MS);
   assert.equal(reads, 2);
-  await after(SETTLE_SLOW_AFTER_MS);
-  const before = reads;
-  await after(SETTLE_SLOW_POLL_MS);
-  assert.equal(reads, before + 1);
   poll.stop();
-  await after(SETTLE_SLOW_POLL_MS * 4);
-  assert.equal(reads, before + 1);
+  await after(SETTLE_POLL_MS * 4);
+  assert.equal(reads, 2);
 });
 
 test("a state that never settles stops the poll after thirty minutes", async () => {
-  assert.equal(settlePollDelay(SETTLE_GIVE_UP_AFTER_MS - 1), SETTLE_SLOW_POLL_MS);
   assert.equal(settlePollDelay(SETTLE_GIVE_UP_AFTER_MS), null);
   mock.timers.enable({ apis: ["setTimeout", "Date"] });
   let reads = 0;
   startSettlePoll({ reload: async () => { reads += 1; }, visible: () => true });
   for (let elapsed = 0; elapsed < SETTLE_GIVE_UP_AFTER_MS; elapsed += SETTLE_POLL_MS) await after(SETTLE_POLL_MS);
   const atCap = reads;
-  // 10 min at 5 s and 20 min at 15 s, give or take the one in flight at the cap.
-  assert.ok(atCap >= 120 + 80 - 1 && atCap <= 120 + 80 + 1, String(atCap));
-  for (let index = 0; index < 20; index += 1) await after(SETTLE_SLOW_POLL_MS);
+  // 30 min at 30 s, give or take the one in flight at the cap.
+  assert.ok(atCap >= 60 - 1 && atCap <= 60 + 1, String(atCap));
+  for (let index = 0; index < 20; index += 1) await after(SETTLE_POLL_MS);
   assert.equal(reads, atCap, "no read after the cap");
 });
 
@@ -145,10 +138,10 @@ test("a poll that hit its cap reads again once a new poll starts for a new trans
   mock.timers.enable({ apis: ["setTimeout", "Date"] });
   let reads = 0;
   const capped = startSettlePoll({ reload: async () => { reads += 1; }, visible: () => true });
-  for (let elapsed = 0; elapsed <= SETTLE_GIVE_UP_AFTER_MS; elapsed += SETTLE_SLOW_POLL_MS) await after(SETTLE_SLOW_POLL_MS);
+  for (let elapsed = 0; elapsed <= SETTLE_GIVE_UP_AFTER_MS; elapsed += SETTLE_POLL_MS) await after(SETTLE_POLL_MS);
   const atCap = reads;
   capped.show();
-  await after(SETTLE_SLOW_POLL_MS * 4);
+  await after(SETTLE_POLL_MS * 4);
   assert.equal(reads, atCap, "the capped poll stays quiet, even when shown");
   // The signature changed, so the hook stops the old poll and starts a new one.
   capped.stop();

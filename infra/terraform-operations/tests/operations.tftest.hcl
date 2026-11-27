@@ -503,10 +503,9 @@ run "control_plane_projection_is_event_driven_scoped_and_recoverable" {
       one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.resources if statement.sid == "WriteControlPlaneProjection"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view"]),
       one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.resources if statement.sid == "ReadLifecycleForRecovery"]) == toset(["arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"]),
       one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.resources if statement.sid == "RecoverOnlyThroughFencedStop"]) == toset([local.lifecycle_v2_stop_arn]),
-      one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.actions if statement.sid == "PublishProjectionInvalidations"]) == toset(["events:PutEvents"]),
-      one([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement.resources if statement.sid == "PublishProjectionInvalidations"]) == toset(["arn:aws:events:eu-central-1:123456789012:event-bus/default"]),
+      length([for statement in data.aws_iam_policy_document.control_plane_projector.statement : statement if contains(statement.actions, "events:PutEvents")]) == 0,
     ])
-    error_message = "The projector may update only its view, read lifecycle, recover through the fenced stop adapter and publish sanitized invalidations."
+    error_message = "The projector may update only its view, read lifecycle and recover through the fenced stop adapter; the view table's stream tells the panels (ADR-0104)."
   }
 
   assert {

@@ -42,7 +42,7 @@ const THEMES: readonly { id: ThemePreference; label: string }[] = [
   { id: "dark", label: t("profile.dark") },
 ];
 
-function Appearance({ model, look, language }: Readonly<{ model: AppearanceModel; look: LookModel; language: LookModel }>) {
+function Appearance({ model, look, language }: Readonly<{ model: AppearanceModel; look: LookModel | null; language: LookModel }>) {
   const notify = useSnackbar();
   const [draft, setDraft] = useState(model.accent);
 
@@ -70,12 +70,14 @@ function Appearance({ model, look, language }: Readonly<{ model: AppearanceModel
             {THEMES.map((option) => <Choice key={option.id} onClick={() => save({ theme: option.id })} pressed={model.preference === option.id}>{option.label}</Choice>)}
           </Choices>
         </div>
-        <div className="t-setting">
-          <span className="t-setting-label">{t("profile.look")}</span>
-          <Choices label={t("profile.look")}>
-            {look.options.map((option) => <Choice data-action={option.choose.id} key={option.id} onClick={option.choose.run} pressed={option.id === look.current} title={option.choose.hint}>{option.name}</Choice>)}
-          </Choices>
-        </div>
+        {look && (
+          <div className="t-setting">
+            <span className="t-setting-label">{t("profile.look")}</span>
+            <Choices label={t("profile.look")}>
+              {look.options.map((option) => <Choice data-action={option.choose.id} key={option.id} onClick={option.choose.run} pressed={option.id === look.current} title={option.choose.hint}>{option.name}</Choice>)}
+            </Choices>
+          </div>
+        )}
         <div className="t-setting">
           <span className="t-setting-label">{t("profile.language")}</span>
           <Choices label={t("profile.language")}>

@@ -22,7 +22,11 @@ from the route table, and MCP and the assistant read them from there, so a new
 feature reaches both by declaring its tool once.
 `capabilities.ts` derives advertised capabilities from the composed routes;
 the session route receives a callback rather than importing the composition
-root. Keep dependencies directed: feature handlers never import route groups,
+root. The feature flags (ADR-0107) switch capabilities off at run time:
+`feature-flags.ts` is the port and its 60-second cache, `ssm-feature-flags.ts`
+the adapter, and `apiDeployment` in `route-table.ts` applies them to the
+session and, through the dispatcher and tool calls, refuses the routes of a
+capability that is off with 404 `feature_off`. Keep dependencies directed: feature handlers never import route groups,
 `route-table.ts`, or the Lambda entry.
 
 `dispatcher.ts` is the single HTTP authentication/authorization boundary. It
@@ -69,6 +73,7 @@ the files that still call the SDK directly; the access feature is most of them.
    authority and capabilities with deployed paths; module-boundary tests reject
    cycles and reverse dependencies.
 
-The entry re-exports `routes` and `deployedCapabilities` from `route-table.ts`
-for compatibility. New tests import the owning module, or `route-table.ts`,
+The entry builds its deployment with `apiDeployment` under the SSM flags and
+exports its `routes` and `deployedCapabilities`; `route-table.ts` also exports
+the same names for a deployment with every flag on. New tests import the owning module, or `route-table.ts`,
 rather than loading the whole API.

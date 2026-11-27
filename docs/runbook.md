@@ -1280,6 +1280,22 @@ Two things `shared` cannot do, and should not surprise anyone: two configured wo
 turns, because they share the game's lifecycle record (fleet worlds have their own, ADR-0062), and a world whose
 record says `configured` starts only on the configured host (ADR-0097).
 
+## Feature flags (ADR-0107)
+
+The parameter `/spawnpoint/flags` switches a panel feature off, or narrows the skins, without a release. It holds JSON:
+`off` lists capability names (the keys of `capabilityRoutes` in `lambdas/src/handlers/api/capabilities.ts`), and
+`skins` lists the skins the panel may wear. Both are optional. Terraform creates it as `{}` and does not overwrite it.
+
+```bash
+aws ssm get-parameter --name /spawnpoint/flags --query Parameter.Value --output text
+aws ssm put-parameter --name /spawnpoint/flags --overwrite --type String --value '{"off":["worldLog"]}'
+aws ssm put-parameter --name /spawnpoint/flags --overwrite --type String --value '{}'   # everything on again
+```
+
+A change applies within about a minute (the API caches the flags for 60 seconds per container). A switched-off route
+answers 404 `feature_off`. Invalid JSON keeps the last good value; the API logs `feature flags:` in
+`/aws/lambda/spawnpoint-access-api`. A `skins` list must include `console`, or the panel ignores it.
+
 ## Delete the persistent host (ADR-0100)
 
 Once every world has moved to the fleet, the worlds page shows "No world is placed on spawnpoint-game-host" with

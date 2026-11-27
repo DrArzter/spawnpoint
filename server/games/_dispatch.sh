@@ -33,7 +33,7 @@
 #                              the slot. GAME_RCON_PORT is read as its old name
 #   GAME_START_TIMEOUT_SECONDS how long start.sh waits for the game to serve: the
 #                              manifest's start_timeout_seconds, 600 when unstated
-#                              (ADR-0106). required_secrets is read before launch
+#                              (ADR-0108). required_secrets is read before launch
 #   GAME_SLOTTABLE             true when the game can run on a slot other than zero:
 #                              its client connects to the port the address names and
 #                              the server announces no other. false refuses such a slot

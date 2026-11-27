@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# What a game needs before a host is launched for it (ADR-0106), held for every
+# What a game needs before a host is launched for it (ADR-0108), held for every
 # game the same way:
 #   * a Compose variable that must be set (`${VAR:?...}`) is either declared in the
 #     manifest's required_secrets, which the API checks in SSM before a launch,

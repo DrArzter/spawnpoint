@@ -96,7 +96,7 @@ test("a module names its look, and one with no presentation names none", () => {
   assert.ok(gameModules.some((module) => module.presentation.scene === null), "a module without a presentation falls back to the skins' defaults");
 });
 
-// ADR-0106: what a launch needs is the manifest's, read the same way for every game.
+// ADR-0108: what a launch needs is the manifest's, read the same way for every game.
 test("every manifest lists its required secrets, and a start timeout is a bounded whole number", async () => {
   for (const module of gameModules) {
     const manifest = JSON.parse(await readFile(new URL(`${module.id}/game.json`, games), "utf8")) as Record<string, unknown>;

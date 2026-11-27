@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { STATES, SURFACES } from "../tools/ui-audit/states.mjs";
+import { skinOff } from "./support/skins.ts";
 
 /*
  * The UI gate opens every surface the skins can show (web/tools/ui-audit).
@@ -27,7 +28,7 @@ function surfacesOf(source: string): Map<string, number> {
 }
 
 for (const skin of Object.keys(SURFACES) as (keyof typeof SURFACES)[]) {
-  test(`ui-audit states: every ${skin} surface is opened by a state`, () => {
+  test(`ui-audit states: every ${skin} surface is opened by a state`, { skip: skinOff(skin) }, () => {
     const folder = new URL(`../src/skins/${skin}/`, import.meta.url);
     const listed: Record<string, Record<string, readonly string[]>> = SURFACES[skin];
     const drawn = new Map(readdirSync(folder).filter((file) => file.endsWith(".tsx")).map((file) => [file, surfacesOf(readFileSync(new URL(file, folder), "utf8"))] as const));

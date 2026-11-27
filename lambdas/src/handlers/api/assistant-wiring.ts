@@ -35,7 +35,12 @@ export const deployedAssistant = assistantFeature({
 });
 
 /** The route table and its tools, handed in by the composition root (ADR-0095). */
-export type AssistantCatalogue = Readonly<{ routes: Readonly<Record<string, Route>>; tools: readonly CatalogueTool[] }>;
+export type AssistantCatalogue = Readonly<{
+  routes: Readonly<Record<string, Route>>;
+  tools: readonly CatalogueTool[];
+  /** The route keys the feature flags switched off (ADR-0107). */
+  switchedOff?: () => Promise<ReadonlySet<string>>;
+}>;
 
 /** What the assistant's changes are recorded as, wherever a route records an agent. */
 export const ASSISTANT_AGENT = { clientId: "assistant", name: "Assistant" } as const;
@@ -50,9 +55,9 @@ export function deployedConversations(catalogue: () => AssistantCatalogue): Conv
     budget: tableAssistantBudget(accessTable, tableName),
     startTurn: lambdaTurnStarter(lambda, workerName),
     runWrite: async (identity, name, args) => {
-      const { routes, tools } = catalogue();
+      const { routes, tools, switchedOff } = catalogue();
       const tool = tools.find((candidate) => candidate.facts.name === name && candidate.facts.effect === "write");
-      return tool === undefined ? null : runTool(routes, tool, identity, args, ASSISTANT_AGENT);
+      return tool === undefined ? null : runTool(routes, tool, identity, args, ASSISTANT_AGENT, await switchedOff?.());
     },
     tools: () => catalogue().tools.map((tool) => ({ name: tool.facts.name, title: tool.facts.title })),
     newId: randomUUID,

@@ -35,7 +35,7 @@ function storage(t: TestContext, table: Table) {
 }
 
 async function body(): Promise<Record<string, unknown>> {
-  const result = await session(configuredAccount, []);
+  const result = await session(configuredAccount, { capabilities: [], skins: null });
   assert.equal(result.statusCode, 200);
   return JSON.parse(result.body as string) as Record<string, unknown>;
 }
@@ -55,7 +55,7 @@ test("a claim made by another request during this one leaves the configured acco
 test("a failed claim on an unclaimed bootstrap is still an error", async (t) => {
   storage(t, { account: { pk: "TELEGRAM#1000", sk: "ACCOUNT", display_name: "Configured", status: "OBSERVED" }, claims: [undefined] });
   t.mock.method(console, "error", () => undefined);
-  await assert.rejects(session(configuredAccount, []), { name: "TransactionCanceledException" });
+  await assert.rejects(session(configuredAccount, { capabilities: [], skins: null }), { name: "TransactionCanceledException" });
 });
 
 test("a member does not receive the Owner's Telegram id from a claimed bootstrap", async (t) => {
@@ -95,7 +95,7 @@ test("a password sign-in copies the linked Telegram photo once, and shows the id
     if (key?.pk === "SYSTEM") return { Item: claim };
     return {};
   });
-  const result = await session(passwordAccount, []);
+  const result = await session(passwordAccount, { capabilities: [], skins: null });
   const profile = (JSON.parse(result.body as string) as { profile: { provider: string; photoUrl: string | null } }).profile;
   assert.equal(profile.provider, "password");
   assert.equal(stored.length, 1, "the photo is copied into the avatar bucket");

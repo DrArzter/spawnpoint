@@ -658,6 +658,18 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
   }
 
   assert {
+    condition = alltrue([
+      aws_ssm_parameter.feature_flags.name == "/spawnpoint/flags",
+      aws_ssm_parameter.feature_flags.type == "String",
+      aws_ssm_parameter.feature_flags.value == "{}",
+      aws_lambda_function.access_api.environment[0].variables.FEATURE_FLAGS_PARAMETER == "/spawnpoint/flags",
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "ReadFeatureFlags"]) == toset(["ssm:GetParameter"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "ReadFeatureFlags"]) == toset(["arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/flags"]),
+    ])
+    error_message = "The API reads the feature flags (ADR-0107) from /spawnpoint/flags, created empty, and may read that one parameter only."
+  }
+
+  assert {
     condition     = aws_ssm_parameter.app_commit.name == "/spawnpoint/host/app-commit" && aws_ssm_parameter.app_commit.value == aws_lambda_function.access_api.environment[0].variables.SPAWNPOINT_APP_COMMIT
     error_message = "A running host brings its checkout to the same commit a launched host checks out (ADR-0067)."
   }

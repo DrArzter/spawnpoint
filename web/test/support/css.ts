@@ -363,47 +363,50 @@ export type CssRuleOptions = Readonly<{
   scope?: string;
   /** Rules that may hold a time, easing or colour literal (the token blocks). Omit to skip the check. */
   mayHoldLiterals?: (rule: Rule) => boolean;
+  /** Why every check skips, for a sheet whose skin is switched off (ADR-0106). */
+  skip?: string | false;
 }>;
 
 /** Registers the rules AGENTS.md sets for a sheet, under a name for the sheet. */
 export function cssRuleTests(name: string, options: CssRuleOptions): void {
-  const { rules, code, prefix, shared = new Set<string>(), scope, mayHoldLiterals } = options;
+  const { rules, code, prefix, shared = new Set<string>(), scope, mayHoldLiterals, skip = false } = options;
+  const check = (title: string, fn: () => void) => { test(title, { skip }, fn); };
 
-  test(`${name}: every styled class is used by the source`, () => {
+  check(`${name}: every styled class is used by the source`, () => {
     const dead = deadClasses(classesStyled(rules), code);
     assert.deepEqual(dead, [], `styled but never rendered: ${dead.join(", ")}`);
   });
 
   if (prefix !== undefined) {
-    test(`${name}: every styled class carries the ${prefix} prefix`, () => {
+    check(`${name}: every styled class carries the ${prefix} prefix`, () => {
       const bare = [...classesStyled(rules)].filter((cls) => !cls.startsWith(prefix) && !shared.has(cls));
       assert.deepEqual(bare, [], `the dead-class check sees only ${prefix}* names: ${bare.join(", ")}`);
     });
   }
 
-  test(`${name}: no selector sets the same property twice in one cascade context`, () => {
+  check(`${name}: no selector sets the same property twice in one cascade context`, () => {
     const clashes = overwrittenProperties(rules);
     assert.deepEqual(clashes, [], `consolidate into one base rule:\n${clashes.join("\n")}`);
   });
 
-  test(`${name}: no selector sets a shorthand and its longhand in one cascade context`, () => {
+  check(`${name}: no selector sets a shorthand and its longhand in one cascade context`, () => {
     const clashes = shorthandClashes(rules);
     assert.deepEqual(clashes, [], `set the property once:\n${clashes.join("\n")}`);
   });
 
-  test(`${name}: a hover state changes no box's size`, () => {
+  check(`${name}: a hover state changes no box's size`, () => {
     const grows = hoverSizeChanges(rules);
     assert.deepEqual(grows, [], `a hover rule may change colour, shadow or a transform, not a size (is a selector list split by another rule?):\n${grows.join("\n")}`);
   });
 
   if (scope !== undefined) {
-    test(`${name}: every rule is scoped to the skin`, () => {
+    check(`${name}: every rule is scoped to the skin`, () => {
       assert.deepEqual(unscoped(rules, scope), []);
     });
   }
 
   if (mayHoldLiterals !== undefined) {
-    test(`${name}: times, easings and colours are tokens`, () => {
+    check(`${name}: times, easings and colours are tokens`, () => {
       assert.deepEqual(rawLiterals(rules.filter((rule) => !mayHoldLiterals(rule))), []);
     });
   }

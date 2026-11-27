@@ -70,8 +70,8 @@ function accountProfile(profile: Partial<AccountProfile>): AccountProfile {
 }
 
 async function loadSession(): Promise<SpawnpointSession> {
-  const parsed = await request<SpawnpointSession & { capabilities?: readonly string[] }>("/session", { renew: false, failure: t("signin.spawnpointSessionExpired"), describe: () => t("signin.spawnpointSessionExpired") });
-  if (parsed.state === "active") return { ...parsed, capabilities: parsed.capabilities ?? [], profile: accountProfile(parsed.profile) };
+  const parsed = await request<SpawnpointSession & { capabilities?: readonly string[]; skins?: readonly string[] | null }>("/session", { renew: false, failure: t("signin.spawnpointSessionExpired"), describe: () => t("signin.spawnpointSessionExpired") });
+  if (parsed.state === "active") return { ...parsed, capabilities: parsed.capabilities ?? [], skins: parsed.skins ?? null, profile: accountProfile(parsed.profile) };
   return { ...parsed, candidate: { ...accountProfile(parsed.candidate), displayName: parsed.candidate.displayName, status: parsed.candidate.status } };
 }
 

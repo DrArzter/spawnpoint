@@ -31,3 +31,21 @@ export function capabilitiesForRoutes(routes: Readonly<Record<string, unknown>>,
     .filter(([name, routeKey]) => Object.hasOwn(routes, routeKey) && !switchedOff.has(name))
     .map(([name]) => name);
 }
+
+/** Every capability name the API knows: what the feature flags may switch off. */
+export const CAPABILITY_NAMES: readonly string[] = Object.keys(capabilityRoutes);
+
+/**
+ * The route keys refused while these capabilities are off (ADR-0107). A
+ * capability with a route group of its own loses the whole group; any other
+ * loses the one route that names it.
+ */
+export function switchedOffRoutes(off: ReadonlySet<string>, groups: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {}): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const name of off) {
+    const group = Object.hasOwn(groups, name) ? groups[name] : undefined;
+    if (group !== undefined) for (const key of Object.keys(group)) keys.add(key);
+    else if (Object.hasOwn(capabilityRoutes, name)) keys.add(capabilityRoutes[name]!);
+  }
+  return keys;
+}

@@ -36,8 +36,29 @@ export type Skin = Readonly<{
 
 export type SkinId = "console" | "terminal";
 
-/** Every face, in the order the contract test and the registry know them. */
+/** Every face there is code for, in the order the registry knows them. */
 export const SKIN_IDS: readonly SkinId[] = ["console", "terminal"];
-/** The faces a person may choose on the profile page. */
-export const CHOOSABLE_SKIN_IDS: readonly SkinId[] = ["console", "terminal"];
 export const DEFAULT_SKIN: SkinId = "console";
+
+/**
+ * The faces switched on (ADR-0106). A face left out keeps its code, which
+ * still typechecks and builds, but it is never worn or offered, and no test
+ * or UI gate checks it. `VITE_ENABLED_SKINS` (comma-separated) replaces the
+ * list at build time. The default face must be on.
+ */
+const SWITCHED_ON: readonly SkinId[] = ["console"];
+
+/** The faces a list names, checked: each one known, none twice, the default among them. */
+export function enabledSkins(override?: string): readonly SkinId[] {
+  const names = override?.trim() ? override.split(",").map((name) => name.trim()).filter(Boolean) : SWITCHED_ON;
+  for (const name of names) {
+    if (!(SKIN_IDS as readonly string[]).includes(name)) throw new Error(`Unknown skin "${name}" in the enabled skins`);
+  }
+  if (!names.includes(DEFAULT_SKIN)) throw new Error(`The default skin "${DEFAULT_SKIN}" must be enabled`);
+  return SKIN_IDS.filter((id) => names.includes(id));
+}
+
+// `?.`: the UI gate and the Vite config read this module outside Vite, where import.meta.env is absent.
+export const ENABLED_SKIN_IDS: readonly SkinId[] = enabledSkins(import.meta.env?.VITE_ENABLED_SKINS);
+/** The faces a person may choose on the profile page. */
+export const CHOOSABLE_SKIN_IDS: readonly SkinId[] = ENABLED_SKIN_IDS;

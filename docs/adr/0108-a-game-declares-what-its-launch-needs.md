@@ -1,4 +1,4 @@
-# ADR-0106 — A game declares what its launch needs
+# ADR-0108 — A game declares what its launch needs
 
 - Status: Accepted
 - Date: 2026-11-27

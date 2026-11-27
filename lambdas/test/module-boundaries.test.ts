@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 const SOURCE = resolve(dirname(fileURLToPath(import.meta.url)), "../src");
 
 // An adapter says what it adapts in its file name.
-const ADAPTER = /(?:^|\/)(?:aws|aws-[a-z-]+|s3-[a-z-]+|dynamo-[a-z-]+|ses-[a-z-]+|[a-z-]+-store|[a-z-]+-port)\.ts$/;
+const ADAPTER = /(?:^|\/)(?:aws|aws-[a-z-]+|s3-[a-z-]+|ssm-[a-z-]+|dynamo-[a-z-]+|ses-[a-z-]+|[a-z-]+-store|[a-z-]+-port)\.ts$/;
 
 // A Lambda's entry: the API and worker handlers, the bot's two, the release writer.
 const ENTRY = /^(?:handlers\/[a-z-]+|bot\/(?:handler|notifier)|builder\/[a-z-]+-main)\.ts$/;
@@ -40,7 +40,7 @@ test("only adapters send to the AWS SDK; an entry only builds its clients", asyn
   for (const source of await sources()) {
     if (!source.packages.some((name) => name.startsWith("@aws-sdk/")) || ADAPTER.test(source.path)) continue;
     assert.ok(ENTRY.test(source.path),
-      `${source.path} imports the AWS SDK: put the call behind a port in an adapter file (aws-*, s3-*, dynamo-*, ses-*, *-store, *-port)`);
+      `${source.path} imports the AWS SDK: put the call behind a port in an adapter file (aws-*, s3-*, ssm-*, dynamo-*, ses-*, *-store, *-port)`);
     const text = await readFile(join(SOURCE, source.path), "utf8");
     for (const [, names = "", from = ""] of text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"(@aws-sdk\/[^"]+)"/g)) {
       for (const name of names.split(",").map((item) => item.trim()).filter(Boolean)) {

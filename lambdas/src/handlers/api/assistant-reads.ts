@@ -29,5 +29,5 @@ export async function answerAssistantRead(
   if (!can(identity, "assistant.use")) return errorResponse(403, "forbidden");
   const tool = catalogue.tools.find((candidate) => candidate.facts.name === request.tool && candidate.facts.effect === "read");
   if (tool === undefined) return errorResponse(404, "not_found");
-  return await runTool(catalogue.routes, tool, identity, request.arguments, ASSISTANT_AGENT) ?? errorResponse(400, "invalid_json");
+  return await runTool(catalogue.routes, tool, identity, request.arguments, ASSISTANT_AGENT, await catalogue.switchedOff?.()) ?? errorResponse(400, "invalid_json");
 }

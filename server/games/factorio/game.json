@@ -14,6 +14,7 @@
   "probe_port": 27015,
   "slottable": true,
   "default_auth": "none",
+  "required_secrets": [],
   "footprint": {
     "memory_mib": 2048,
     "cores": 0.5

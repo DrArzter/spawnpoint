@@ -9,6 +9,9 @@
   "probe_port": 8212,
   "slottable": true,
   "default_auth": "none",
+  "required_secrets": [
+    "PALWORLD_ADMIN_PASSWORD"
+  ],
   "footprint": {
     "memory_mib": 16384,
     "cores": 4

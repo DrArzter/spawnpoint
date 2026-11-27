@@ -1,10 +1,11 @@
 # Project Zomboid session. The image is reused packaging (ADR-0005) built on the
 # official SteamCMD image; it runs RCON and, on SIGTERM, issues `save` then
 # `quit` before exiting — which is what makes our stop contract safe here.
-# `latest` moves, so pin a digest before this world's first AWS session.
+# Pinned to the digest `latest` named when it was last pushed (2026-04-02), so
+# the image every production start pulled; game-requirements-test.sh holds the pin.
 services:
   zomboid:
-    image: terule/pz-dedicated-server:latest
+    image: terule/pz-dedicated-server@sha256:f5e39eeb549e3a975b049ea02d206f528b80b78343cb3418c0bcf7152ca9d55a
     ports:
       # The game speaks UDP on two ports; players arrive over the overlay, so
       # neither is public (ADR-0024 mode C).

@@ -14,6 +14,11 @@
   "probe_port": 27015,
   "slottable": false,
   "default_auth": "none",
+  "required_secrets": [
+    "ZOMBOID_RCON_PASSWORD",
+    "ZOMBOID_ADMIN_PASSWORD"
+  ],
+  "start_timeout_seconds": 1500,
   "footprint": {
     "memory_mib": 8192,
     "cores": 1

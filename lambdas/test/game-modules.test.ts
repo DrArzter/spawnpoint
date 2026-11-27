@@ -3,7 +3,7 @@ import { access, readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { gameFootprints, gameCatalog } from "../src/control-plane/catalog.ts";
-import { gameModule, gameModules, INTERRUPTION_BUDGET_LIMIT_SECONDS } from "../src/control-plane/game-modules.ts";
+import { DEFAULT_START_TIMEOUT_SECONDS, gameModule, gameModules, INTERRUPTION_BUDGET_LIMIT_SECONDS } from "../src/control-plane/game-modules.ts";
 import { gameSettingDefinitions } from "../src/control-plane/game-settings.ts";
 
 // ADR-0088: a game module is one folder; the Lambdas list each folder once and
@@ -94,4 +94,20 @@ test("a module names its look, and one with no presentation names none", () => {
     }
   }
   assert.ok(gameModules.some((module) => module.presentation.scene === null), "a module without a presentation falls back to the skins' defaults");
+});
+
+// ADR-0106: what a launch needs is the manifest's, read the same way for every game.
+test("every manifest lists its required secrets, and a start timeout is a bounded whole number", async () => {
+  for (const module of gameModules) {
+    const manifest = JSON.parse(await readFile(new URL(`${module.id}/game.json`, games), "utf8")) as Record<string, unknown>;
+    assert.deepEqual(module.requiredSecrets, manifest.required_secrets, module.id);
+    assert.equal(module.startTimeoutSeconds, manifest.start_timeout_seconds ?? DEFAULT_START_TIMEOUT_SECONDS, module.id);
+  }
+  const minecraft = JSON.parse(await readFile(new URL("minecraft/game.json", games), "utf8")) as Record<string, unknown>;
+  assert.throws(() => gameModule({ ...minecraft, required_secrets: undefined }), /required_secrets/);
+  assert.throws(() => gameModule({ ...minecraft, required_secrets: ["rcon password"] }), /not an \.env key/);
+  assert.throws(() => gameModule({ ...minecraft, start_timeout_seconds: 30 }), /start_timeout_seconds/);
+  assert.throws(() => gameModule({ ...minecraft, start_timeout_seconds: 3601 }), /start_timeout_seconds/);
+  assert.throws(() => gameModule({ ...minecraft, start_timeout_seconds: 900.5 }), /start_timeout_seconds/);
+  assert.equal(gameModule({ ...minecraft, start_timeout_seconds: 1500 }).startTimeoutSeconds, 1500);
 });

@@ -16,6 +16,9 @@
   "probe_port": 25575,
   "slottable": true,
   "default_auth": "none",
+  "required_secrets": [
+    "RCON_PASSWORD"
+  ],
   "footprint": {
     "memory_mib": 7168,
     "cores": 1

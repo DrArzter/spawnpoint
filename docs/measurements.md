@@ -352,19 +352,27 @@ Two measurements are still genuinely open, both M2-or-later and neither blocking
 load** with the group on, and **peak memory with the full group** rather than one player — the number that decides
 whether the 8 GiB Free Plan host gives way to the reviewed 16 GiB upgrade.
 
-## Spot interruption and move — **not measured yet**
+## Spot interruption and move — Minecraft, measured 2026-11-27
 
 ADR-0102, step 7. One run per game on a cold test world, with `SPAWNPOINT_SESSION_VOLUME`, `SPAWNPOINT_SPOT` and
 `SPAWNPOINT_SPOT_FAULT_TEST` enabled. Stop and start the world first, so its last S3 archive is fresh. Then run
 `scripts/spot-fault-test.sh <world-id>`, check its output, and run it again with `--run`.
 
+The run below is Prominence II (world `minecraft-prominenc2-34b8b62d`, footprint 12288 MiB / 1.5 cores) on
+`r8i-flex.large` Spot, moved to `r7i.large` Spot. FIS experiment `EXP71X7g2dDMpLRqE2`, started 08:55:16 UTC.
+
 | Field | Where it is read | Value |
 | --- | --- | --- |
-| Notice to save done | `journalctl -u spawnpoint-spot-watcher` on the host: `event=notice`, then `saved=` | — |
-| Save result | the same block: `saved`, `failed`, `reported` | — |
-| Notice to terminated | the Lambda log `/aws/lambda/spawnpoint-spot-interruption` | — |
-| Move start to volume attached | the `move-…` Start server V2 execution: `Adopt Moved Session Volume` to `Adopt Session Volume` | — |
-| Volume attached to ready | the same execution: to `Ready` | — |
-| Player downtime | the notice time to `[BACK]` in Telegram | — |
-| Same address, same volume, same session | `[BACK]` address; the `vol-…` and session id in the execution input | — |
-| Old watchdog | ends with `session_moved` | — |
+| Notice to save done | the `saved` event in `/aws/lambda/spawnpoint-spot-interruption` (the host is gone after the move) | at most 24 s: experiment 08:55:16, save reported 08:55:40 |
+| Save result | the same event: `saved`, `failed` | `saved=[minecraft-prominenc2-34b8b62d]`, `failed=[]` |
+| Notice to terminated | the Lambda log, and EC2 | about 2 min 30 s: host shutting down at 08:57:53, move started 08:58:02 |
+| Move start to volume attached | the `move-…` Start server V2 execution: start to `Adopt Session Volume` | 13 s: new Spot host launched in 2 s, attach retried while it was pending, attached at 08:58:15 |
+| Volume attached to ready | the same execution: to `Ready` | 4 min 47 s (08:58:15 to 09:03:02), almost all of it the game's own start |
+| Player downtime | the host's termination to `Ready` | about 5 min 10 s (08:57:53 to 09:03:02); about 7 min 45 s from the notice |
+| Same address, same volume, same session | the lifecycle record and the volume after the move | same address `minecraft-prominenc2-34b8b62d.spawnpoint.drarzter.dev:25565`, same volume `vol-0bc9a9f5639e61732`, same session id |
+| Old watchdog | ends with `session_moved` | `session_moved` at its first check, 09:09:56 |
+
+The four runs before it failed, each on a bug that the run exposed and that is now fixed: the move was placed back on
+the reclaimed host (#326), that fix never reached the Lambda that Terraform deploys (#327), the volume was attached to
+a host still `pending` and an unstoppable Spot host was left running (#328), and mods staged as root on a reused
+volume made SimplySwords crash at boot (#329).

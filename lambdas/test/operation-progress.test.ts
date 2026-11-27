@@ -264,13 +264,13 @@ test("the reader describes only the execution of the machine the id names", asyn
 const INSTANCE = "i-0123456789abcdef0";
 const hostLine = { at: "2026-11-22T10:00:30Z", kind: "step" as const, text: "World prepared (14 s)" };
 
-function startWithHost(id: string, patch: Partial<ExecutionSummary> = {}) {
+function startWithHost(id: string, patch: Partial<ExecutionSummary> = {}, hostInput: unknown = { request: { instanceId: INSTANCE, worldId: "prominence" } }) {
   const hostId = `${id}-host`;
   return {
     hostId,
     executions: {
       [execution("start-server-v2", id)]: { summary: summary(patch), events: [entered("Initialize"), entered("Start Accepted V1"), scheduled("start-server", hostId, "start-server")] },
-      [execution("start-server", hostId)]: { summary: summary({ input: JSON.stringify({ request: { instanceId: INSTANCE, worldId: "prominence" } }) }), events: [entered("Start Session Command")] },
+      [execution("start-server", hostId)]: { summary: summary({ input: JSON.stringify(hostInput) }), events: [entered("Start Session Command")] },
     },
   };
 }
@@ -281,6 +281,18 @@ test("a running start reads the host's lines from the instance its host workflow
   const { port } = fake(executions);
   const hosts: unknown[] = [];
   const progress = await readOperationProgress(port, {
+    ...request(id, { type: "start", workflow: "start", executionArn: execution("start-server-v2", id) }),
+    hostLog: async (host) => { hosts.push(host); return [hostLine]; },
+  });
+  assert.deepEqual(progress?.hostLog, [hostLine]);
+  assert.deepEqual(hosts, [{ instanceId: INSTANCE, startedAt: START, endedAt: null }]);
+});
+
+test("a fleet start reads the host's lines from the instance its placement gave the host workflow", async () => {
+  const id = "panel-start-20261127T113009-eeee5555";
+  const { executions } = startWithHost(id, {}, { instanceId: INSTANCE, worldId: "prominence", placement: "fleet", slot: 0 });
+  const hosts: unknown[] = [];
+  const progress = await readOperationProgress(fake(executions).port, {
     ...request(id, { type: "start", workflow: "start", executionArn: execution("start-server-v2", id) }),
     hostLog: async (host) => { hosts.push(host); return [hostLine]; },
   });

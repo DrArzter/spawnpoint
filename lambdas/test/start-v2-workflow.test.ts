@@ -121,6 +121,13 @@ test("a failed verified compensation force-stops the billed host with a bounded 
     "InstanceIds.$": "States.Array($.request.placed.hostId)",
   });
   assert.equal(state(definition, "Describe Forced Stop Host").Resource, "arn:aws:states:::aws-sdk:ec2:describeInstances");
+  // 2026-11-27: a one-time Spot host refuses StopInstances; a fleet host is terminated instead.
+  assert.equal(state(definition, "Force Stop Failed Start Host").Catch?.[0]?.Next, "Route Unstoppable Host");
+  assert.deepEqual(state(definition, "Route Unstoppable Host").Choices, [{ Variable: "$.request.placement", StringEquals: "fleet", Next: "Terminate Unstoppable Fleet Host" }]);
+  assert.equal(state(definition, "Route Unstoppable Host").Default, "Start Compensation Failed", "the configured host is never terminated");
+  assert.equal(state(definition, "Terminate Unstoppable Fleet Host").Resource, "arn:aws:states:::aws-sdk:ec2:terminateInstances");
+  assert.deepEqual(state(definition, "Terminate Unstoppable Fleet Host").Parameters, { "InstanceIds.$": "States.Array($.request.placed.hostId)" });
+  assert.equal(state(definition, "Terminate Unstoppable Fleet Host").Next, "Start Compensation Failed");
   assert.equal(state(definition, "Forced Stop Host Stopped").Default, "Increment Forced Stop Poll");
   assert.equal(state(definition, "Increment Forced Stop Poll").Next, "Forced Stop Poll Limit Reached");
   assert.equal(state(definition, "Forced Stop Poll Limit Reached").Default, "Wait Before Forced Stop Poll");

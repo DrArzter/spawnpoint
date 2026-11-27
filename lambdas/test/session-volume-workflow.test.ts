@@ -13,6 +13,7 @@ type State = {
   ResultPath?: string | null;
   Parameters?: Record<string, unknown>;
   Choices?: Array<Record<string, unknown>>;
+  Retry?: Array<Record<string, unknown>>;
   Catch?: Array<{ ErrorEquals: string[]; Next: string }>;
 };
 
@@ -111,6 +112,11 @@ test("the volume is created tagged in the host's zone, attached by slot, and han
   const device = state(start, "Attach Session Volume").Parameters!["Device.$"] as string;
   assert.match(device, /^States\.ArrayGetItem\(States\.Array\('\/dev\/sdf', .*'\/dev\/sdz'\), \$\.request\.placed\.slot\)$/);
   assert.equal(state(start, "Session Volume Available").Choices![1]!.Next, "Attach Session Volume");
+  // 2026-11-27: a move attaches to a host launched a second ago, still pending.
+  const pendingRetry = (state(start, "Attach Session Volume").Retry ?? [])
+    .find((retrier) => (retrier.ErrorEquals as string[]).includes("Ec2.Ec2Exception"));
+  assert.ok(pendingRetry, "an attach to a pending host is retried");
+  assert.ok((pendingRetry.IntervalSeconds as number) * (pendingRetry.MaxAttempts as number) >= 45, "for long enough to reach running");
   assert.equal(state(start, "Session Volume Attached").Choices![0]!.Next, "Adopt Session Volume");
   assert.equal(state(start, "Adopt Session Volume").InputPath, "$.sessionVolume.created.volumeId");
   assert.equal(state(start, "Adopt Session Volume").ResultPath, "$.sessionVolume.volumeId");

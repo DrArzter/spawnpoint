@@ -91,6 +91,12 @@ test("every V2 Lambda task retries the transient Lambda service errors", async (
   assert.ok(count > 0);
 });
 
+// Retries beyond throttling, each for a named reason. The attach meets a host
+// launched a second ago, still pending (ADR-0102, the 2026-11-27 fault test).
+const EXTRA_RETRY: Readonly<Record<string, readonly unknown[]>> = {
+  "Attach Session Volume": [{ ErrorEquals: ["Ec2.Ec2Exception"], IntervalSeconds: 6, MaxAttempts: 10, BackoffRate: 1 }],
+};
+
 test("every V2 EC2 and SSM call retries throttling, except the fleet launch", async () => {
   let count = 0;
   for (const [file, machine] of await v2Machines()) {
@@ -99,7 +105,7 @@ test("every V2 EC2 and SSM call retries throttling, except the fleet launch", as
       if (service !== "ec2" && service !== "ssm") continue;
       if (state.Resource === CREATE_FLEET) continue;
       count += 1;
-      assert.deepEqual(state.Retry, [THROTTLE_RETRY[service]], `${file}: ${name}`);
+      assert.deepEqual(state.Retry, [THROTTLE_RETRY[service], ...(EXTRA_RETRY[name] ?? [])], `${file}: ${name}`);
     }
   }
   assert.ok(count > 0);

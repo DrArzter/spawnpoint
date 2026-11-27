@@ -352,3 +352,15 @@ test("the bot's status is its world's session, with the address the host reporte
   assert.deepEqual(worldSessionStatus(ready, "world"), { state: "running", address: "world.games.example:25565" });
   assert.deepEqual(worldSessionStatus(ready, "other"), { state: "stopped", address: null }, "another world's session is not this one");
 });
+
+test("a host command is read every 5 s and the 40 minute ceiling stays", async () => {
+  for (const name of ["start-server-v2", "stop-server-v2", "start-server", "stop-server", "idle-watchdog-v2", "promote-release"]) {
+    const text = await readFile(new URL(`../../workflows/${name}.input.example.json`, import.meta.url), "utf8");
+    const timings = [...text.matchAll(/"commandPollSeconds": (\d+),[\s\S]*?"maxCommandPolls": (\d+)/g)];
+    assert.ok(timings.length > 0, name);
+    for (const [, seconds, polls] of timings) {
+      assert.equal(Number(seconds), 5, name);
+      assert.equal(Number(seconds) * Number(polls), 40 * 60, name);
+    }
+  }
+});

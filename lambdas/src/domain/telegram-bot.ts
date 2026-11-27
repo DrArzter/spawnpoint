@@ -42,13 +42,15 @@ export function parseChatIds(raw: string): readonly number[] {
 
 // One timing vocabulary for every machine input, matching the committed
 // input examples verbatim.
+// A host command is read every 5 s, so ready and stopped are recorded within
+// 5 s of the host saying so; 480 reads keep the 40 minute ceiling.
 const POLL_TIMING = {
   instancePollSeconds: 10,
   ssmPollSeconds: 10,
-  commandPollSeconds: 15,
+  commandPollSeconds: 5,
   maxInstancePolls: 30,
   maxSsmPolls: 30,
-  maxCommandPolls: 160,
+  maxCommandPolls: 480,
 } as const;
 
 

@@ -4,10 +4,10 @@
   "worldId": "world",
   "timing": {
     "ssmPollSeconds": 10,
-    "commandPollSeconds": 15,
+    "commandPollSeconds": 5,
     "instancePollSeconds": 10,
     "maxSsmPolls": 30,
-    "maxCommandPolls": 160,
+    "maxCommandPolls": 480,
     "maxInstancePolls": 30
   }
 }

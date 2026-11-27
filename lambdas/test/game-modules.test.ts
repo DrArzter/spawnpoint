@@ -3,7 +3,7 @@ import { access, readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { gameFootprints, gameCatalog } from "../src/control-plane/catalog.ts";
-import { gameModules } from "../src/control-plane/game-modules.ts";
+import { gameModule, gameModules, INTERRUPTION_BUDGET_LIMIT_SECONDS } from "../src/control-plane/game-modules.ts";
 import { gameSettingDefinitions } from "../src/control-plane/game-settings.ts";
 
 // ADR-0088: a game module is one folder; the Lambdas list each folder once and
@@ -57,6 +57,33 @@ test("every manifest states whether its game may run on Spot (ADR-0102)", async 
     const manifest = JSON.parse(await readFile(new URL(`${module.id}/game.json`, games), "utf8")) as { capabilities: Record<string, unknown> };
     assert.equal(typeof manifest.capabilities.spot, "boolean", `${module.id}: capabilities.spot is not stated`);
     assert.equal(module.spot, manifest.capabilities.spot);
+  }
+});
+
+// ADR-0103: one interruption pipeline; each game says only how it saves.
+test("every module says how it saves on an interruption, and one on Spot fits the notice", () => {
+  for (const module of gameModules) {
+    assert.ok(module.interruption, `${module.id}: no interruption block`);
+    if (module.spot) assert.ok(module.interruption.saveBudgetSeconds <= INTERRUPTION_BUDGET_LIMIT_SECONDS, module.id);
+  }
+});
+
+test("a manifest is refused on Spot without a contract, with a budget over the notice, or with an unknown save", async () => {
+  const minecraft = JSON.parse(await readFile(new URL("minecraft/game.json", games), "utf8")) as Record<string, unknown>;
+  const spot = { ...minecraft, capabilities: { ...(minecraft.capabilities as object), spot: true } };
+  assert.throws(() => gameModule({ ...spot, interruption: undefined }), /needs an interruption block/);
+  assert.throws(() => gameModule({ ...spot, interruption: { save: "live", save_budget_seconds: 91 } }), /cannot be on Spot/);
+  assert.throws(() => gameModule({ ...spot, interruption: { save: "rcon", save_budget_seconds: 30 } }), /live or stop/);
+  assert.throws(() => gameModule({ ...spot, interruption: { save: "live", save_budget_seconds: 0 } }), /save_budget_seconds/);
+  const off = gameModule({ ...minecraft, capabilities: { ...(minecraft.capabilities as object), spot: false }, interruption: { save: "stop", save_budget_seconds: 600 } });
+  assert.equal(off.spot, false, "a game off Spot may declare any budget");
+});
+
+// A budget is a guess until a fault test has measured it (docs/measurements.md).
+test("a game goes on Spot only once its interruption and move are measured", async () => {
+  const measurements = await readFile(new URL("../../docs/measurements.md", import.meta.url), "utf8");
+  for (const module of gameModules.filter((candidate) => candidate.spot)) {
+    assert.match(measurements, new RegExp(`^## Spot interruption and move — ${module.displayName}, measured `, "m"), module.id);
   }
 });
 

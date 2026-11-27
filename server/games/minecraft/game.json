@@ -24,6 +24,10 @@
     "whitelist": true,
     "spot": true
   },
+  "interruption": {
+    "save": "live",
+    "save_budget_seconds": 30
+  },
   "console": {
     "lifecycle_commands": [
       "stop",

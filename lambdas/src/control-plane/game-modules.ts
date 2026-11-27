@@ -33,6 +33,8 @@ export type GameModule = Readonly<{
   whitelist: boolean;
   /** A session of this game may run on a Spot host (ADR-0102). Absent in the manifest means false. */
   spot: boolean;
+  /** How a session saves on a Spot interruption (ADR-0103); null when the module declares none. */
+  interruption: Interruption | null;
   /** This module owns the records written before games were an axis, which name no game (ADR-0089). */
   legacyDefault: boolean;
   /** What its console refuses (commands that end the game outside its lifecycle) and offers (ADR-0063). */
@@ -48,6 +50,19 @@ export type GameModule = Readonly<{
   /** The game settings a world may carry (ADR-0064), as the module's settings.json states them. */
   settings: readonly Readonly<Record<string, unknown>>[];
 }>;
+
+/**
+ * ADR-0103. `live`: game_save writes the world while it runs. `stop`: only a
+ * graceful stop writes it, so the notice stops the game. The budget is the
+ * measured worst case of that save.
+ */
+export type Interruption = Readonly<{ save: "live" | "stop"; saveBudgetSeconds: number }>;
+
+/**
+ * The longest save a Spot game may declare: the two-minute notice, less the
+ * announcements, the flush, the report and a margin for a late watcher poll.
+ */
+export const INTERRUPTION_BUDGET_LIMIT_SECONDS = 90;
 
 type Manifest = Readonly<Record<string, unknown>>;
 type SettingsFile = Readonly<{ settings: readonly Readonly<Record<string, unknown>>[] }>;
@@ -110,13 +125,37 @@ function configFileRules(manifest: Manifest, id: string): ConfigFileRules | null
   };
 }
 
+function interruptionOf(manifest: Manifest, id: string): Interruption | null {
+  if (manifest.interruption === undefined) return null;
+  const block = object(manifest.interruption, `${id} interruption`);
+  const save = block.save;
+  if (save !== "live" && save !== "stop") throw new Error(`${id}.interruption.save must be live or stop`);
+  const budget = field(block.save_budget_seconds, isNumber, `${id}.interruption.save_budget_seconds`);
+  if (!Number.isInteger(budget) || budget < 1) throw new Error(`${id}.interruption.save_budget_seconds must be a whole number above zero`);
+  return { save, saveBudgetSeconds: budget };
+}
+
+// A Spot host is taken back two minutes after its notice; a game that cannot
+// say how it saves in that time does not go on one (ADR-0103).
+function spotOf(capabilities: Manifest, interruption: Interruption | null, id: string): boolean {
+  const spot = capabilities.spot === undefined ? false : field(capabilities.spot, isBoolean, `${id}.capabilities.spot`);
+  if (!spot) return false;
+  if (interruption === null) throw new Error(`${id}.capabilities.spot needs an interruption block`);
+  if (interruption.saveBudgetSeconds > INTERRUPTION_BUDGET_LIMIT_SECONDS) {
+    throw new Error(`${id}.interruption.save_budget_seconds exceeds ${INTERRUPTION_BUDGET_LIMIT_SECONDS}, so it cannot be on Spot`);
+  }
+  return true;
+}
+
 // A malformed manifest stops the bundle loading rather than placing a game wrongly.
-function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
+// Exported for the contract tests, which feed it manifests that must be refused.
+export function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
   const manifest = object(raw, "game manifest");
   const id = field(manifest.id, isString, "id");
   const connect = object(manifest.connect, `${id} connect`);
   const footprint = object(manifest.footprint, `${id} footprint`);
   const capabilities = object(manifest.capabilities, `${id} capabilities`);
+  const interruption = interruptionOf(manifest, id);
   return {
     id,
     code: field(manifest.code, isString, `${id}.code`),
@@ -129,7 +168,8 @@ function gameModule(raw: unknown, settings?: SettingsFile): GameModule {
       cores: field(footprint.cores, isNumber, `${id}.footprint.cores`),
     },
     whitelist: field(capabilities.whitelist, isBoolean, `${id}.capabilities.whitelist`),
-    spot: capabilities.spot === undefined ? false : field(capabilities.spot, isBoolean, `${id}.capabilities.spot`),
+    spot: spotOf(capabilities, interruption, id),
+    interruption,
     legacyDefault: manifest.legacy_default === true,
     presentation: presentationOf(manifest, id),
     console: consoleRules(manifest, id),

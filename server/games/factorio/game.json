@@ -20,7 +20,11 @@
   },
   "capabilities": {
     "whitelist": false,
-    "spot": true
+    "spot": false
+  },
+  "interruption": {
+    "save": "live",
+    "save_budget_seconds": 30
   },
   "console": {
     "lifecycle_commands": [

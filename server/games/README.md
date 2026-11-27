@@ -10,6 +10,12 @@ listed once more, in `lambdas/src/control-plane/game-modules.ts`; a test fails u
 minecraft, byte-identically.
 
 `load_game` runs `game_check_contract`: a module that lacks a required hook is refused with a message that names it.
+
+`interruption` says how a session saves when its Spot host is taken back
+([ADR-0103](../../docs/adr/0103-one-interruption-pipeline-for-every-game.md)): `"save": "live"` when `game_save`
+writes the world while the game runs, `"stop"` when only a graceful stop does, and `save_budget_seconds`, the
+measured worst case. `capabilities.spot` may be `true` only with this block, a budget of at most 90 seconds, and a
+measured section in `docs/measurements.md`.
 `GAME_REQUIRED_HOOKS` and `GAME_OPTIONAL_HOOKS` in `_dispatch.sh` are the lists, and its header describes each hook.
 
 | Kind | Hooks |

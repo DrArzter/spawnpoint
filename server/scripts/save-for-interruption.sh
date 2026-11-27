@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# Save every session on this host for a Spot interruption (ADR-0102).
+# Save every session on this host for a Spot interruption (ADR-0102), in the
+# phases every game shares (ADR-0103):
 #
-#   notice     the two-minute notice: announce a countdown where the game can,
-#              save to the session volume, flush it, tell the players it is
-#              saved, and report to the control plane
-#   rebalance  a rebalance recommendation: save only
+#   1 announce  the countdown, where the game can
+#   2 save      in the way the game declares (save-session-for-interruption.sh)
+#   3 check     that the save reached the disk (the same script)
+#   4 flush     the session volume
+#   5 report    saved, failed and skipped, to the control plane
+#
+#   notice     all five; a game that saves only on a graceful stop is stopped
+#   rebalance  save and check only, and only for a game that saves while it runs
 #
 # Nothing goes to S3 here: the session volume outlives the instance. The report
 # is one EventBridge event (source spawnpoint.host) on the default bus; the
@@ -63,6 +68,7 @@ for_session() {
 
 saved=()
 failed=()
+skipped=()
 records=()
 if [[ -d "${SESSION_RECORDS_DIRECTORY}" ]]; then
   shopt -s nullglob
@@ -70,6 +76,8 @@ if [[ -d "${SESSION_RECORDS_DIRECTORY}" ]]; then
   shopt -u nullglob
 fi
 
+# A save counts only when it was written after this moment.
+since="$(($(date +%s) - 1))"
 notice_text="${NOTICE_TEXT//\{when\}/$(countdown)}"
 for record in "${records[@]}"; do
   world_id="$(session_record_value "${record}" world_id)"
@@ -80,15 +88,22 @@ for record in "${records[@]}"; do
   if [[ "${kind}" == "notice" ]]; then
     for_session "${record}" announce-world.sh "${notice_text}" >&2 || true
   fi
-  if for_session "${record}" save-world.sh >&2; then
-    if [[ "${kind}" == "notice" ]]; then
-      sync -f -- "$(realpath -m -- "${SPAWNPOINT_WORLDS_DIRECTORY:-${SERVER_DIR}/runtime/worlds}")/${world_id}" || true
-      for_session "${record}" announce-world.sh "${SAVED_TEXT}" >&2 || true
-    fi
-    saved+=("${world_id}")
-  else
-    failed+=("${world_id}")
-  fi
+  save_output="$(for_session "${record}" save-session-for-interruption.sh "${kind}" "${since}")" || true
+  printf '%s\n' "${save_output}" | sed "s/^/${world_id}: /" >&2
+  result="$(awk -F= '$1 == "result" { print $2 }' <<<"${save_output}")"
+  method="$(awk -F= '$1 == "method" { print $2 }' <<<"${save_output}")"
+  case "${result}" in
+    saved)
+      if [[ "${kind}" == "notice" ]]; then
+        sync -f -- "$(realpath -m -- "${SPAWNPOINT_WORLDS_DIRECTORY:-${SERVER_DIR}/runtime/worlds}")/${world_id}" || true
+        # A game stopped to save has nobody left to tell.
+        [[ "${method}" != "live" ]] || for_session "${record}" announce-world.sh "${SAVED_TEXT}" >&2 || true
+      fi
+      saved+=("${world_id}")
+      ;;
+    skipped) skipped+=("${world_id}") ;;
+    *) failed+=("${world_id}") ;;
+  esac
 done
 
 join() {
@@ -101,10 +116,10 @@ if [[ "${kind}" == "notice" ]]; then
   instance_id="${SPAWNPOINT_INSTANCE_ID:-$(read_env_value SPAWNPOINT_INSTANCE_ID || true)}"
   region="${AWS_REGION:-$(read_env_value AWS_REGION || true)}"
   detail="$(jq -cn --arg instance "${instance_id}" --arg action_time "${action_time}" \
-    --arg saved "$(join "${saved[@]}")" --arg failed "$(join "${failed[@]}")" '
+    --arg saved "$(join "${saved[@]}")" --arg failed "$(join "${failed[@]}")" --arg skipped "$(join "${skipped[@]}")" '
     def list: if . == "" then [] else split(",") end;
     {instanceId: $instance, actionTime: (if $action_time == "" then null else $action_time end),
-     saved: ($saved | list), failed: ($failed | list)}')"
+     saved: ($saved | list), failed: ($failed | list), skipped: ($skipped | list)}')"
   entries="$(jq -cn --arg detail "${detail}" \
     '[{Source: "spawnpoint.host", DetailType: "Sessions saved for interruption", Detail: $detail}]')"
   if [[ -n "${instance_id}" && -n "${region}" ]] &&
@@ -117,5 +132,6 @@ printf 'kind=%s\n' "${kind}"
 printf 'sessions=%s\n' "${#records[@]}"
 printf 'saved=%s\n' "$(join "${saved[@]}")"
 printf 'failed=%s\n' "$(join "${failed[@]}")"
+printf 'skipped=%s\n' "$(join "${skipped[@]}")"
 printf 'reported=%s\n' "${reported}"
 (( ${#failed[@]} == 0 ))

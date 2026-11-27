@@ -15,7 +15,11 @@
   },
   "capabilities": {
     "whitelist": false,
-    "spot": true
+    "spot": false
+  },
+  "interruption": {
+    "save": "stop",
+    "save_budget_seconds": 60
   },
   "console": {
     "lifecycle_commands": [],

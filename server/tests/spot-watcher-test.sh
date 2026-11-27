@@ -18,14 +18,27 @@ scripts="${fixture}/server/scripts"
 calls="${fixture}/calls"
 : >"${calls}"
 
-for fake in save-world.sh announce-world.sh; do
-  cat >"${scripts}/${fake}" <<FAKE
+cat >"${scripts}/announce-world.sh" <<FAKE
 #!/usr/bin/env bash
-printf '%s world=%s slot=%s volume=%s catalog=%s args=%s\n' "${fake}" "\${WORLD_ID}" "\${SPAWNPOINT_SLOT}" \
+printf '%s world=%s slot=%s volume=%s catalog=%s args=%s\n' announce-world.sh "\${WORLD_ID}" "\${SPAWNPOINT_SLOT}" \
   "\${SPAWNPOINT_SESSION_VOLUME_ID}" "\${SPAWNPOINT_WORLD_CATALOG}" "\$*" >>"${calls}"
-[[ "\${WORLD_ID}" != "\${FAKE_FAIL_WORLD:-}" || "${fake}" != save-world.sh ]]
 FAKE
-done
+# The session's save answers as the real one does (ADR-0103): a game that
+# saves only by stopping (FAKE_STOP_WORLD) is skipped on a recommendation.
+cat >"${scripts}/save-session-for-interruption.sh" <<FAKE
+#!/usr/bin/env bash
+printf '%s world=%s slot=%s volume=%s catalog=%s args=%s\n' save-session "\${WORLD_ID}" "\${SPAWNPOINT_SLOT}" \
+  "\${SPAWNPOINT_SESSION_VOLUME_ID}" "\${SPAWNPOINT_WORLD_CATALOG}" "\$*" >>"${calls}"
+method=live
+[[ "\${WORLD_ID}" != "\${FAKE_STOP_WORLD:-}" ]] || method=stop
+if [[ "\${WORLD_ID}" == "\${FAKE_FAIL_WORLD:-}" ]]; then
+  printf 'result=failed\nmethod=%s\nreason=save_not_on_disk\nseconds=1\n' "\${method}"; exit 1
+fi
+if [[ "\$1" == rebalance && "\${method}" == stop ]]; then
+  printf 'result=skipped\nmethod=stop\nreason=stops_the_game\nseconds=0\n'; exit 0
+fi
+printf 'result=saved\nmethod=%s\nreason=\nseconds=1\n' "\${method}"
+FAKE
 
 # Fake IMDS: a token for PUT, a file per metadata path, curl -f's 22 when absent.
 cat >"${fixture}/bin/curl" <<'FAKE'
@@ -81,9 +94,11 @@ output="$("${watcher}")"
 grep -qx 'event=rebalance' <<<"${output}"
 grep -qx 'kind=rebalance' <<<"${output}"
 grep -qx 'saved=alpha,beta' <<<"${output}"
+grep -qx 'skipped=' <<<"${output}"
 grep -qx 'reported=false' <<<"${output}"
-[[ "$(grep -c '^save-world.sh' "${calls}")" == 2 ]]
-grep -q '^save-world.sh world=beta slot=3 volume=vol-0fedcba9876543210 catalog=/srv/catalog.json' "${calls}"
+grep -q '^save-session world=alpha .* args=rebalance [0-9]\+$' "${calls}"
+[[ "$(grep -c '^save-session' "${calls}")" == 2 ]]
+grep -q '^save-session world=beta slot=3 volume=vol-0fedcba9876543210 catalog=/srv/catalog.json' "${calls}"
 if grep -q -e '^announce-world.sh' -e '^aws' -e '^sync' "${calls}"; then exit 1; fi
 
 # The two-minute notice: announce, save, flush, announce, then one report.
@@ -101,11 +116,11 @@ grep -qx 'failed=beta' <<<"${output}"
 grep -qx 'reported=true' <<<"${output}"
 diff -u <(cut -d' ' -f1,2 "${calls}" | grep -v '^aws') - <<'EXPECTED'
 announce-world.sh world=alpha
-save-world.sh world=alpha
+save-session world=alpha
 sync -f
 announce-world.sh world=alpha
 announce-world.sh world=beta
-save-world.sh world=beta
+save-session world=beta
 EXPECTED
 grep -q "^announce-world.sh world=alpha .* args=This server moves to a new machine in about 2 minutes. Your world is being saved.$" "${calls}"
 grep -q 'args=World saved. Reconnect to the same address in a few minutes.$' "${calls}"
@@ -116,8 +131,32 @@ if grep -q '^aws s3' "${calls}"; then exit 1; fi
 entries="$(sed -E 's/.*--entries (.*) --output json$/\1/' <<<"${report}")"
 jq -e --arg time "${action_time}" '
   length == 1 and .[0].Source == "spawnpoint.host" and .[0].DetailType == "Sessions saved for interruption" and
-  (.[0].Detail | fromjson) == {instanceId: "i-0123456789abcdef0", actionTime: $time, saved: ["alpha"], failed: ["beta"]}
+  (.[0].Detail | fromjson) == {instanceId: "i-0123456789abcdef0", actionTime: $time, saved: ["alpha"], failed: ["beta"], skipped: []}
 ' <<<"${entries}" >/dev/null
+
+# A game that saves only by stopping (ADR-0103): a recommendation leaves it
+# running and reports it skipped; the notice saves it, flushes it, and tells
+# nobody it is saved, because its players have already left.
+rm -f -- "${fixture}/imds/spot/instance-action"
+printf '{"noticeTime":"2026-11-26T13:00:00Z"}' >"${fixture}/imds/events/recommendations/rebalance"
+: >"${calls}"
+output="$(FAKE_STOP_WORLD=beta "${watcher}")"
+grep -qx 'saved=alpha' <<<"${output}"
+grep -qx 'skipped=beta' <<<"${output}"
+grep -qx 'failed=' <<<"${output}"
+: >"${calls}"
+printf '{"action":"terminate","time":"%s"}' "${action_time}" >"${fixture}/imds/spot/instance-action"
+output="$(FAKE_STOP_WORLD=beta "${scripts}/save-for-interruption.sh" notice "${action_time}")"
+grep -qx 'saved=alpha,beta' <<<"${output}"
+diff -u <(cut -d' ' -f1,2 "${calls}" | grep -v '^aws') - <<'EXPECTED'
+announce-world.sh world=alpha
+save-session world=alpha
+sync -f
+announce-world.sh world=alpha
+announce-world.sh world=beta
+save-session world=beta
+sync -f
+EXPECTED
 
 # A record removed by unmount leaves nothing to save.
 remove_session_record alpha

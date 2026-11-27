@@ -195,7 +195,8 @@ test("fleet-only placement ignores a configured host and launches from zero", as
     serverId: "factorio",
     eligibleProvenance: "launched",
   });
-  assert.deepEqual(portable.placement, { kind: "launch", requirements: { memoryMiB: 3 * 1024, vcpu: 1 }, spot: true });
+  // Factorio stays off Spot until its interruption is measured (ADR-0103).
+  assert.deepEqual(portable.placement, { kind: "launch", requirements: { memoryMiB: 3 * 1024, vcpu: 1 }, spot: false });
 
   await coordinate({ action: "registerHost", hostId: "i-fleet", shape: LARGE, ready: true, provenance: "launched" });
   const reused = await coordinate({

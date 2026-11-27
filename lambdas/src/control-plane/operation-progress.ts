@@ -198,7 +198,8 @@ export async function findHostRun(port: ExecutionPort, root: Readonly<{ arn: str
   return instanceId === null ? null : { instanceId, startedAt: summary.startDate, endedAt: summary.stopDate };
 }
 
-function instanceOfInput(input: string | undefined): string | null {
+/** The host a host start runs on, from its execution input; the guard holds the workflows to it. */
+export function instanceOfInput(input: string | undefined): string | null {
   if (input === undefined) return null;
   try {
     const parsed: unknown = JSON.parse(input);

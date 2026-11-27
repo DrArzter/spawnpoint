@@ -28,6 +28,43 @@ export const WORKFLOW_FILES: Readonly<Record<WorkflowName, string>> = {
   world: "world-lifecycle.asl.json.tftpl",
 };
 
+/**
+ * The workflows of an operation that show no step: the drain runs after its
+ * operation has ended, and the host deletion has no progress card. The guard
+ * reads them too, so each of their states is a decision, not an accident.
+ */
+export type QuietWorkflowName = "drain" | "delete-host";
+export type GuardedWorkflowName = WorkflowName | QuietWorkflowName;
+
+export const GUARDED_WORKFLOW_FILES: Readonly<Record<GuardedWorkflowName, string>> = {
+  ...WORKFLOW_FILES,
+  drain: "drain-host-v2.asl.json.tftpl",
+  "delete-host": "delete-host.asl.json.tftpl",
+};
+
+/** States the panel does not show, by workflow. A state is in a step table or here, never in neither. */
+export const NOT_SHOWN: Readonly<Record<GuardedWorkflowName, readonly string[]>> = {
+  promote: [],
+  start: [],
+  stop: [],
+  "start-host": [],
+  "stop-host": [],
+  world: [],
+  drain: [
+    "Initialize", "Route Drain Urgency", "Wait Out Grace Period", "Decide Drain", "Decide Immediate Drain", "Route Drain",
+    "Count Kept Poll", "Kept Too Long", "Conclude Termination", "Terminate Host", "Conclude Stop", "Stop Host", "Drained",
+    "Host Taken Back", "Host Already Let Go", "Drain Gave Up", "Drain Not Concluded", "Host Not Released",
+  ],
+  "delete-host": [
+    "Initialize", "Route Snapshot", "Snapshot Data Volumes", "Allow Termination", "Terminate Host", "Wait For Termination",
+    "Read Host", "Route Host State", "Delete Data Volumes", "Find Host Alarms", "Route Host Alarms", "Delete Host Alarms",
+    "Host Deleted",
+  ],
+};
+
+/** The state machine whose start the host log follows (ADR-0105). */
+export const HOST_START_MACHINE = "spawnpoint-start-server";
+
 export const ENDED = "ended";
 
 export const STEP_LABELS: Readonly<Record<string, string>> = {

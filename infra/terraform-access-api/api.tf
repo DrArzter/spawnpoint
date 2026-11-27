@@ -314,6 +314,12 @@ data "aws_iam_policy_document" "access_api" {
     ]
   }
 
+  statement {
+    sid       = "ReadFeatureFlags"
+    actions   = ["ssm:GetParameter"]
+    resources = [local.feature_flags_parameter_arn]
+  }
+
   dynamic "statement" {
     for_each = var.email_delivery_provider == "resend" ? [1] : []
     content {
@@ -403,6 +409,7 @@ resource "aws_lambda_function" "access_api" {
       SPAWNPOINT_APP_COMMIT            = var.app_commit
       GAME_DNS_SUFFIX                  = var.game_dns_suffix
       REFRESH_COOKIE_SAME_SITE         = local.custom_api_domain_enabled ? "Strict" : "None"
+      FEATURE_FLAGS_PARAMETER          = aws_ssm_parameter.feature_flags.name
     }
   }
 

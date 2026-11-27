@@ -8,12 +8,27 @@ const skins: Readonly<Record<SkinId, Skin>> = { console: consoleSkin, terminal: 
 
 /** Every face switched on, each held to the skin contract; a face switched off is not tested. */
 export const SKINS: readonly Skin[] = ENABLED_SKIN_IDS.map((id) => skins[id]);
-/** The faces offered on the profile page. */
-export const SKIN_CHOICES: readonly Readonly<{ id: SkinId; name: string }>[] = CHOOSABLE_SKIN_IDS.map((id) => ({ id, name: skins[id].name }));
+/** The faces offered on the profile page, of those a session may wear. */
+export function skinChoices(allowed: readonly SkinId[] = CHOOSABLE_SKIN_IDS): readonly Readonly<{ id: SkinId; name: string }>[] {
+  return allowed.map((id) => ({ id, name: skins[id].name }));
+}
 
-/** A face that is switched on; a stored or asked-for face that is off reads as no choice. */
-export function isEnabledSkin(value: unknown): value is SkinId {
-  return typeof value === "string" && (ENABLED_SKIN_IDS as readonly string[]).includes(value);
+/** A face that may be worn; a stored or asked-for face that may not reads as no choice. */
+export function isEnabledSkin(value: unknown, allowed: readonly SkinId[] = ENABLED_SKIN_IDS): value is SkinId {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value);
+}
+
+/**
+ * The faces a session may wear: the build's, narrowed by the skins the
+ * feature flags name (ADR-0107). A list that leaves out the default face is
+ * a mistake in the flags; it is ignored, and said so.
+ */
+export function allowedSkins(flagged: readonly string[] | null | undefined, enabled: readonly SkinId[] = ENABLED_SKIN_IDS): readonly SkinId[] {
+  if (flagged === null || flagged === undefined) return enabled;
+  const allowed = enabled.filter((id) => flagged.includes(id));
+  if (allowed.includes(DEFAULT_SKIN)) return allowed;
+  console.warn(`feature flags: the skins ${JSON.stringify(flagged)} leave out the default skin "${DEFAULT_SKIN}"; ignored`);
+  return enabled;
 }
 
 const STORAGE_KEY = "spawnpoint.skin";
@@ -24,17 +39,18 @@ const STORAGE_KEY = "spawnpoint.skin";
  * remembered choice, otherwise the default. Stored beside theme and accent;
  * the account copy follows when a second skin ships.
  */
-export function chooseSkin(): Skin {
-  return skins[currentSkinId()];
+export function chooseSkin(allowed: readonly SkinId[] = ENABLED_SKIN_IDS): Skin {
+  return skins[currentSkinId(allowed)];
 }
 
-export function currentSkinId(): SkinId {
+/** A remembered or asked-for face the session may not wear yields the default, and is neither stored nor cleared. */
+export function currentSkinId(allowed: readonly SkinId[] = ENABLED_SKIN_IDS): SkinId {
   let id: SkinId = DEFAULT_SKIN;
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (isEnabledSkin(stored)) id = stored;
+    if (isEnabledSkin(stored, allowed)) id = stored;
     const requested = new URLSearchParams(window.location.search).get("skin");
-    if (isEnabledSkin(requested)) {
+    if (isEnabledSkin(requested, allowed)) {
       id = requested;
       window.localStorage.setItem(STORAGE_KEY, requested);
     }

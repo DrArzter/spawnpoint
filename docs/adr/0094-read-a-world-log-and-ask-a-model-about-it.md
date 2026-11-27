@@ -5,6 +5,7 @@
 - Milestone: M6
 - Relates: [ADR-0063](0063-run-console-commands-through-one-ssm-document.md), [ADR-0066](0066-keep-a-world-whitelist-on-its-record.md),
   [ADR-0071](0071-delete-an-identity-and-everything-that-names-it.md), [ADR-0092](0092-a-lambda-entry-is-its-composition-root.md)
+- Amended by: [ADR-0107](0107-feature-flags-in-parameter-store.md) — the feature flags may also switch the assistant off
 
 ## Context
 

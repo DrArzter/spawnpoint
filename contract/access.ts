@@ -43,6 +43,8 @@ export type ActiveSession = Readonly<{
   identity: SessionIdentity;
   /** What this deployment routes. A screen whose capability is absent is not offered at all. */
   capabilities: readonly string[];
+  /** The skins the panel may wear, from the feature flags (ADR-0107); null when the flags do not say. */
+  skins: readonly string[] | null;
   role: SessionRole | null;
   profile: AccountProfile;
   bootstrap: OwnerBootstrapState;

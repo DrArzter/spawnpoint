@@ -10,7 +10,12 @@ import { type Route } from "./routing.ts";
 type McpRequest = Readonly<{ jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown }>;
 
 /** The route table and its tools, handed in by the composition root (ADR-0095). */
-export type McpCatalogue = Readonly<{ routes: Readonly<Record<string, Route>>; tools: readonly CatalogueTool[] }>;
+export type McpCatalogue = Readonly<{
+  routes: Readonly<Record<string, Route>>;
+  tools: readonly CatalogueTool[];
+  /** The route keys the feature flags switched off (ADR-0107): their tools are neither listed nor run. */
+  switchedOff?: () => Promise<ReadonlySet<string>>;
+}>;
 
 function mcpJson(id: unknown, result: unknown): Response {
   return response(200, { jsonrpc: "2.0", id, result });
@@ -54,7 +59,7 @@ async function agentOf(clientId: string): Promise<Readonly<{ clientId: string; n
 }
 
 /** The tools MCP offers: the profile, and each catalogue tool a feature offered to MCP. */
-export function mcpTools(catalogue: McpCatalogue): readonly McpTool[] {
+export function mcpTools(catalogue: McpCatalogue, switchedOff: ReadonlySet<string> = new Set()): readonly McpTool[] {
   const profile: McpTool = {
     ...PROFILE_TOOL, scope: "spawnpoint.read", permission: null,
     call: async (caller) => {
@@ -62,18 +67,18 @@ export function mcpTools(catalogue: McpCatalogue): readonly McpTool[] {
       return response(200, { structuredContent: value, content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
     },
   };
-  return [profile, ...catalogue.tools.filter((tool) => tool.facts.mcp === true).map((tool): McpTool => ({
+  return [profile, ...catalogue.tools.filter((tool) => tool.facts.mcp === true && !switchedOff.has(tool.routeKey)).map((tool): McpTool => ({
     name: tool.facts.name, title: tool.facts.title, description: tool.facts.description, inputSchema: tool.inputSchema,
     readOnly: tool.facts.effect === "read", destructive: tool.facts.destructive === true,
     scope: tool.facts.effect === "read" ? "spawnpoint.read" : "spawnpoint.operate",
     permission: tool.permission,
     // The record names the client as well as the person.
-    call: async (caller, args) => runTool(catalogue.routes, tool, caller.identity, args, await agentOf(caller.clientId)),
+    call: async (caller, args) => runTool(catalogue.routes, tool, caller.identity, args, await agentOf(caller.clientId), switchedOff),
   }))];
 }
 
 async function callMcpTool(catalogue: McpCatalogue, caller: McpCaller, scopes: readonly OAuthScope[], name: string, args: Record<string, unknown>): Promise<Response> {
-  const tool = mcpTools(catalogue).find((candidate) => candidate.name === name);
+  const tool = mcpTools(catalogue, await catalogue.switchedOff?.()).find((candidate) => candidate.name === name);
   if (tool === undefined) return mcpToolError(`Unknown tool: ${name}`);
   if (!scopes.includes(tool.scope)) return response(403, { error: "insufficient_scope" });
   if (tool.permission !== null && !can(caller.identity, tool.permission)) return response(403, { error: "forbidden" });
@@ -112,8 +117,8 @@ function initializeMcp(request: McpRequest): Response {
   });
 }
 
-function listMcpTools(catalogue: McpCatalogue, id: unknown): Response {
-  return mcpJson(id, { tools: mcpTools(catalogue).map((tool) => ({
+async function listMcpTools(catalogue: McpCatalogue, id: unknown): Promise<Response> {
+  return mcpJson(id, { tools: mcpTools(catalogue, await catalogue.switchedOff?.()).map((tool) => ({
     name: tool.name, title: tool.title, description: tool.description, inputSchema: tool.inputSchema,
     annotations: { readOnlyHint: tool.readOnly, destructiveHint: tool.destructive, openWorldHint: false },
     securitySchemes: [{ type: "oauth2", scopes: [tool.scope] }],

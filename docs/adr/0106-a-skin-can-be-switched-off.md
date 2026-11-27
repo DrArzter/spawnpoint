@@ -4,6 +4,7 @@
 - Date: 2026-11-27
 - Milestone: M6
 - Amends: [ADR-0059](0059-separate-the-console-into-bones-and-skins.md) — which skins a build wears and tests
+- Amended by: [ADR-0107](0107-feature-flags-in-parameter-store.md) — the feature flags may narrow the skins at run time
 
 ## Context
 

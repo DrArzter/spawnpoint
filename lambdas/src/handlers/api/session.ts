@@ -9,7 +9,10 @@ import type { AccountProfile, ActiveSession, SessionIdentity, SessionRole, Visit
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
-export async function session(account: Caller, capabilities: readonly string[]): Promise<Response> {
+/** What the deployment offers a session: its capabilities, and the skins the feature flags allow (ADR-0107). */
+export type SessionFlags = Readonly<{ capabilities: readonly string[]; skins: readonly string[] | null }>;
+
+export async function session(account: Caller, { capabilities, skins }: SessionFlags): Promise<Response> {
   const observed = await observe(account);
   const identity = await resolveIdentity(account, observed) ?? await bootstrapOwner(account);
   if (identity !== null) {
@@ -22,7 +25,7 @@ export async function session(account: Caller, capabilities: readonly string[]):
     if (key === null && !identity.avatarRemoved) key = await copyProviderAvatar(identity, providerPhoto(await identityAccounts(identity), account));
     if (key !== null) profile.photoUrl = await avatarLink(key);
     else if (identity.avatarRemoved) profile.photoUrl = null;
-    const active: ActiveSession = { state: "active", identity: sessionIdentity(identity), role: sessionRole(role), capabilities, profile,
+    const active: ActiveSession = { state: "active", identity: sessionIdentity(identity), role: sessionRole(role), capabilities, skins, profile,
       bootstrap: bootstrap.Item === undefined ? { state: "unclaimed" } : {
         state: "claimed", ownerId: bootstrap.Item.identity_id, telegramId: null, claimedAt: bootstrap.Item.claimed_at,
       } };

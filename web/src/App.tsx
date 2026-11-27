@@ -11,7 +11,7 @@ import { JoinScreen } from "./screens/JoinScreen";
 import { LandingScreen } from "./screens/LandingScreen";
 import { ConnectScreen } from "./screens/ConnectScreen";
 import { useBootCard } from "./shell/hooks";
-import { chooseSkin, currentSkinId, isEnabledSkin, SKIN_CHOICES, wearOnDocument, wearSkin } from "./skins";
+import { allowedSkins, chooseSkin, currentSkinId, isEnabledSkin, skinChoices, wearOnDocument, wearSkin } from "./skins";
 import { t } from "./i18n";
 
 // The gate in front of the console: who is here, and which door they came
@@ -24,8 +24,12 @@ export function App() {
   const [connectRequest, setConnectRequest] = useState(() => readMcpConnectRoute());
   const { visible: bootVisible, publish } = useBootCard();
   const emailAction = readEmailActionRoute();
-  const skin = useMemo(chooseSkin, []);
-  const looks = useMemo(() => ({ current: currentSkinId(), options: SKIN_CHOICES, wear: (id: string) => { if (isEnabledSkin(id)) wearSkin(id); } }), []);
+  // The flags may narrow the build's faces once the session says so (ADR-0107);
+  // a face they leave out gives way to the default in place, without a reload.
+  const flaggedSkins = auth.status === "authenticated" && auth.session.state === "active" ? auth.session.skins : null;
+  const allowed = useMemo(() => allowedSkins(flaggedSkins), [flaggedSkins]);
+  const skin = useMemo(() => chooseSkin(allowed), [allowed]);
+  const looks = useMemo(() => ({ current: currentSkinId(allowed), options: skinChoices(allowed), wear: (id: string) => { if (isEnabledSkin(id, allowed)) wearSkin(id); } }), [allowed]);
 
   useEffect(() => {
     let active = true;

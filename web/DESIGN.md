@@ -309,7 +309,8 @@ A skin is a set of views over the same models; it may not change what a page off
 described above, and `terminal`. `ENABLED_SKIN_IDS` in `skins/skin.ts` says which are switched on
 ([ADR-0106](../docs/adr/0106-a-skin-can-be-switched-off.md)); only the console is on now. A person picks a skin that is
 on in Profile › Appearance › Look, or tries one with `?skin=`; with one skin on there is no Look to pick. A stored or
-asked-for skin that is off falls back to the console.
+asked-for skin that is off falls back to the console. At run time the feature flags may narrow this list further
+([ADR-0107](../docs/adr/0107-feature-flags-in-parameter-store.md)): the session's `skins`, which must include the console.
 
 `index.html` stamps `html[data-skin]` from `spawnpoint.skin` (or `?skin=`, else `console`), if that skin is on, before the first paint and
 asks for the skin's fonts. `main.tsx` paints the remembered accent and theme before the first render, and `App`

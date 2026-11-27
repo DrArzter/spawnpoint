@@ -38,6 +38,7 @@ export const API_ERROR_CODES = [
   "duplicate_player_name",
   "email_already_registered",
   "email_delivery_unavailable",
+  "feature_off",
   "fleet_unavailable",
   "forbidden",
   "game_has_no_config_files",

@@ -8,7 +8,14 @@ type Authority = Readonly<{
   caller: (event: Event) => Promise<Caller | null>;
   resolveIdentity: (account: Caller) => Promise<Identity | null>;
   panelOrigins: readonly string[];
+  /** The route keys whose capability the feature flags switched off (ADR-0107). */
+  switchedOff?: () => Promise<ReadonlySet<string>>;
 }>;
+
+/** A route whose capability is switched off answers as a feature that is not there (ADR-0107). */
+export function featureRefusal(routeKey: string, switchedOff: ReadonlySet<string>): Response | null {
+  return switchedOff.has(routeKey) ? errorResponse(404, "feature_off") : null;
+}
 
 /**
  * The one gate between a resolved identity and a route: what its declared
@@ -45,7 +52,10 @@ export function createDispatcher(routes: Readonly<Record<string, Route>>, author
 
     // A handler that reads its body throws InvalidBodyError for a body that is
     // not one JSON object. That is the caller's mistake, so it answers 400.
+    // A switched-off feature is refused only to a caller who would otherwise reach it.
     const call = async (subject: unknown): Promise<Response> => {
+      const off = featureRefusal(routeKey, await authority.switchedOff?.() ?? new Set());
+      if (off) return off;
       try {
         return await (route.handle as (subject: unknown, event: Event) => Promise<Response> | Response)(subject, event);
       } catch (error) {

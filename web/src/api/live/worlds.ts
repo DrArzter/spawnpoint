@@ -78,6 +78,12 @@ function named(template: (value: string) => string, fallback: string, key: "name
   };
 }
 
+// ADR-0108: the keys a start needs and SSM lacks, named so the Owner can set them.
+const MISSING_SECRETS = (detail: ApiErrorBody) => {
+  const keys = Array.isArray(detail.keys) ? detail.keys.filter((key): key is string => typeof key === "string") : [];
+  return keys.length > 0 ? t("world.gameSecretsMissing", { keys: keys.join(", ") }) : API_ERROR_TEXT.missing_game_secrets;
+};
+
 export const worldsApi = {
   async requestReleaseBuild(gameId: string, presetId: string, profileDigest: string, retryRelease?: string): Promise<{ release: string; attempt: number }> {
     const result = await request<{ release?: unknown; attempt?: unknown }>(`/games/${encodeURIComponent(gameId)}/presets/${encodeURIComponent(presetId)}/builds`, {
@@ -102,7 +108,7 @@ export const worldsApi = {
     const body = await request<{ result?: "requested" | "already_stopped"; operationId?: string }>(`${worldPath(gameId, worldId)}/${action}`, {
       method: "POST", ...(players === "disconnect" ? { body: { players } } : {}),
       failure: t("world.actionRequestCouldNot", { action: operationNoun(action) }),
-      refusals: { forbidden: players === "disconnect" ? t("world.roleCannotDisconnectPlayers") : refused },
+      refusals: { forbidden: players === "disconnect" ? t("world.roleCannotDisconnectPlayers") : refused, missing_game_secrets: MISSING_SECRETS },
       valid: (answer) => answer.result !== undefined,
     });
     return { result: body.result as "requested" | "already_stopped", ...(body.operationId ? { operationId: body.operationId } : {}) };
@@ -112,7 +118,7 @@ export const worldsApi = {
     const body = await request<{ result?: "requested" | "switched"; operationId?: string }>(`${worldPath(gameId, worldId)}/promote`, {
       method: "POST", body: { release },
       failure: t("world.releaseUpdateCouldNot"),
-      refusals: { forbidden: t("world.onlyOwnerCanUpdate") },
+      refusals: { forbidden: t("world.onlyOwnerCanUpdate"), missing_game_secrets: MISSING_SECRETS },
       valid: (answer) => answer.result === "switched" || (answer.result === "requested" && answer.operationId !== undefined),
     });
     if (body.result === "switched") return { result: "switched" as const };

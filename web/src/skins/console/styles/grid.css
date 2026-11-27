@@ -9,6 +9,11 @@ html[data-skin="console"] .c-grid {
   min-width: 0;
 }
 
+/* The world's details: at most two columns, so its four cards make two rows of two. */
+html[data-skin="console"] .c-grid-detail {
+  grid-template-columns: repeat(auto-fit, minmax(max(min(100%, var(--c-min)), calc((100% - var(--c-gap)) / 2)), 1fr));
+}
+
 html[data-skin="console"] .c-grid-stat {
   --c-min: 200px;
 }
@@ -80,4 +85,30 @@ html[data-skin="console"] .c-span-full {
   html[data-skin="console"] .c-grid-home > .c-span-2-wide {
     grid-column: span 2;
   }
+}
+
+/*
+ * A filling stack hands the free height to its cards marked fill, shared
+ * evenly, each at least 280px; their lists scroll inside them instead of
+ * pushing the page down. Other cards keep their own height.
+ */
+html[data-skin="console"] .c-grid-stack[data-fill] {
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-skin="console"] .c-page > .c-grid-stack[data-fill],
+html[data-skin="console"] .c-split-pane > .c-grid-stack[data-fill] {
+  flex: 1 1 0;
+}
+
+html[data-skin="console"] .c-grid-stack[data-fill] > .c-card[data-fill] {
+  flex: 1 1 0;
+  min-height: 280px;
+}
+
+html[data-skin="console"] .c-grid-stack[data-fill] > .c-card[data-fill] > .c-card-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
 }

@@ -1,4 +1,5 @@
 import { type Identity } from "../../access/domain.ts";
+import { type HostEnvKeys, missingGameSecrets } from "../../control-plane/launch-preflight.ts";
 import { type SessionMachines } from "../../control-plane/session-machines.ts";
 import { refuseUnprovenGame } from "./game-proof.ts";
 import { type WorldRecords } from "../../control-plane/world-records.ts";
@@ -180,9 +181,11 @@ export type WorldsDependencies = Readonly<{
   machines: SessionMachines;
   gateway: Pick<ConsoleGateway, "send" | "read" | "reloadWhitelist">;
   backupReleases: () => BackupReleaseSources;
+  /** The host .env's names, checked before a start (ADR-0108). */
+  hostEnv: HostEnvKeys;
 }>;
 
-export function worldsFeature({ sources, worlds, machines, gateway, backupReleases }: WorldsDependencies) {
+export function worldsFeature({ sources, worlds, machines, gateway, backupReleases, hostEnv }: WorldsDependencies) {
   async function controlSession(identity: Identity, action: SessionAction, gameId: string, worldId: string, body?: string): Promise<Response> {
     const players = action === "stop" ? stopPlayersPolicy(identity, body) : "refuse";
     if (typeof players !== "string") return players;
@@ -208,6 +211,8 @@ export function worldsFeature({ sources, worlds, machines, gateway, backupReleas
     if (action === "start") {
       const unproven = await refuseUnprovenGame(identity, gameId, sources);
       if (unproven) return unproven;
+      const missing = await missingGameSecrets(hostEnv, gameId);
+      if (missing.length > 0) return errorResponse(409, "missing_game_secrets", { keys: missing });
     }
     // A fleet world kept warm asks placement to keep its launched host after the stop (ADR-0048).
     const own = worldRecords.find((record) => record.worldId === worldId);

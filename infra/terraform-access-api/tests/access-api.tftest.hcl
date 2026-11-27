@@ -398,6 +398,18 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "ListHostEnvParameterNames"]) == toset(["ssm:GetParametersByPath"]),
+      one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "ListHostEnvParameterNames"]) == toset([
+        "arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/host/env",
+        "arn:aws:ssm:eu-central-1:123456789012:parameter/spawnpoint/host/env/*",
+      ]),
+      !anytrue([for statement in data.aws_iam_policy_document.access_api.statement : contains(statement.actions, "kms:Decrypt")]),
+    ])
+    error_message = "The start preflight lists the host .env's names on its path only, and the API cannot decrypt a value (ADR-0108)."
+  }
+
+  assert {
+    condition = alltrue([
       one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "FindHostStartCommand"]) == toset(["ssm:ListCommands"]),
       one([for statement in data.aws_iam_policy_document.access_api.statement : statement.actions if statement.sid == "ReadHostStartOutput"]) == toset(["logs:GetLogEvents"]),
       one([for statement in data.aws_iam_policy_document.access_api.statement : statement.resources if statement.sid == "ReadHostStartOutput"]) == toset(["arn:aws:logs:eu-central-1:123456789012:log-group:/spawnpoint/session-commands:log-stream:*"]),

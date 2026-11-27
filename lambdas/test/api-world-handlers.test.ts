@@ -11,6 +11,7 @@ import { type ControlPlaneSources, type HostObservation } from "../src/control-p
 import { type WorldRecord, worldRecordDocument } from "../src/control-plane/world-registry.ts";
 import { InvalidBodyError } from "../src/handlers/api/http.ts";
 import { FakeRefsTable } from "./fake-refs-table.ts";
+import { awsHostEnvKeys } from "../src/control-plane/aws-host-env-keys.ts";
 import { deployedWorlds } from "../src/handlers/api/worlds-wiring.ts";
 
 const { controlSession, controlWorldLifecycle, createWorld, updateWorldSettings, whitelistOf } = deployedWorlds;
@@ -36,9 +37,12 @@ function scenario(t: TestContext, options: Readonly<{
   /** False: the deployment's persistent host was deleted (ADR-0100). */
   persistentHost?: boolean;
   presets?: readonly PresetObservation[];
+  /** The .env keys in SSM; by default every one the games need. */
+  hostEnv?: readonly string[];
 }> = {}) {
   const sources = awsControlPlaneSources as Required<ControlPlaneSources>;
   const inputs: Record<string, unknown>[] = [];
+  t.mock.method(awsHostEnvKeys, "list", async () => options.hostEnv ?? ["RCON_PASSWORD", "PALWORLD_ADMIN_PASSWORD", "ZOMBOID_RCON_PASSWORD", "ZOMBOID_ADMIN_PASSWORD"]);
   t.mock.method(sources, "listHosts", async () => options.persistentHost === false ? [] : [{
     id: "host", name: "Host", state: options.state ?? "stopped", providerRef: "i-12345678", instanceType: null,
     availabilityZone: null, launchedAt: null, publicIp: null, provenance: "configured" as const,
@@ -56,6 +60,22 @@ function scenario(t: TestContext, options: Readonly<{
   });
   return inputs;
 }
+
+// ADR-0108: a secret the game needs and SSM lacks refuses the start before any machine runs.
+test("a start is refused with the missing keys when the host env lacks the game's secrets", async (t) => {
+  const inputs = scenario(t, { hostEnv: ["AWS_REGION"] });
+  const refused = await controlSession(identity, "start", "minecraft", record.worldId);
+  assert.equal(refused.statusCode, 409);
+  assert.deepEqual(JSON.parse(refused.body), { error: "missing_game_secrets", keys: ["RCON_PASSWORD"] });
+  assert.deepEqual(inputs, []);
+});
+
+test("a stop does not read the host env", async (t) => {
+  scenario(t, { game: running(), state: "running" });
+  t.mock.method(awsHostEnvKeys, "list", async () => { throw new Error("a stop must not read the host env"); });
+  const stopped = await controlSession(identity, "stop", "minecraft", record.worldId);
+  assert.notEqual(stopped.statusCode, 500);
+});
 
 test("configured start uses the planned host and the game's session key", async (t) => {
   const inputs = scenario(t);

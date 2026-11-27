@@ -54,7 +54,7 @@ export function Settle({ children }: Readonly<{ children: ReactNode }>) {
   }, []);
   return (
     <div className="c-settle" ref={box}>
-      <div ref={content}>{children}</div>
+      <div className="c-settle-body" ref={content}>{children}</div>
     </div>
   );
 }

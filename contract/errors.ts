@@ -103,6 +103,7 @@ export const API_ERROR_CODES = [
   "lifecycle_command",
   "log_not_ready",
   "metrics_unavailable",
+  "missing_game_secrets",
   "no_pack_published",
   "no_plan",
   "no_release_pointer",

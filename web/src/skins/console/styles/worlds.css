@@ -112,6 +112,11 @@ html[data-skin="console"] .c-worlds-layout {
   gap: var(--c-gap);
 }
 
+/* The worlds table reaches the bottom of the page; the quick look keeps its own height. */
+html[data-skin="console"] .c-worlds-layout > .c-card {
+  align-self: stretch;
+}
+
 html[data-skin="console"] .c-worlds-sep {
   width: 1px;
   height: 24px;

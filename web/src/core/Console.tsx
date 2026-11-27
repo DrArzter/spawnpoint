@@ -18,6 +18,7 @@ import { chooseFile } from "./choose-file";
 import { useConsole, type ConsoleController } from "./useConsole";
 import { accessRequests, useBackups, useConsoleGateway, type ConsoleGateway, useInvitation, useLoginAccounts, useNotifications, useConfigFiles, useWorldLog, useReleaseChanges, useReleaseMods, useRoles, useUsers, useWhitelist, useWorldMetrics } from "./data";
 import { newestRunning, progressModel, useOperationProgress } from "./operation-progress";
+import { backupOverview } from "./world-overview";
 import { persistentHostNotice } from "./hosts";
 import { useConfirmationForm, useCreateWorldForm, useGameSettingsForm, useWorldSettingsForm } from "./forms";
 import type { AccessModel, ConsoleLine, ConsoleModel, HostLogRow, LookModel, Notice, OperationRow, ReleasesModel, ShellModel, WorldModel, WorldRow, WorldsModel } from "./models";
@@ -275,6 +276,8 @@ function WorldPage({ console, skin, game, world }: Controlled & Readonly<{ game:
     progress,
     wipes: [...world.wipes].reverse().map((wipe) => ({ wipe, showBackups: action("wipe.backups", t("common.backups"), () => { backups.setFilter(wipe.id); navigate({ worldTab: "backups" }); }, { icon: "backup" }) })),
     backups,
+    backupOverview: backupOverview(backups),
+    showBackups: action("world.backups.open", t("world.allBackups"), () => { backups.setFilter(null); navigate({ worldTab: "backups" }); }, { icon: "backup" }),
     releases: {
       rows: withReleasePacks(
         releaseRows(world, granted.has("connection.read"), busy, () => worldCallbacks.onDownloadPack(game, world)),

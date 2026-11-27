@@ -39,7 +39,7 @@ export function WhitelistTab({ model }: Readonly<{ model: WhitelistModel }>) {
     </form>
   );
   return (
-    <Card actions={form} body="flush" count={ready?.rows.length} title={t("common.whitelist")} titleTip={changed}>
+    <Card actions={form} body="flush" fill count={ready?.rows.length} title={t("common.whitelist")} titleTip={changed}>
       {list.status === "error" && <LoadError error={list.error} kind={list.kind} retry={list.retry} title={t("whitelist.whitelistCouldNotLoaded")} verb={t("whitelist.readWhitelist")} />}
       {list.status === "loading" && (
         <SkeletonGroup>

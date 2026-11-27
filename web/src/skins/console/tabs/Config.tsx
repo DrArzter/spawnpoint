@@ -48,7 +48,7 @@ function Files({ model }: Readonly<{ model: ConfigFilesModel }>) {
   const ready = list.status === "ready" ? list.value : null;
   const shown = ready ? applyFilter(ready.rows, tokens, () => "", (row) => row.path) : [];
   return (
-    <Card actions={ready?.release ? <span className="c-faint c-mono">{t("common.releaseActiveRelease", { activeRelease: ready.release })}</span> : undefined} body="flush" count={ready?.rows.length} title={t("config.configFiles")}>
+    <Card actions={ready?.release ? <span className="c-faint c-mono">{t("common.releaseActiveRelease", { activeRelease: ready.release })}</span> : undefined} body="flush" fill count={ready?.rows.length} title={t("config.configFiles")}>
       {list.status === "error"
         ? <LoadError error={list.error} kind={list.kind} retry={list.retry} title={t("config.configFilesCouldNot")} verb={t("config.editConfigFiles")} />
         : (

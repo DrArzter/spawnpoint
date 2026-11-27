@@ -1,3 +1,5 @@
+import { useState, type ReactNode } from "react";
+
 import type { PointerRow, PresetRow, ReleasesModel } from "../../core/models";
 import { routeHash } from "../../routing";
 import { BuildState } from "./BuildState";
@@ -5,6 +7,7 @@ import { ActionButton } from "./ui/ActionButton";
 import { Card } from "./ui/Card";
 import { Chip } from "./ui/Chip";
 import { Empty } from "./ui/Empty";
+import { applyFilter, FilterBar, type FilterProperty, type FilterToken } from "./ui/FilterBar";
 import { Grid } from "./ui/Grid";
 import { PageHeader } from "./ui/PageHeader";
 import { SourceRef } from "./ui/SourceRef";
@@ -13,7 +16,8 @@ import { t } from "../../i18n";
 
 /**
  * Releases (spec §6.4): the game's presets with their builds, and the
- * release each world points at. Stacked at every width.
+ * release each world points at. Stacked at every width; the two share the
+ * screen's height, each list scrolls inside its card and can be searched.
  */
 export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
   const game = model.game;
@@ -22,7 +26,7 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
     return (
       <div className="c-page">
         {header}
-        <Card label={t("common.releases")}><Empty icon="public" title={t("common.noGamesYet")} /></Card>
+        <Card fill label={t("common.releases")}><Empty icon="public" title={t("common.noGamesYet")} /></Card>
       </div>
     );
   }
@@ -43,13 +47,33 @@ export function Releases({ model }: Readonly<{ model: ReleasesModel }>) {
   return (
     <div className="c-page">
       {header}
-      <Grid kind="stack">
-        <Card body="flush" count={model.loading ? undefined : model.presets.length} title={t("releases.presets")}>
-          <Table columns={presets} empty={<Empty icon="inventory_2" size="sm" title={t("releases.noPresets")} />} label={t("releases.presets")} loading={model.loading} rowKey={(row) => row.preset.id} rows={model.presets} />
-        </Card>
-        <Card body="flush" count={model.loading ? undefined : model.pointers.length} title={t("releases.releasePointers")}>
-          <Table columns={pointers} empty={<Empty icon="public" size="sm" title={t("common.noWorlds")} />} label={t("releases.releasePointers")} loading={model.loading} rowKey={(row) => row.world.id} rows={model.pointers} />
-        </Card>
+      <Grid fill kind="stack">
+        <Searchable
+          columns={presets}
+          empty={<Empty icon="inventory_2" size="sm" title={t("releases.noPresets")} />}
+          label={t("releases.presets")}
+          loading={model.loading}
+          placeholder={t("releases.searchByPreset")}
+          properties={[]}
+          read={() => ""}
+          rowKey={(row) => row.preset.id}
+          rows={model.presets}
+          search={t("releases.searchPresets")}
+          text={(row) => `${row.preset.displayName} ${row.preset.latestRelease ?? ""} ${row.preset.repository ?? ""}`}
+        />
+        <Searchable
+          columns={pointers}
+          empty={<Empty icon="public" size="sm" title={t("common.noWorlds")} />}
+          label={t("releases.releasePointers")}
+          loading={model.loading}
+          placeholder={t("releases.searchByWorld")}
+          properties={[presetProperty(model.pointers)]}
+          read={(row) => row.presetName}
+          rowKey={(row) => row.world.id}
+          rows={model.pointers}
+          search={t("releases.searchPointers")}
+          text={(row) => `${row.world.displayName} ${row.presetName} ${row.world.release.activeRelease ?? ""} ${row.world.release.desiredRelease ?? ""}`}
+        />
       </Grid>
     </div>
   );
@@ -63,5 +87,36 @@ function PointerRelease({ row }: Readonly<{ row: PointerRow }>) {
       <span className="c-mono">{activeRelease ?? row.summary}</span>
       {desiredRelease !== null && desiredRelease !== activeRelease && <Chip tip={t("common.desiredDesiredRelease", { desiredRelease })}>→ {desiredRelease}</Chip>}
     </span>
+  );
+}
+
+/** The preset a world points at, offered as a filter with each one's count. */
+function presetProperty(rows: readonly PointerRow[]): FilterProperty {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.presetName, (counts.get(row.presetName) ?? 0) + 1);
+  return { id: "preset", label: t("common.preset"), values: [...counts].map(([value, count]) => ({ value, count })) };
+}
+
+/** A list in its own card, with a search over it once it has rows. */
+function Searchable<Row>({ label, search, placeholder, columns, rows, rowKey, loading, empty, properties, read, text }: Readonly<{
+  label: string;
+  search: string;
+  placeholder: string;
+  columns: Column<Row>[];
+  rows: readonly Row[];
+  rowKey: (row: Row) => string;
+  loading: boolean;
+  empty: ReactNode;
+  properties: FilterProperty[];
+  read: (row: Row, property: string) => string;
+  text: (row: Row) => string;
+}>) {
+  const [tokens, setTokens] = useState<readonly FilterToken[]>([]);
+  const shown = applyFilter(rows, tokens, read, text);
+  return (
+    <Card body="flush" count={loading ? undefined : rows.length} fill title={label}>
+      {(loading || rows.length > 0) && <FilterBar disabled={loading} label={search} matches={shown.length} onChange={setTokens} placeholder={placeholder} properties={properties} tokens={tokens} />}
+      <Table columns={columns} empty={rows.length > 0 ? <Empty icon="search" size="sm" title={t("common.noMatches")} /> : empty} label={label} loading={loading} rowKey={rowKey} rows={shown} />
+    </Card>
   );
 }

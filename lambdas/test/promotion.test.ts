@@ -9,6 +9,7 @@ import type { PresetObservation } from "../src/control-plane/preset-catalog.ts";
 import type { ControlPlaneSources, OperationObservation } from "../src/control-plane/read-model.ts";
 import type { WorldRecord } from "../src/control-plane/world-registry.ts";
 import { InvalidBodyError } from "../src/handlers/api/http.ts";
+import { awsHostEnvKeys } from "../src/control-plane/aws-host-env-keys.ts";
 import { deployedPromotion } from "../src/handlers/api/promotion-wiring.ts";
 
 const { promoteWorld } = deployedPromotion;
@@ -103,7 +104,8 @@ test("players online or another operation refuse before the workflow starts", ()
   assert.equal(refused({ blockingOperations: 1 }), "409 operation_in_progress");
 });
 
-function scenario(t: TestContext, options: Readonly<{ operations?: OperationObservation[]; world?: WorldRecord }> = {}) {
+function scenario(t: TestContext, options: Readonly<{ operations?: OperationObservation[]; world?: WorldRecord; hostEnv?: readonly string[] }> = {}) {
+  t.mock.method(awsHostEnvKeys, "list", async () => options.hostEnv ?? ["RCON_PASSWORD"]);
   process.env.SPAWNPOINT_LAUNCH = "enabled";
   process.env.RELEASE_BUCKET = "releases";
   t.after(() => { delete process.env.SPAWNPOINT_LAUNCH; delete process.env.RELEASE_BUCKET; });
@@ -139,6 +141,15 @@ test("a promotion of a game that has not run here is the Owner's alone (ADR-0109
   assert.deepEqual([refused.statusCode, JSON.parse(refused.body)], [403, { error: "game_not_proven" }]);
   assert.deepEqual(machines, []);
   assert.equal((await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }))).statusCode, 202);
+});
+
+// ADR-0108: the promote machine starts the world on its host, so it needs the game's secrets too.
+test("a promotion is refused with the missing keys when the host env lacks the game's secrets", async (t) => {
+  const { machines } = scenario(t, { hostEnv: [] });
+  const result = await promoteWorld(owner, "minecraft", record.worldId, JSON.stringify({ release: "200.1" }));
+  assert.equal(result.statusCode, 409);
+  assert.deepEqual(JSON.parse(result.body), { error: "missing_game_secrets", keys: ["RCON_PASSWORD"] });
+  assert.deepEqual(machines, []);
 });
 
 test("the API starts the promote machine with the fleet world's own record, placement and warm choice", async (t) => {

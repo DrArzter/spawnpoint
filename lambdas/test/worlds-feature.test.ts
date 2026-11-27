@@ -27,6 +27,7 @@ function fakes(change: WorldChange, record: WorldRecord | null = null) {
     machines: unused as SessionMachines,
     gateway: unused as never,
     backupReleases: () => unused as never,
+    hostEnv: unused as never,
   });
   return { feature, replaced };
 }
@@ -67,6 +68,7 @@ test("a whitelist name is held to the game's own rule, and the refusal carries i
     machines: unused as SessionMachines,
     gateway: unused as never,
     backupReleases: () => unused as never,
+    hostEnv: unused as never,
   });
   const refused = await feature.updateWhitelist(owner, "minecraft", "world-a", JSON.stringify({ names: ["no spaces allowed"] }));
   assert.equal(refused.statusCode, 400);

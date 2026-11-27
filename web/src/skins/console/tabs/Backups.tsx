@@ -25,7 +25,7 @@ export function BackupsTab({ model }: Readonly<{ model: BackupsModel }>) {
     <Segmented label={t("common.wipe")} onChange={(value) => model.setFilter(value === ALL ? null : value)} options={options} value={model.filter ?? ALL} />
   );
   return (
-    <Card actions={model.canRead ? filter : undefined} body="flush" count={model.canRead && model.inventory.status === "ready" ? model.inventory.value.entries.length : undefined} title={t("common.backups")}>
+    <Card actions={model.canRead ? filter : undefined} body="flush" fill count={model.canRead && model.inventory.status === "ready" ? model.inventory.value.entries.length : undefined} title={t("common.backups")}>
       <Body model={model} />
     </Card>
   );

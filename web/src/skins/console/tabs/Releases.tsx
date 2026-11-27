@@ -13,7 +13,6 @@ import { Copy } from "../ui/Copy";
 import { DetailList } from "../ui/DetailList";
 import { Empty, LoadError } from "../ui/Empty";
 import { FilterBar, type FilterProperty, type FilterToken } from "../ui/FilterBar";
-import { Grid } from "../ui/Grid";
 import { Indicator } from "../ui/Indicator";
 import { Pager } from "../ui/Pager";
 import { Status } from "../ui/Status";
@@ -33,13 +32,17 @@ function releaseFacts(model: WorldModel): Detail[] {
 }
 
 /** The Release card says which release is active or desired; a download row names its release only (a state shown once). */
+/** The release and what comes with it; the last card takes the free height, and a long one grows the page. */
 export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
   const rows = newestFirst(model.releases.rows);
+  const downloads = rows.some((row) => row.downloads.length > 0);
+  const { changes, mods } = model.releases;
+  const last = mods ? "mods" : changes ? "changes" : downloads ? "downloads" : "release";
   return (
-    <Grid kind="stack">
-      <Card body="kv" title={t("common.release")}><DetailList columns="fit" details={releaseFacts(model)} /></Card>
-      {rows.some((row) => row.downloads.length > 0) && (
-        <Card body="flush" title={t("releases.downloads")}>
+    <>
+      <Card body="kv" fill={last === "release"} title={t("common.release")}><DetailList columns="fit" details={releaseFacts(model)} /></Card>
+      {downloads && (
+        <Card body="flush" fill={last === "downloads"} title={t("releases.downloads")}>
           <TrackList
             label={t("releases.downloads")}
             rowKey={(row) => row.name}
@@ -52,9 +55,9 @@ export function ReleasesTab({ model }: Readonly<{ model: WorldModel }>) {
           />
         </Card>
       )}
-      {model.releases.changes && <Changes changes={model.releases.changes} />}
-      {model.releases.mods && <Mods key={`${model.world.id}:${model.releases.mods.release}`} mods={model.releases.mods} />}
-    </Grid>
+      {changes && <Changes changes={changes} fill={last === "changes"} />}
+      {mods && <Mods fill key={`${model.world.id}:${mods.release}`} mods={mods} />}
+    </>
   );
 }
 
@@ -65,12 +68,12 @@ const changeStatus: Readonly<Record<ChangeRow["change"], StatusDescriptor>> = {
 };
 
 /** What the release changes (P3); the pair it compares is the chip, the unchanged count its tooltip. */
-function Changes({ changes }: Readonly<{ changes: ReleaseChangesModel }>) {
+function Changes({ changes, fill }: Readonly<{ changes: ReleaseChangesModel; fill: boolean }>) {
   const state = changes.changes;
   const value = state.status === "ready" ? state.value : null;
   const head = value && <Chip icon="history" tip={t("releases.unchangedFilesUnchanged", { unchanged: value.unchanged })}>{value.from === null ? t("releases.firstReleaseRelease", { release: changes.release }) : `${value.from} → ${changes.release}`}</Chip>;
   return (
-    <Card actions={head ?? undefined} body="flush" count={value?.rows.length} title={t("releases.changes")}>
+    <Card actions={head ?? undefined} body="flush" count={value?.rows.length} fill={fill} title={t("releases.changes")}>
       {state.status === "error"
         ? <LoadError error={state.error} kind={state.kind} retry={state.retry} size="sm" title={t("releases.changesCouldNotLoaded")} verb={t("common.readChanges")} />
         : state.status === "ready" && state.value === null
@@ -117,7 +120,7 @@ export function narrow(mods: ModsModel, tokens: readonly FilterToken[]) {
   mods.setSource(mods.sources.find((entry) => entry.label === source?.value)?.source ?? null);
 }
 
-function Mods({ mods }: Readonly<{ mods: ModsModel }>) {
+function Mods({ mods, fill }: Readonly<{ mods: ModsModel; fill: boolean }>) {
   const files = mods.files;
   const ready = files.status === "ready" ? files.value : null;
   // The source filter exists only when the release recorded sources; an old one keeps the search alone.
@@ -136,7 +139,7 @@ function Mods({ mods }: Readonly<{ mods: ModsModel }>) {
     { id: "actions", header: t("common.actions"), kind: "act", render: (row) => <ActionButton action={row.download} size="sm" /> },
   ];
   return (
-    <Card actions={head} body="flush" count={ready?.all} title={t("releases.mods")}>
+    <Card actions={head} body="flush" count={ready?.all} fill={fill} title={t("releases.mods")}>
       {files.status === "error"
         ? <LoadError error={files.error} kind={files.kind} retry={files.retry} size="sm" title={t("releases.modsCouldNotLoaded")} verb={t("common.readMods")} />
         : (

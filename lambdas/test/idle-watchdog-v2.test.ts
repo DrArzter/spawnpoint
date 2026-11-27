@@ -6,6 +6,7 @@ type State = {
   Type: string;
   Next?: string;
   End?: boolean;
+  Error?: string;
   Default?: string;
   Resource?: string;
   Parameters?: Record<string, unknown>;
@@ -206,4 +207,25 @@ test("the host's memory is published after the observation, and never fails or c
   assert.equal(parameters.MetricData[0]?.["Value.$"], "$.observed.probe.memory.usedPercent");
   assert.equal(publish.Next, "Count Successful Probe");
   assert.deepEqual(publish.Catch?.map((caught) => [caught.ErrorEquals, caught.Next]), [[["States.ALL"], "Count Successful Probe"]], "a failed publish is not a probe failure");
+});
+
+// 2026-11-27: most watchdog alarms were watchdogs whose session had already
+// ended, been replaced or moved. That is the end of their job, not a failure.
+test("a watchdog whose session is no longer its own ends quietly; real failures still fail", async () => {
+  const definition = await loadDefinition();
+  for (const name of ["Read Session Before Reconcile", "Record Successful Observation", "Record Command Unknown", "Record Synthetic Unknown", "Check Idle Eligibility"]) {
+    const conflict = state(definition, name).Catch?.find((entry) => (entry.ErrorEquals as string[]).includes("LifecycleConflict"));
+    assert.equal(conflict?.Next, "Session No Longer Watched", name);
+  }
+  const ended = state(definition, "Session No Longer Watched");
+  assert.equal(ended.Type, "Pass");
+  assert.equal(ended.End, true);
+  assert.equal(ended.Parameters?.status, "session_ended");
+  const rejected = state(definition, "Watchdog Registration Rejected");
+  assert.equal(rejected.Type, "Pass");
+  assert.equal(rejected.Parameters?.status, "registration_superseded");
+  const failures = Object.values(definition.States).filter((candidate) => candidate.Type === "Fail").map((candidate) => candidate.Error);
+  assert.ok(failures.includes("Spawnpoint.V2WatchdogStopFailing"), "a failed stop still fails");
+  assert.ok(failures.includes("Spawnpoint.V2WatchdogBlind"), "a blind watchdog still fails");
+  assert.ok(!failures.includes("Spawnpoint.V2WatchdogRegistrationRejected"));
 });

@@ -119,9 +119,26 @@
       "Next": "Watchdog Registration Rejected"
     },
     "Watchdog Registration Rejected": {
-      "Type": "Fail",
-      "Error": "Spawnpoint.V2WatchdogRegistrationRejected",
-      "Cause": "The session is stale, is not ready, or already owns a different watchdog; the rejected execution released its lease."
+      "Type": "Pass",
+      "Comment": "The session is stale, is not ready, or already owns a different watchdog, and the rejected execution released its lease. Another execution watches it, or nothing needs watching: not a failure, so no alarm.",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "status": "registration_superseded"
+      },
+      "End": true
+    },
+    "Session No Longer Watched": {
+      "Type": "Pass",
+      "Comment": "The coordinator refused this watchdog's write with LifecycleConflict: its session was stopped, replaced or moved, or another watchdog owns it. The watchdog has nothing left to watch, so it ends quietly; a stop it should have made is the running-hours alarm's backstop.",
+      "Parameters": {
+        "operationId.$": "$.request.operationId",
+        "sessionId.$": "$.request.sessionId",
+        "status": "session_ended",
+        "checksTotal.$": "$.counters.total",
+        "conflict.$": "$.sessionEnded.Cause"
+      },
+      "End": true
     },
     "Release Registration Lease": {
       "Type": "Task",
@@ -221,6 +238,13 @@
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["LifecycleConflict"],
+          "ResultPath": "$.sessionEnded",
+          "Next": "Session No Longer Watched"
         }
       ],
       "Next": "Session Moving"
@@ -475,6 +499,13 @@
           "BackoffRate": 2
         }
       ],
+      "Catch": [
+        {
+          "ErrorEquals": ["LifecycleConflict"],
+          "ResultPath": "$.sessionEnded",
+          "Next": "Session No Longer Watched"
+        }
+      ],
       "Next": "Has Memory Reading"
     },
     "Has Memory Reading": {
@@ -557,6 +588,13 @@
           "BackoffRate": 2
         }
       ],
+      "Catch": [
+        {
+          "ErrorEquals": ["LifecycleConflict"],
+          "ResultPath": "$.sessionEnded",
+          "Next": "Session No Longer Watched"
+        }
+      ],
       "Next": "Count Probe Failure"
     },
     "Record Synthetic Unknown": {
@@ -585,6 +623,13 @@
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["LifecycleConflict"],
+          "ResultPath": "$.sessionEnded",
+          "Next": "Session No Longer Watched"
         }
       ],
       "Next": "Count Probe Failure"
@@ -641,6 +686,13 @@
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["LifecycleConflict"],
+          "ResultPath": "$.sessionEnded",
+          "Next": "Session No Longer Watched"
         }
       ],
       "Next": "Idle Stop Eligible"

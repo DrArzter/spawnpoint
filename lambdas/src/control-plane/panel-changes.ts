@@ -46,19 +46,23 @@ function viewTarget(change: TableChange): string | null {
   return change.keys.pk === PROJECTION_KEY.pk && change.keys.sk === PROJECTION_KEY.sk ? PROJECTION_TARGET : null;
 }
 
+function reloadTarget(change: TableChange, tables: StreamedTables): string | null {
+  if (change.table === tables.lifecycle) return lifecycleTarget(change);
+  if (change.table === tables.view) return viewTarget(change);
+  return null;
+}
+
 /** The distinct reloads one batch of changes asks for, and the time of its latest change. */
 export function panelReloads(changes: readonly TableChange[], tables: StreamedTables): PanelReloads {
   const targets = new Set<string>();
   let observedAt: number | null = null;
   for (const change of changes) {
-    const target = change.table === tables.lifecycle ? lifecycleTarget(change)
-      : change.table === tables.view ? viewTarget(change)
-      : null;
+    const target = reloadTarget(change, tables);
     if (target === null) continue;
     targets.add(target);
     if (change.atEpochMilliseconds !== null && (observedAt === null || change.atEpochMilliseconds > observedAt)) {
       observedAt = change.atEpochMilliseconds;
     }
   }
-  return { targets: [...targets].sort(), observedAtEpochMilliseconds: observedAt };
+  return { targets: [...targets].sort((a, b) => a.localeCompare(b)), observedAtEpochMilliseconds: observedAt };
 }

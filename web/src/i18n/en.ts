@@ -1329,6 +1329,7 @@ export const en = {
   "world.runningCountWorldsRunningEach": "{runningCount} worlds are running, each on a fleet host of its own.",
   "world.runningOperations": "Running operations",
   "world.saveBackUpSession": "Save and back up this session, then drain its host",
+  "world.stopDidNotFinish": "The last stop did not finish. Stop again; it is refused while the failed attempt still holds the world, for up to 30 minutes.",
   "world.saveBackUpStop": "Save, back up and stop this session?",
   "world.saveBackUpStopSession": "Save, back up and stop this session",
   "world.saveSettings": "Save settings",

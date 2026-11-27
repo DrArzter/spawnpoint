@@ -163,3 +163,18 @@ test("the fleet overview counts the running launched hosts on Spot", () => {
   assert.equal(buildSessionOverview(game, { ...base, hosts }, "running", shared, true).fleetHosts.spot, 1);
   assert.equal(buildSessionOverview(game, base, "running", shared, true).fleetHosts.spot, 0);
 });
+
+// A stop that failed leaves the world stopping (Spawnpoint.V2VerifiedStopFailed);
+// the answer is to stop again, and the panel must let the person do it.
+test("a fleet world stuck in stopping offers Stop again; one whose stop still runs does not", () => {
+  const stuck = fleetWorld("stuck", "Stuck", session("stuck", "stopping"));
+  const withStuck: Game = { ...game, worlds: [stuck, spare] };
+  const shared = deriveSharedHostSession(snapshot());
+  const retry = sessionControlAvailability(stuck, withStuck, shared, true, false, true, []);
+  assert.equal(retry.action, "stop");
+  assert.equal(retry.disabled, false, retry.hint);
+  assert.match(retry.hint, /did not finish/);
+  const running = { id: "panel-stop-1", type: "stop" as const, status: "running" as const, startedAt: "2026-11-27T00:00:00.000Z", worldId: "stuck" };
+  const waiting = sessionControlAvailability(stuck, withStuck, shared, true, false, true, [running]);
+  assert.equal(waiting.disabled, true, "a stop in progress holds the world");
+});

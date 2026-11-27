@@ -45,10 +45,13 @@ function unavailableReason(world: World): string {
 
 // A fleet world is refused for its own session's state, never for another
 // world's: each runs on a host launched for it (ADR-0062).
+// Reached only when no operation holds the world, so a world still `stopping`
+// is a stop that failed and left it there; the workflow's answer is to stop
+// again (Spawnpoint.V2VerifiedStopFailed), and so is the panel's.
 function fleetRefusal(world: World, game: Game): string | null {
   const observed = fleetSessionOf(world)?.observedState;
   if (world.connectivity === "zerotier") return t("world.fleetHostsDoNotJoin");
-  if (observed === "starting" || observed === "stopping" || observed === "moving" || observed === "unknown") return t("world.worldObserved", { observed });
+  if (observed === "starting" || observed === "moving" || observed === "unknown") return t("world.worldObserved", { observed });
   return null;
 }
 
@@ -81,6 +84,7 @@ export function sessionControlAvailability(
   if (controlBusy || (fleet ? blocking.length > 0 : sharedSession.operationRunning)) return refuse(t("world.controlPlaneOperationAlreadyProgress"));
   const refusal = fleet ? fleetRefusal(world, game) : sharedRefusal(sharedSession, action);
   if (refusal !== null) return refuse(refusal);
+  if (fleet && fleetSessionOf(world)?.observedState === "stopping") return { action, disabled: false, hint: t("world.stopDidNotFinish") };
   if (fleet) return { action, disabled: false, hint: action === "start" ? t("world.launchReuseBilledFleet") : t("world.saveBackUpSession") };
   return { action, disabled: false, hint: action === "start" ? t("world.startBilledSessionShared") : t("world.saveBackUpStopSession") };
 }

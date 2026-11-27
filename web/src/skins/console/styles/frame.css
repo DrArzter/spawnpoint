@@ -155,8 +155,16 @@ html[data-skin="console"] .c-body {
   min-height: calc(100vh - var(--c-bar));
 }
 
+/*
+ * The main area is at least the screen under the bar, so a page can hand that
+ * height on (fill). The small viewport height: the dynamic one changes while a
+ * phone's toolbar hides on scroll, and every card would resize with it.
+ */
 html[data-skin="console"] .c-main {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: calc(100svh - var(--c-bar));
   padding: 20px var(--c-pad) 48px;
   background: var(--c-bg);
   view-transition-name: c-page;
@@ -297,6 +305,7 @@ html[data-skin="console"] .c-bottom {
 
 html[data-skin="console"] .c-page {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: var(--c-gap);
   min-width: 0;

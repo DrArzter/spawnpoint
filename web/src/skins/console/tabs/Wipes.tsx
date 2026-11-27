@@ -11,7 +11,7 @@ import { t } from "../../../i18n";
 export function WipesTab({ model }: Readonly<{ model: WorldModel }>) {
   const wipe = model.more.find((item) => item.id === "world.wipe");
   return (
-    <Card actions={wipe && <ActionButton action={wipe} size="sm" />} body="flush" count={model.wipes.length} title={t("world.wipes")}>
+    <Card actions={wipe && <ActionButton action={wipe} size="sm" />} body="flush" fill count={model.wipes.length} title={t("world.wipes")}>
       <Table
         columns={[
           { id: "wipe", header: t("common.wipe"), kind: "lead", render: (row) => <strong>#{row.wipe.number}</strong> },

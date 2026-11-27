@@ -83,6 +83,14 @@ html[data-skin="console"] .c-tabrow-end {
   gap: 8px;
 }
 
+/* The panel takes the page's free height and hands it to its content (fill). */
+html[data-skin="console"] .c-settle,
+html[data-skin="console"] .c-settle-body {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
 /* The panel's height glides when its content changes size; it clips only while it moves. */
 html[data-skin="console"] .c-settle[data-settling] {
   overflow: clip;
@@ -91,6 +99,7 @@ html[data-skin="console"] .c-settle[data-settling] {
 
 html[data-skin="console"] .c-tabpanel {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: var(--c-gap);
   padding-top: 18px;
@@ -116,3 +125,14 @@ html[data-skin="console"] .c-tabpanel:focus-visible {
 }
 
 @keyframes c-tab-in { from { opacity: .75; } }
+
+/*
+ * Fill: one card or grid of a tab takes the free height under the tabs, so a
+ * short tab ends at the bottom of the screen instead of halfway. A longer one
+ * grows past it and the page scrolls as before.
+ */
+html[data-skin="console"] .c-tabpanel > [data-fill],
+html[data-skin="console"] .c-page > [data-fill],
+html[data-skin="console"] .c-split-pane > [data-fill] {
+  flex: 1 0 auto;
+}

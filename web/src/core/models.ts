@@ -378,6 +378,10 @@ export type WorldModel = Readonly<{
   progress: OperationProgressModel | null;
   wipes: readonly Readonly<{ wipe: Wipe; showBackups: Action }>[];
   backups: BackupsModel;
+  /** The newest backup in a few facts (empty when there is none); null when the role reads no backups. */
+  backupOverview: Loading<readonly Detail[]> | null;
+  /** Opens the Backups tab. */
+  showBackups: Action;
   releases: Readonly<{
     rows: readonly ReleaseRow[];
     state: World["release"]["state"];

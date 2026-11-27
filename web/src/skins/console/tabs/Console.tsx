@@ -17,7 +17,7 @@ export function ConsoleTab({ model, world }: Readonly<{ model: ConsoleModel; wor
   };
   const quick = model.quickCommands.map((item, index) => <ActionButton action={item} className="c-mono" key={`${item.id}:${item.label}:${index}`} size="sm" />);
   return (
-    <Card actions={quick.length > 0 ? <span className="c-console-quick">{quick}</span> : undefined} body="flush" count={log?.status === "ready" ? log.value.length : undefined} title={t("rcon.commandLog")}>
+    <Card actions={quick.length > 0 ? <span className="c-console-quick">{quick}</span> : undefined} body="flush" fill count={log?.status === "ready" ? log.value.length : undefined} title={t("rcon.commandLog")}>
       {log === null && <Empty icon="terminal" title={t("rcon.worldOffline")} />}
       {log?.status === "loading" && <Terminal label={t("rcon.worldConsole", { world })} lines={[]} loading />}
       {log?.status === "error" && <LoadError error={log.error} kind={log.kind} retry={log.retry} title={t("rcon.consoleCouldNotLoaded")} verb={t("rcon.readConsole")} />}

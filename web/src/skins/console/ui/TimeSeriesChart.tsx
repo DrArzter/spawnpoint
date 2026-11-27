@@ -130,12 +130,6 @@ export function readingValue(point: ChartPoint, format: (value: number) => strin
   return point.interpolated ? t("ui.valueJoined", { value: format(point.value) }) : format(point.value);
 }
 
-/** What a series draws besides its line, for the legend. */
-export function chartNotes(points: readonly ChartPoint[], pendingFrom?: string | null): Readonly<{ gaps: boolean; pending: boolean }> {
-  const shape = chartGeometry(points, 1, pendingFrom);
-  return { gaps: shape.gaps.length > 0, pending: shape.pending !== null };
-}
-
 /** The announced reading: its time, then its value, then its aside. */
 function readingText(at: ChartPoint | null, time: (at: string) => string, format: (value: number) => string, pending: boolean, aside: string | null): string {
   if (!at) return "";
@@ -148,9 +142,9 @@ function readingText(at: ChartPoint | null, time: (at: string) => string, format
  * "not reported yet" band instead. A reading the server flagged `interpolated`
  * is the one exception to "never joined": memory is probed every 15 minutes. A pointer or touch moves a crosshair with the time and
  * value; on keyboard focus the arrows move a cursor point by point, Home and
- * End jump, and the reading is announced. "Show data" lists every reading.
+ * End jump, and the reading is announced. "Show data" lists every reading in the plot's place.
  */
-export function TimeSeriesChart({ label, range, points, format, tick = format, time, timeTick = time, ceiling = "decimal", aside, legend, reveal = false, pendingFrom = null }: Readonly<{
+export function TimeSeriesChart({ label, range, points, format, tick = format, time, timeTick = time, ceiling = "decimal", aside, reveal = false, pendingFrom = null }: Readonly<{
   label: string;
   /** The window in words, for the accessible name: "24 hours". */
   range: string;
@@ -166,8 +160,6 @@ export function TimeSeriesChart({ label, range, points, format, tick = format, t
   ceiling?: MetricCeiling | number;
   /** A second fact about a reading, by index, for the readout only: "65 % of host". */
   aside?: (index: number) => string | null;
-  /** The unit and marks the plot draws, on one line in the foot. */
-  legend?: ReactNode;
   /** Draws the line in from the start of the window (A5). */
   reveal?: boolean;
   /** The first slot not reported yet while the session runs. */
@@ -202,76 +194,79 @@ export function TimeSeriesChart({ label, range, points, format, tick = format, t
   const top = at?.value != null ? (pointY(at.value, max) / PLOT.height) * 100 : null;
   return (
     <div className={cx("c-chart", reveal && "c-chart-reveal")}>
-      <div className="c-chart-plot">
-        <div aria-hidden="true" className="c-chart-axis">
-          {[max, max / 2, 0].map((value) => <span key={value}>{tick(value)}</span>)}
+      {/* The readings take the plot's place, so the card keeps its height. */}
+      {table ? (
+        <div className="c-chart-readings">
+          <Table
+            columns={[
+              { id: "time", header: t("common.time"), kind: "lead", render: (point) => time(point.at) },
+              { id: "value", header: label, kind: "num", render: (point) => point.value === null ? <span className="c-faint">{readingValue(point, format, pendingAt !== null && point.at >= (pendingFrom ?? ""))}</span> : readingValue(point, format, false) },
+            ]}
+            label={t("ui.labelReadings", { label })}
+            rowKey={(point) => point.at}
+            rows={points}
+          />
         </div>
-        <div // NOSONAR a focusable chart region: the arrow keys and pointer move a cursor through the readings
-          aria-label={name}
-          aria-roledescription="chart"
-          className="c-chart-area"
-          onBlur={() => setCursor(null)}
-          onKeyDown={onKey}
-          onPointerDown={onPointer}
-          onPointerLeave={(event) => { if (event.pointerType === "mouse") setCursor(null); }}
-          onPointerMove={onPointer}
-          role="group"
-          tabIndex={0} // NOSONAR the region is the keyboard stop for the cursor
-        >
-          <svg aria-hidden="true" className="c-chart-svg" preserveAspectRatio="none" viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}>
-            <defs>
-              <pattern height="6" id={`${id}-hatch`} patternTransform="rotate(45)" patternUnits="userSpaceOnUse" width="6">
-                <rect className="c-chart-hatch-ground" height="6" width="6" />
-                <line className="c-chart-hatch-line" x1="0" x2="0" y1="0" y2="6" />
-              </pattern>
-            </defs>
-            {[max, max / 2, 0].map((tick) => <line className="c-chart-grid" key={tick} x1="0" x2={PLOT.width} y1={pointY(tick, max)} y2={pointY(tick, max)} />)}
-            <g className="c-chart-data">
-              {shape.pending && <rect className="c-chart-pending" height={PLOT.height - PLOT.inset * 2} width={shape.pending.width} x={shape.pending.x} y={PLOT.inset} />}
-              {shape.gaps.map((gap) => <rect fill={`url(#${id}-hatch)`} height={PLOT.height - PLOT.inset * 2} key={gap.x} width={gap.width} x={gap.x} y={PLOT.inset} />)}
-              {shape.areas.map((area) => <path className="c-chart-fill" d={area} key={area} />)}
-              {shape.lines.map((line) => <path className="c-chart-line" d={line} key={line} />)}
-            </g>
-          </svg>
-          {/* Lone readings are HTML marks: the stretched SVG would draw a circle as an ellipse. */}
-          {shape.dots.map((dot) => <span aria-hidden="true" className="c-chart-point" key={dot.x} style={{ left: `${(dot.x / PLOT.width) * 100}%`, top: `${(dot.y / PLOT.height) * 100}%` }} />)}
-          {at && (
-            <>
-              <span aria-hidden="true" className="c-chart-cross" style={{ left: `${left}%` }} />
-              {top !== null && <span aria-hidden="true" className="c-chart-dot" style={{ left: `${left}%`, top: `${top}%` }} />}
-              <span aria-hidden="true" className={cx("c-chart-tip", left > 70 && "c-chart-tip-end")} style={{ left: `${left}%` }}>
-                <span>{time(at.at)}</span>
-                <strong>{readingValue(at, format, pendingAt !== null && cursor !== null && cursor >= pendingAt)}</strong>
-                {atAside && <span>{atAside}</span>}
-              </span>
-            </>
-          )}
-          <span aria-live="polite" className="c-sr">{reading}</span>
+      ) : (
+        <div className="c-chart-plot">
+          <div aria-hidden="true" className="c-chart-axis">
+            {[max, max / 2, 0].map((value) => <span key={value}>{tick(value)}</span>)}
+          </div>
+          <div // NOSONAR a focusable chart region: the arrow keys and pointer move a cursor through the readings
+            aria-label={name}
+            aria-roledescription="chart"
+            className="c-chart-area"
+            onBlur={() => setCursor(null)}
+            onKeyDown={onKey}
+            onPointerDown={onPointer}
+            onPointerLeave={(event) => { if (event.pointerType === "mouse") setCursor(null); }}
+            onPointerMove={onPointer}
+            role="group"
+            tabIndex={0} // NOSONAR the region is the keyboard stop for the cursor
+          >
+            <svg aria-hidden="true" className="c-chart-svg" preserveAspectRatio="none" viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}>
+              <defs>
+                <pattern height="6" id={`${id}-hatch`} patternTransform="rotate(45)" patternUnits="userSpaceOnUse" width="6">
+                  <rect className="c-chart-hatch-ground" height="6" width="6" />
+                  <line className="c-chart-hatch-line" x1="0" x2="0" y1="0" y2="6" />
+                </pattern>
+              </defs>
+              {[max, max / 2, 0].map((tick) => <line className="c-chart-grid" key={tick} x1="0" x2={PLOT.width} y1={pointY(tick, max)} y2={pointY(tick, max)} />)}
+              <g className="c-chart-data">
+                {shape.pending && <rect className="c-chart-pending" height={PLOT.height - PLOT.inset * 2} width={shape.pending.width} x={shape.pending.x} y={PLOT.inset} />}
+                {shape.gaps.map((gap) => <rect fill={`url(#${id}-hatch)`} height={PLOT.height - PLOT.inset * 2} key={gap.x} width={gap.width} x={gap.x} y={PLOT.inset} />)}
+                {shape.areas.map((area) => <path className="c-chart-fill" d={area} key={area} />)}
+                {shape.lines.map((line) => <path className="c-chart-line" d={line} key={line} />)}
+              </g>
+            </svg>
+            {/* Lone readings are HTML marks: the stretched SVG would draw a circle as an ellipse. */}
+            {shape.dots.map((dot) => <span aria-hidden="true" className="c-chart-point" key={dot.x} style={{ left: `${(dot.x / PLOT.width) * 100}%`, top: `${(dot.y / PLOT.height) * 100}%` }} />)}
+            {at && (
+              <>
+                <span aria-hidden="true" className="c-chart-cross" style={{ left: `${left}%` }} />
+                {top !== null && <span aria-hidden="true" className="c-chart-dot" style={{ left: `${left}%`, top: `${top}%` }} />}
+                <span aria-hidden="true" className={cx("c-chart-tip", left > 70 && "c-chart-tip-end")} style={{ left: `${left}%` }}>
+                  <span>{time(at.at)}</span>
+                  <strong>{readingValue(at, format, pendingAt !== null && cursor !== null && cursor >= pendingAt)}</strong>
+                  {atAside && <span>{atAside}</span>}
+                </span>
+              </>
+            )}
+            <span aria-live="polite" className="c-sr">{reading}</span>
+          </div>
+          <div aria-hidden="true" className="c-chart-times">
+            {timeTicks(points.length).map((index) => <span key={index} style={{ left: `${(pointX(index, points.length) / PLOT.width) * 100}%` }}>{timeTick(points[index]!.at)}</span>)}
+          </div>
         </div>
-        <div aria-hidden="true" className="c-chart-times">
-          {timeTicks(points.length).map((index) => <span key={index} style={{ left: `${(pointX(index, points.length) / PLOT.width) * 100}%` }}>{timeTick(points[index]!.at)}</span>)}
-        </div>
-      </div>
+      )}
       <div className="c-chart-foot">
-        {legend}
         <ActionButton action={action("chart.data", table ? t("ui.hideData") : t("ui.showData"), () => setTable((open) => !open), { icon: table ? "expand_less" : "expand_more" })} size="sm" variant="ghost" />
       </div>
-      {table && (
-        <Table
-          columns={[
-            { id: "time", header: t("common.time"), kind: "lead", render: (point) => time(point.at) },
-            { id: "value", header: label, kind: "num", render: (point) => point.value === null ? <span className="c-faint">{readingValue(point, format, pendingAt !== null && point.at >= (pendingFrom ?? ""))}</span> : readingValue(point, format, false) },
-          ]}
-          label={t("ui.labelReadings", { label })}
-          rowKey={(point) => point.at}
-          rows={points}
-        />
-      )}
     </div>
   );
 }
 
-/** A chart that is still loading: the axis column, the plot box, the time row, the legend and the data key, at their final size. */
+/** A chart that is still loading: the axis column, the plot box, the time row and the data key, at their final size. */
 export function ChartSkeleton() {
   return (
     <div className="c-chart">
@@ -285,7 +280,6 @@ export function ChartSkeleton() {
         </div>
       </div>
       <div className="c-chart-foot">
-        <span className="c-legend"><Skeleton text width="8em" /></span>
         <Skeleton height="var(--c-ctl-sm)" width={96} />
       </div>
     </div>

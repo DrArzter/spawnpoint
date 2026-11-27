@@ -1,5 +1,5 @@
 /* TimeSeriesChart: the y labels in their own column, the plot stretched to its box, the time labels in a row under
-   it, a crosshair on pointer or keyboard, and one foot line with the legend and the data key. */
+   it, a crosshair on pointer or keyboard, and one foot line with the data key. */
 
 html[data-skin="console"] .c-chart {
   display: flex;
@@ -169,53 +169,35 @@ html[data-skin="console"] .c-chart-foot {
   min-width: 0;
 }
 
-/* One line at every width: a legend wider than the card cuts its labels with an ellipsis rather than wraps and grows the foot. */
-html[data-skin="console"] .c-legend {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: 16px;
-  min-width: 0;
-  color: var(--c-ink-2);
-  font-size: var(--c-fs-s);
-  white-space: nowrap;
-}
-
-html[data-skin="console"] .c-legend-item {
-  display: inline-flex;
-  flex: 0 1 auto;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-html[data-skin="console"] .c-legend-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-html[data-skin="console"] .c-legend-gap,
-html[data-skin="console"] .c-legend-pending {
-  display: inline-block;
-  flex: none;
-  width: 14px;
-  height: 10px;
-  border-radius: 3px;
-}
-
-html[data-skin="console"] .c-legend-gap {
-  background: repeating-linear-gradient(45deg, var(--c-surface-2) 0 3px, var(--c-line-2) 3px 5px);
-}
-
-html[data-skin="console"] .c-legend-pending {
-  background: var(--c-surface-2);
-  outline: 1px dashed var(--c-line-2);
-  outline-offset: -1px;
-}
-
 @media (max-width: 759px) {
   html[data-skin="console"] .c-chart-area {
     height: 180px;
   }
+}
+
+/* In a filling grid a chart grows with its card: the plot takes the height, the times stay under it. */
+html[data-skin="console"] .c-grid[data-fill] .c-chart {
+  flex: 1 0 auto;
+}
+
+html[data-skin="console"] .c-grid[data-fill] .c-chart-plot {
+  flex: 1 0 auto;
+  grid-template-rows: minmax(200px, 1fr) auto;
+}
+
+html[data-skin="console"] .c-grid[data-fill] .c-chart-area {
+  height: auto;
+}
+
+/* The readings in the plot's place: as tall as the plot and its times, scrolling inside. */
+html[data-skin="console"] .c-chart-readings {
+  height: calc(206px + 1.2 * var(--c-fs-xs));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+html[data-skin="console"] .c-grid[data-fill] .c-chart-readings {
+  flex: 1 1 0;
+  height: auto;
+  min-height: calc(206px + 1.2 * var(--c-fs-xs));
 }

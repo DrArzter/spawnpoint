@@ -179,7 +179,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
     return (
       <div className="c-page">
         {header(undefined)}
-        <Card label={t("common.games")}>
+        <Card fill label={t("common.games")}>
           <GamesEmpty refresh={model.refresh} unavailable={model.unavailable} />
         </Card>
       </div>
@@ -189,7 +189,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
     return (
       <div className="c-page">
         {header(undefined)}
-        <Card label={t("world.worldsTable")}><LoadError error={model.error} kind={model.errorKind} retry={withIcon(model.refresh, "refresh")} title={t("common.worldsCouldNotLoaded")} verb={t("common.viewWorlds")} /></Card>
+        <Card fill label={t("world.worldsTable")}><LoadError error={model.error} kind={model.errorKind} retry={withIcon(model.refresh, "refresh")} title={t("common.worldsCouldNotLoaded")} verb={t("common.viewWorlds")} /></Card>
       </div>
     );
   }
@@ -198,7 +198,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
       <div className="c-page">
         {header(0, undefined, false)}
         <Notices notices={model.notices} />
-        <Card label={t("world.worldsTable")}>
+        <Card fill label={t("world.worldsTable")}>
           <Empty action={create} icon="public" message={create ? undefined : model.emptyDescription ?? undefined} title={t("common.noWorlds")} />
         </Card>
       </div>
@@ -240,7 +240,7 @@ function WorldsList({ model }: Readonly<{ model: WorldsModel }>) {
             <Tile count={count} key={status.label} onPress={() => setState(state === status.label ? null : status.label)} pressed={state === status.label} status={status} />
           ))}
       </Tiles>
-      <div className={peek ? "c-worlds-layout c-worlds-layout-open" : "c-worlds-layout"}>
+      <div className={peek ? "c-worlds-layout c-worlds-layout-open" : "c-worlds-layout"} data-fill="">
         <Card body="flush" label={t("world.worldsTable")}>
           <FilterBar
             end={<>

@@ -6,8 +6,8 @@ html[data-skin="console"] .c-main:has(.c-split) {
 
 html[data-skin="console"] .c-split {
   display: grid;
+  flex: 1 0 auto;
   grid-template-columns: var(--c-lcol) minmax(0, 1fr);
-  min-height: calc(100vh - var(--c-bar));
 }
 
 html[data-skin="console"] .c-split-list {
@@ -24,8 +24,14 @@ html[data-skin="console"] .c-split-pane {
 }
 
 @media (max-width: 1023px) {
+  /* One column; the pane still takes the screen's height and hands it on (fill). */
   html[data-skin="console"] .c-split {
-    display: block;
+    display: flex;
+    flex-direction: column;
+  }
+
+  html[data-skin="console"] .c-split > .c-split-pane {
+    flex: 1 0 auto;
   }
 
   html[data-skin="console"] .c-split[data-selected] > .c-split-list,

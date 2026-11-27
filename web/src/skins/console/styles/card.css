@@ -81,3 +81,17 @@ html[data-skin="console"] .c-card-meta::before {
   color: var(--c-ink-3);
   content: "·";
 }
+
+/* A filling card's body grows with it, and so does each card of a filling grid; an empty state is centred in it. */
+html[data-skin="console"] .c-card[data-fill] > .c-card-body,
+html[data-skin="console"] .c-grid[data-fill]:not(.c-grid-stack) > .c-card > .c-card-body,
+html[data-skin="console"] .c-grid[data-fill] > .c-grid-cell > .c-card > .c-card-body {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+/* A card in a cell of a filling grid takes the cell's height. */
+html[data-skin="console"] .c-grid[data-fill] > .c-grid-cell > .c-card {
+  flex: 1 0 auto;
+}

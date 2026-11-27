@@ -3,7 +3,7 @@ import { useMediaQuery } from "../../../shell/hooks";
 import { ActionButton } from "../ui/ActionButton";
 import { Card } from "../ui/Card";
 import { DetailList } from "../ui/DetailList";
-import { Empty } from "../ui/Empty";
+import { Empty, LoadError } from "../ui/Empty";
 import { Grid } from "../ui/Grid";
 import { TrackList, TrackTitle } from "../ui/TrackList";
 import { RunningTime } from "../ui/Flashbar";
@@ -34,15 +34,14 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
   // Spec §6.3.1: on a phone the card head keeps its title and shows these as icons, named and tooltipped by their labels.
   const phone = useMediaQuery("(max-width: 759px)");
   return (
-    <>
-      <Grid kind="detail">
-        <SessionSlot details={session} live={live} model={model} />
-        <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} iconOnly={phone} key={item.id} size="sm" />) : undefined} body="kv" title={t("common.world")}>
-          <DetailList columns="two" details={activeOnly(model.worldDetails)} omit={omit} />
-        </Card>
-      </Grid>
-      {model.operations.length > 0 && (
-        <Card body="flush" count={model.operations.length} title={t("common.operations")}>
+    <Grid fill kind="detail">
+      <SessionSlot details={session} live={live} model={model} />
+      <Card actions={settings.length > 0 ? settings.map((item) => <ActionButton action={item} iconOnly={phone} key={item.id} size="sm" />) : undefined} body="kv" title={t("common.world")}>
+        <DetailList columns="two" details={activeOnly(model.worldDetails)} omit={omit} />
+      </Card>
+      {model.backupOverview && <BackupCard model={model} overview={model.backupOverview} />}
+      <Card body="flush" count={model.operations.length > 0 ? model.operations.length : undefined} title={t("world.activity")}>
+        {model.operations.length === 0 ? <Empty icon="history" size="sm" title={t("world.nothingRunning")} /> : (
           <TrackList
             label={t("common.operations")}
             rowKey={(row) => row.operation.id}
@@ -52,13 +51,23 @@ export function DetailsTab({ model }: Readonly<{ model: WorldModel }>) {
               { id: "running", header: t("common.running2"), width: "auto", kind: "num", render: (row) => <RunningTime expectation={row.operation} since={row.operation.startedAt} /> },
             ]}
           />
-        </Card>
-      )}
-    </>
+        )}
+      </Card>
+    </Grid>
   );
 }
 
-/** The session's place: the operation that holds it, else the live session, else a boxed "No session". */
+/** The newest backup in a few facts, and the way to all of them. */
+function BackupCard({ model, overview }: Readonly<{ model: WorldModel; overview: NonNullable<WorldModel["backupOverview"]> }>) {
+  return (
+    <Card actions={<ActionButton action={model.showBackups} size="sm" />} body="kv" title={t("world.latestBackup")}>
+      {overview.status === "loading" && <DetailList columns="fit" details={[{ label: t("world.stored"), value: { type: "loading" } }, { label: t("common.size"), value: { type: "loading" } }]} />}
+      {overview.status === "error" && <LoadError error={overview.error} kind={overview.kind} retry={overview.retry} size="sm" title={t("world.latestBackup")} verb={t("common.backups")} />}
+      {overview.status === "ready" && (overview.value.length === 0 ? <Empty icon="cloud_off" size="sm" title={t("backups.noBackups")} /> : <DetailList columns="fit" details={overview.value} />)}
+    </Card>
+  );
+}
+
 function SessionSlot({ model, live, details }: Readonly<{ model: WorldModel; live: boolean | undefined; details: readonly Detail[] }>) {
   if (model.progress) return <OperationProgress model={model.progress} />;
   if (live === false) return <Card title={t("world.session")}><Empty icon="power_settings_new" size="sm" title={t("world.noSession")} /></Card>;

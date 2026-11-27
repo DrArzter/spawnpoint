@@ -40,14 +40,14 @@ listens to. The lifecycle table does not suit: it has a hash key only, no TTL, a
 | Access | How |
 | --- | --- |
 | one operation, by its id (progress route, host log) | `GetItem`, consistent, on `pk = OPERATION#<operation_id>`, `sk = RECORD` |
-| the operations that run now (snapshot, the guard against a second operation) | `Query` on the sparse index `open_operations`: hash `open`, range `started_at` |
+| the operations that run now (snapshot, the guard against a second operation) | `Query` on the sparse index `open_operations`: hash `open_key`, range `started_at` |
 | the nested run an operation is in now | `GetItem` on the parent's `child_id`, at most two levels |
 
 The key is built by one function, `operationRecordKey(operationId)` in `lambdas/src/control-plane/operation-record.ts`.
 Every reader and the tests call it. The workflow templates cannot call TypeScript, so the contract test holds their
 key expression to the same shape.
 
-`open` is set (to `open`) by every write of a running operation and removed by the write that ends it, so the index
+`open_key` is set (to `open`) by every write of a running operation and removed by the write that ends it, so the index
 holds only running records: a few items. Its read is eventually consistent, as `ListExecutions` is, but its lag is
 milliseconds, not seconds; the lease in the lifecycle record stays the real guard against two operations.
 
@@ -62,6 +62,7 @@ operation id, so the progress route's id does not change. A nested run has a nam
 | `operation_id` | S | accepted | the execution name |
 | `execution_arn` | S | accepted | the execution, for the projector's end write |
 | `type` | S | accepted | `start`, `stop`, `promote`, `world`, `host` |
+| `workflow` | S | accepted | the workflow of `operation-steps.ts` (`start-host` for the host start), so a reader knows the step table |
 | `world_id` | S | accepted | from the execution input; absent for a host operation |
 | `game_id` | S | accepted, when the input has it | |
 | `server_id` | S | accepted, when the input has it | the lifecycle record's key |
@@ -78,10 +79,11 @@ operation id, so the progress route's id does not change. A nested run has a nam
 | `started_at` | S | accepted | `$$.Execution.StartTime`, ISO 8601 |
 | `updated_at` | S | every write | `$$.State.EnteredTime` |
 | `ended_at` | S | end | |
-| `open` | S | running writes; removed at the end | the key of the `open_operations` index |
+| `open_key` | S | running writes; removed at the end | the key of the `open_operations` index |
 | `expires_at` | N | accepted | 30 days after `started_at` (TTL) |
 
-All attribute names are snake_case (stored); the API's JSON stays camelCase (`contract/operations.ts`). The panel's
+An attribute the run cannot know is absent; `result` and the caught fields are an empty string when the workflow gave
+none, and a reader reads an empty string as none. All attribute names are snake_case (stored); the API's JSON stays camelCase (`contract/operations.ts`). The panel's
 words for a step come from the message catalogue by the step key, as now.
 
 ### Who writes it
@@ -91,17 +93,20 @@ words for a step come from the message catalogue by the step key, as now.
    (`$states.context.Execution`), not from the state data, so the same task fits anywhere in the workflow; its output
    is its input, so the workflow's data does not change. A failed write is retried and then caught: a record is a
    view, and it never fails an operation.
+   The record states are named `Report …` and are the workflow's only JSONata states; that is how the tests tell
+   them apart from the workflow's own states.
 2. **Writes:** accepted (the first state); each step that the panel shows, on every edge that enters it from another
    step; the host and the command once they are known; and every end. Each `Fail` and `Succeed` state, and each state
-   with `End`, is reached only through a write that sets the final status. A `Catch` path that goes on writes the
+   with `End`, is reached only through a write that sets the final status. A state that ended the run now leads to
+   its end write, which ends it; when that write fails, a `Succeed` named `Report … Missed` ends the run instead. A `Catch` path that goes on writes the
    caught error.
 3. **A nested run** gets `operationParent` (`$$.Execution.Name`) and `operationRoot` in its input from the state that
    starts it. The accepted write keeps the root in a workflow variable, `$operationRoot`, so the run can pass it on.
    The child's accepted write also sets the parent's `child_id`.
 4. **The projector closes what a workflow cannot.** An aborted or timed-out run, or an error that no `Catch` handles,
    ends without its own end write. The projector already receives every Step Functions status change of the operation
-   machines; on an end status it updates the record with the condition `status = running`, so it never overwrites the
-   workflow's own end.
+   machines, and the rule now sends the host start and host stop too. On an end status it updates the record with
+   the condition `status = running`, so it never overwrites the workflow's own end.
 5. **Grants:** each workflow role and the projector get `dynamodb:UpdateItem` on the view table, limited by
    `dynamodb:LeadingKeys` to `OPERATION#*`. Nothing else may write a record.
 

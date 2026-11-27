@@ -15,7 +15,6 @@ import {
   type LeaseOwnership,
   type LifecycleRecord,
 } from "../domain/lifecycle.ts";
-import type { SessionChangeNotifier } from "./session-changes.ts";
 
 export type VersionedLifecycle = Readonly<{
   revision: number;
@@ -87,7 +86,6 @@ function requireServerId(serverId: string): void {
 export function createLifecycleCoordinator(
   store: LifecycleStore,
   nowEpochSeconds: () => number = () => Math.floor(Date.now() / 1_000),
-  stateChanged: SessionChangeNotifier = async () => undefined,
 ): (input: CoordinatorInput) => Promise<CoordinatorOutput> {
   async function loadRequired(serverId: string): Promise<VersionedLifecycle> {
     const current = await store.read(serverId);
@@ -111,7 +109,6 @@ export function createLifecycleCoordinator(
         return { revision: current.revision, ...result };
       }
       if (await store.compareAndSet(serverId, current.revision, result.record)) {
-        if (result.record.observedState !== current.record.observedState) await stateChanged(serverId);
         return { revision: current.revision + 1, ...result };
       }
     }

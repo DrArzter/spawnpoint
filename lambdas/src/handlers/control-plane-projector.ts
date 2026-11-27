@@ -1,5 +1,4 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 import { Route53Client } from "@aws-sdk/client-route-53";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
@@ -10,7 +9,6 @@ import { eventJournalItem, hostOwnsSession, recoveryTarget, type ControlPlaneEve
 import { gameCatalog } from "../control-plane/catalog.ts";
 import { parkDnsRecord } from "../control-plane/aws-dns-ledger.ts";
 import { dnsLedgerRecords, terminalHostInstanceId } from "../control-plane/dns-ledger.ts";
-import { eventBus } from "../control-plane/aws-event-bus.ts";
 import { dynamoTable } from "../control-plane/dynamo-table.ts";
 
 const viewTable = process.env.CONTROL_PLANE_VIEW_TABLE;
@@ -20,7 +18,6 @@ const document = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 const table = dynamoTable(document);
-const events = eventBus(new EventBridgeClient({}));
 const route53 = new Route53Client({});
 const dnsZoneId = process.env.GAME_DNS_ZONE_ID;
 const dnsSuffix = process.env.GAME_DNS_SUFFIX;
@@ -64,17 +61,6 @@ async function putProjection(projection: StoredProjection): Promise<boolean> {
     if (!conditionalFailure(error)) throw error;
     return false;
   }
-}
-
-async function publishProjectionInvalidation(
-  eventId: string,
-  observedAtEpochMilliseconds: number,
-): Promise<void> {
-  const refused = await events.publish({
-    source: "spawnpoint.control-plane", detailType: "Projection Updated",
-    detail: { schemaVersion: 1, sourceEventId: eventId, observedAtEpochMilliseconds },
-  });
-  if (refused !== null) throw new Error(refused);
 }
 
 async function reconcileStoppedHost(
@@ -125,13 +111,13 @@ export async function handler(event: ControlPlaneEvent): Promise<void> {
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
   await cleanTerminalHostDns(event);
   await recordEvent(event, nowEpochSeconds);
-  const { hosts, operations, written, observedAtEpochMilliseconds } = await writeProjection({
+  // A written projection reaches open panels through the view table's stream (ADR-0104).
+  const { hosts, operations } = await writeProjection({
     listHosts: awsControlPlaneSources.listHosts,
     listRunningOperations: awsControlPlaneSources.listRunningOperations,
     describeRunningOperation,
     putProjection,
     now: Date.now,
   }, event);
-  if (written) await publishProjectionInvalidation(event.id, observedAtEpochMilliseconds);
   await reconcileStoppedHost(event.id, hosts, operations, nowEpochSeconds);
 }

@@ -41,8 +41,23 @@ mock_provider "aws" {
   override_data {
     target = data.aws_dynamodb_table.lifecycle
     values = {
-      name = "spawnpoint-lifecycle-v2"
-      arn  = "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"
+      name       = "spawnpoint-lifecycle-v2"
+      arn        = "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2"
+      stream_arn = "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2/stream/2026-11-27T12:00:00.000"
+    }
+  }
+
+  override_resource {
+    target = aws_sqs_queue.panel_stream_failures
+    values = { arn = "arn:aws:sqs:eu-central-1:123456789012:spawnpoint-panel-stream-failures" }
+  }
+
+  override_data {
+    target = data.aws_dynamodb_table.control_plane_view
+    values = {
+      name       = "spawnpoint-control-plane-view"
+      arn        = "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view"
+      stream_arn = "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view/stream/2026-11-27T12:00:00.000"
     }
   }
 
@@ -565,10 +580,50 @@ run "access_api_verifies_telegram_sessions_and_is_scoped" {
 
   assert {
     condition = (
-      jsondecode(aws_cloudwatch_event_rule.control_plane_projection_updated.event_pattern).source == ["spawnpoint.control-plane"] &&
-      jsondecode(aws_cloudwatch_event_rule.control_plane_projection_updated.event_pattern)["detail-type"] == ["Projection Updated", "Session Changed"]
+      aws_lambda_function.control_plane_subscriptions.environment[0].variables.LIFECYCLE_TABLE_NAME == "spawnpoint-lifecycle-v2" &&
+      toset(keys(aws_lambda_event_source_mapping.panel_streams)) == toset(["lifecycle", "view"]) &&
+      aws_lambda_event_source_mapping.panel_streams["lifecycle"].event_source_arn == "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2/stream/2026-11-27T12:00:00.000" &&
+      aws_lambda_event_source_mapping.panel_streams["view"].event_source_arn == "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view/stream/2026-11-27T12:00:00.000"
     )
-    error_message = "Only normalized projection and session invalidations may reach browser subscriptions."
+    error_message = "Each panel table's stream reaches the subscriptions Lambda straight, with no pipe or bus between them (ADR-0104)."
+  }
+
+  assert {
+    condition = alltrue([
+      for mapping in aws_lambda_event_source_mapping.panel_streams :
+      mapping.starting_position == "LATEST" && mapping.maximum_retry_attempts == 3 && mapping.bisect_batch_on_function_error &&
+      mapping.destination_config[0].on_failure[0].destination_arn == aws_sqs_queue.panel_stream_failures.arn
+    ])
+    error_message = "A failing batch is retried, bisected, then kept in the dead-letter queue."
+  }
+
+  assert {
+    condition = (
+      [for filter in aws_lambda_event_source_mapping.panel_streams["view"].filter_criteria[0].filter : jsondecode(filter.pattern)] == [
+        { dynamodb = { Keys = { pk = { S = ["PROJECTION#CONTROL_PLANE"] }, sk = { S = ["DYNAMIC"] } } } },
+      ] &&
+      alltrue([
+        for filter in aws_lambda_event_source_mapping.panel_streams["lifecycle"].filter_criteria[0].filter :
+        can(jsondecode(filter.pattern).dynamodb.NewImage.lifecycle.M.observedState) || (
+          jsondecode(filter.pattern).eventName == ["REMOVE"] && can(jsondecode(filter.pattern).dynamodb.OldImage.lifecycle.M.observedState)
+        )
+      ])
+    )
+    error_message = "Only the projection item and session records pass the filters; tickets, connections, journal entries and host records send nothing."
+  }
+
+  assert {
+    condition = alltrue([
+      one([for statement in data.aws_iam_policy_document.control_plane_subscriptions.statement : toset(statement.actions) if statement.sid == "ReadPanelStreams"]) == toset(["dynamodb:DescribeStream", "dynamodb:GetRecords", "dynamodb:GetShardIterator"]),
+      one([for statement in data.aws_iam_policy_document.control_plane_subscriptions.statement : toset(statement.resources) if statement.sid == "ReadPanelStreams"]) == toset([
+        "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-lifecycle-v2/stream/2026-11-27T12:00:00.000",
+        "arn:aws:dynamodb:eu-central-1:123456789012:table/spawnpoint-control-plane-view/stream/2026-11-27T12:00:00.000",
+      ]),
+      aws_sqs_queue.panel_stream_failures.sqs_managed_sse_enabled,
+      aws_cloudwatch_metric_alarm.panel_stream_failures.dimensions.QueueName == aws_sqs_queue.panel_stream_failures.name,
+      aws_cloudwatch_metric_alarm.panel_stream_iterator_age.metric_name == "IteratorAge",
+    ])
+    error_message = "The subscriptions Lambda reads only the two panel streams, and both the dead-letter queue and the iterator age alarm."
   }
 
   assert {

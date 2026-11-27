@@ -119,14 +119,6 @@ test("the warning marks each ready session on the host as moving", async () => {
   assert.equal(lifecycle.get("world#beta")?.record.observedState, "starting", "a start in flight compensates on its own");
 });
 
-test("the warning tells the panels about each session it turns moving, and only those", async () => {
-  const beta = ready({ serverId: "world#beta", activeSessionId: "s9", activeWorldId: "beta", observedState: "starting" });
-  const { ports } = fakes({ "world#alpha": ready(), "world#beta": beta }, host());
-  const told: string[] = [];
-  await markHostSessionsMoving({ ...ports, changed: async (serverId) => { told.push(serverId); } }, "i-0123456789abcdef0", NOW, quiet);
-  assert.deepEqual(told, ["world#alpha"]);
-});
-
 // The 2026-11-27 fault test: the move was placed back on the host AWS was taking.
 test("a reclaimed host takes no session again, from the warning to after its last session moved", async () => {
   const footprint = { memoryMiB: 4096, cores: 1 };

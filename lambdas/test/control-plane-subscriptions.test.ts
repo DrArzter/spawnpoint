@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   controlPlaneConnectionItem,
-  invalidatesPanels,
   postToConnections,
   subscriptionConnectionLifetimeSeconds,
   subscriptionTicketItem,
@@ -30,13 +29,6 @@ test("control-plane connections share a queryable partition and expire", () => {
     identity_id: "identity-1",
     expires_at: 2_000 + subscriptionConnectionLifetimeSeconds,
   });
-});
-
-test("projection updates and session changes reach the panels; nothing else does", () => {
-  assert.equal(invalidatesPanels({ source: "spawnpoint.control-plane", "detail-type": "Projection Updated" }), true);
-  assert.equal(invalidatesPanels({ source: "spawnpoint.control-plane", "detail-type": "Session Changed" }), true);
-  assert.equal(invalidatesPanels({ source: "spawnpoint.control-plane", "detail-type": "Something Else" }), false);
-  assert.equal(invalidatesPanels({ source: "aws.states", "detail-type": "Session Changed" }), false);
 });
 
 test("one failed post does not keep the message from the other connections", async () => {

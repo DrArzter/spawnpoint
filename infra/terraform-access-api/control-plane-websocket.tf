@@ -89,6 +89,35 @@ data "aws_iam_policy_document" "control_plane_subscriptions" {
     resources = [local.control_plane_view_table_arn]
   }
 
+  dynamic "statement" {
+    for_each = length(local.panel_streams) == 0 ? [] : [1]
+    content {
+      sid = "ReadPanelStreams"
+      actions = [
+        "dynamodb:DescribeStream",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+      ]
+      resources = [for stream in values(local.panel_streams) : stream.arn]
+    }
+  }
+
+  # ListStreams names no stream, so IAM takes no narrower resource for it.
+  dynamic "statement" {
+    for_each = length(local.panel_streams) == 0 ? [] : [1]
+    content {
+      sid       = "ListPanelStreams"
+      actions   = ["dynamodb:ListStreams"]
+      resources = ["*"]
+    }
+  }
+
+  statement {
+    sid       = "KeepFailedPanelBatches"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.panel_stream_failures.arn]
+  }
+
   statement {
     sid       = "PublishProjectionInvalidations"
     actions   = ["execute-api:ManageConnections"]
@@ -115,6 +144,7 @@ resource "aws_lambda_function" "control_plane_subscriptions" {
   environment {
     variables = {
       CONTROL_PLANE_VIEW_TABLE             = var.control_plane_view_table_name
+      LIFECYCLE_TABLE_NAME                 = data.aws_dynamodb_table.lifecycle.name
       CONTROL_PLANE_WEBSOCKET_CALLBACK_URL = "https://${aws_apigatewayv2_api.control_plane.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.control_plane.name}"
     }
   }
@@ -172,30 +202,8 @@ resource "aws_lambda_permission" "control_plane_subscriptions_websocket" {
   source_arn    = "${aws_apigatewayv2_api.control_plane.execution_arn}/*"
 }
 
-resource "aws_cloudwatch_event_rule" "control_plane_projection_updated" {
-  name        = "spawnpoint-control-plane-projection-updated"
-  description = "Fan out sanitized dashboard projection and session-record invalidations."
-  event_pattern = jsonencode({
-    source      = ["spawnpoint.control-plane"]
-    detail-type = ["Projection Updated", "Session Changed"]
-  })
-}
-
-resource "aws_cloudwatch_event_target" "control_plane_projection_updated" {
-  rule = aws_cloudwatch_event_rule.control_plane_projection_updated.name
-  arn  = aws_lambda_function.control_plane_subscriptions.arn
-}
-
-resource "aws_lambda_permission" "control_plane_projection_updated" {
-  statement_id  = "AllowProjectionInvalidationEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.control_plane_subscriptions.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.control_plane_projection_updated.arn
-}
-
 # A failed fan-out leaves open panels on the old state until their poll reads
-# again. EventBridge retries the invocation; this says when that was not enough.
+# again. The stream mapping retries the batch; this says when a run failed.
 resource "aws_cloudwatch_metric_alarm" "control_plane_subscriptions_errors" {
   alarm_name        = "spawnpoint-control-plane-subscriptions-errors"
   alarm_description = "The control-plane subscriptions Lambda failed: open panels may not have been told to reload. Check /aws/lambda/${aws_lambda_function.control_plane_subscriptions.function_name}."
@@ -218,5 +226,140 @@ resource "aws_cloudwatch_metric_alarm" "control_plane_subscriptions_errors" {
 
   tags = {
     Name = "spawnpoint-control-plane-subscriptions-errors"
+  }
+}
+
+# --- Reload messages from the tables' own change streams (ADR-0104) ----------
+
+data "aws_dynamodb_table" "control_plane_view" {
+  name = var.control_plane_view_table_name
+}
+
+locals {
+  # The streams are enabled by the roots that own the tables, which apply
+  # before this one. A plan made before that apply sees no stream yet and plans
+  # no mapping for it; the check below says so.
+  panel_stream_candidates = {
+    # Session records: the filter passes the items that carry a lifecycle
+    # record; the handler drops a write that changes none of its shown fields.
+    lifecycle = {
+      arn = data.aws_dynamodb_table.lifecycle.stream_arn
+      filters = [
+        jsonencode({ dynamodb = { NewImage = { lifecycle = { M = { observedState = { S = [{ exists = true }] } } } } } }),
+        jsonencode({ eventName = ["REMOVE"], dynamodb = { OldImage = { lifecycle = { M = { observedState = { S = [{ exists = true }] } } } } } }),
+      ]
+    }
+    # The dashboard projection: one item. Tickets, connections and the event
+    # journal share the table and pass nothing.
+    view = {
+      arn = data.aws_dynamodb_table.control_plane_view.stream_arn
+      filters = [
+        jsonencode({ dynamodb = { Keys = { pk = { S = ["PROJECTION#CONTROL_PLANE"] }, sk = { S = ["DYNAMIC"] } } } }),
+      ]
+    }
+  }
+  panel_streams = { for name, stream in local.panel_stream_candidates : name => stream if stream.arn != null && stream.arn != "" }
+}
+
+check "panel_streams_are_enabled" {
+  assert {
+    condition     = length(local.panel_streams) == length(local.panel_stream_candidates)
+    error_message = "A panel table has no stream yet, so no reload message comes from it. Apply infra/terraform and infra/terraform-storage first (ADR-0104)."
+  }
+}
+
+# A batch that still fails after its retries lands here: its records' changes
+# reached no panel, which the panel's safety-net poll then catches.
+resource "aws_sqs_queue" "panel_stream_failures" {
+  name                      = "spawnpoint-panel-stream-failures"
+  message_retention_seconds = 14 * 24 * 60 * 60
+  sqs_managed_sse_enabled   = true
+
+  tags = {
+    Name = "spawnpoint-panel-stream-failures"
+  }
+}
+
+resource "aws_lambda_event_source_mapping" "panel_streams" {
+  for_each = local.panel_streams
+
+  event_source_arn  = each.value.arn
+  function_name     = aws_lambda_function.control_plane_subscriptions.arn
+  starting_position = "LATEST"
+  batch_size        = 100
+  # A reload message is wanted now or not at all: an older one only repeats
+  # what the poll has read since.
+  maximum_batching_window_in_seconds = 0
+  maximum_record_age_in_seconds      = 600
+  maximum_retry_attempts             = 3
+  bisect_batch_on_function_error     = true
+
+  filter_criteria {
+    dynamic "filter" {
+      for_each = each.value.filters
+      content {
+        pattern = filter.value
+      }
+    }
+  }
+
+  destination_config {
+    on_failure {
+      destination_arn = aws_sqs_queue.panel_stream_failures.arn
+    }
+  }
+
+  depends_on = [aws_iam_role_policy.control_plane_subscriptions]
+}
+
+resource "aws_cloudwatch_metric_alarm" "panel_stream_failures" {
+  alarm_name        = "spawnpoint-panel-stream-failures"
+  alarm_description = "A batch of table changes reached no open panel after its retries. Read the messages in ${aws_sqs_queue.panel_stream_failures.name} and /aws/lambda/${aws_lambda_function.control_plane_subscriptions.function_name}."
+
+  namespace   = "AWS/SQS"
+  metric_name = "ApproximateNumberOfMessagesVisible"
+  dimensions = {
+    QueueName = aws_sqs_queue.panel_stream_failures.name
+  }
+
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  alarm_actions = [data.aws_sns_topic.alerts.arn]
+  ok_actions    = [data.aws_sns_topic.alerts.arn]
+
+  tags = {
+    Name = "spawnpoint-panel-stream-failures"
+  }
+}
+
+# The age of the oldest change the mapping has not handed over yet. Above a
+# minute, reload messages come late or the stream has stalled.
+resource "aws_cloudwatch_metric_alarm" "panel_stream_iterator_age" {
+  alarm_name        = "spawnpoint-panel-stream-iterator-age"
+  alarm_description = "Table changes wait more than a minute before they reach open panels. Check /aws/lambda/${aws_lambda_function.control_plane_subscriptions.function_name}."
+
+  namespace   = "AWS/Lambda"
+  metric_name = "IteratorAge"
+  dimensions = {
+    FunctionName = aws_lambda_function.control_plane_subscriptions.function_name
+  }
+
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 60000
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  alarm_actions = [data.aws_sns_topic.alerts.arn]
+  ok_actions    = [data.aws_sns_topic.alerts.arn]
+
+  tags = {
+    Name = "spawnpoint-panel-stream-iterator-age"
   }
 }

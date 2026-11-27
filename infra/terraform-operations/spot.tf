@@ -117,12 +117,6 @@ data "aws_iam_policy_document" "spot_interruption" {
     actions   = ["states:StartExecution"]
     resources = [aws_sfn_state_machine.lifecycle_v2_start.arn]
   }
-
-  statement {
-    sid       = "TellPanelsASessionMoves"
-    actions   = ["events:PutEvents"]
-    resources = ["arn:aws:events:${var.aws_region}:${local.account_id}:event-bus/default"]
-  }
 }
 
 resource "aws_iam_role_policy" "spot_interruption" {

@@ -168,6 +168,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0101](0101-dynamodb-tables-use-the-aws-owned-key.md) | DynamoDB tables use the AWS owned key | Accepted | M6 |
 | [0102](0102-spot-for-cold-launched-hosts-with-a-session-volume.md) | Spot for cold launched hosts, with a session volume | Proposed | M6 |
 | [0103](0103-one-interruption-pipeline-for-every-game.md) | One interruption pipeline for every game | Accepted | M6 |
+| [0104](0104-the-tables-send-the-panels-reload-message.md) | The tables send the panel's reload message | Accepted | M6 |
 
 ## Decisions still to record
 

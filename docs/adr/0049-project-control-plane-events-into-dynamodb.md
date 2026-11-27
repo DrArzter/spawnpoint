@@ -40,7 +40,7 @@ schedule and no direct `stopped` write from an unordered event.
 The panel does not poll while an operation is visible. An approved `status.read` caller exchanges its ordinary HTTP
 session for a single-use, one-minute subscription ticket, then opens an API Gateway WebSocket. After successfully
 replacing the projection, the projector publishes a normalized `Projection Updated` event; a separate subscription
-adapter sends only that invalidation and its observation revision to connected browsers. Opening or reopening the
+adapter sends only that invalidation and its observation revision to connected browsers. ([ADR-0104](0104-the-tables-send-the-panels-reload-message.md) replaces the published event with the tables' own change streams.) Opening or reopening the
 socket also invalidates the client's cache, so events missed while disconnected are recovered. Clients always fetch
 permission-filtered data through the control-plane HTTP API; the socket never carries provider or world state.
 

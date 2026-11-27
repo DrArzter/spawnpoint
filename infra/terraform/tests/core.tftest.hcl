@@ -319,6 +319,11 @@ run "lifecycle_v2_state_is_inert_protected_on_demand_storage" {
     condition     = length(aws_dynamodb_table.lifecycle_v2.ttl) == 0
     error_message = "Lease expiry is a conditional-write fact; DynamoDB TTL must not delete the lifecycle record."
   }
+
+  assert {
+    condition     = aws_dynamodb_table.lifecycle_v2.stream_enabled && aws_dynamodb_table.lifecycle_v2.stream_view_type == "NEW_AND_OLD_IMAGES"
+    error_message = "Session record changes reach open panels through the table's stream, which carries both images for the filter and the comparison (ADR-0104)."
+  }
 }
 
 run "lifecycle_v2_coordinator_is_small_scoped_and_not_wired_to_v1" {

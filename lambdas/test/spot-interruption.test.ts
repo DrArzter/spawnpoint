@@ -11,7 +11,7 @@ import {
   beginStopping,
   type LifecycleRecord,
 } from "../src/domain/lifecycle.ts";
-import type { HostRecord } from "../src/domain/placement.ts";
+import { accepts, type HostRecord } from "../src/domain/placement.ts";
 import type { SessionVolume } from "../src/domain/session-volume.ts";
 import { parseExecutionEvent, renderNotification } from "../src/domain/notifications.ts";
 import {
@@ -117,6 +117,21 @@ test("the warning marks each ready session on the host as moving", async () => {
   assert.deepEqual(result, { hostId: "i-0123456789abcdef0", worlds: ["alpha"], skipped: ["beta"] });
   assert.equal(lifecycle.get("world#alpha")?.record.observedState, "moving");
   assert.equal(lifecycle.get("world#beta")?.record.observedState, "starting", "a start in flight compensates on its own");
+});
+
+// The 2026-11-27 fault test: the move was placed back on the host AWS was taking.
+test("a reclaimed host takes no session again, from the warning to after its last session moved", async () => {
+  const footprint = { memoryMiB: 4096, cores: 1 };
+  const warned = fakes({ "world#alpha": ready() }, host({ reservations: [host().reservations[0]!] }));
+  await markHostSessionsMoving(warned.ports, "i-0123456789abcdef0", NOW, quiet);
+  assert.equal(warned.host()?.record.state, "terminating", "the warning closes the host");
+  assert.equal(accepts(warned.host()!.record, footprint, "other", undefined, true), false);
+
+  const moved = fakes({ "world#alpha": beginMoving(ready(), "s1", NOW - 120) }, host({ reservations: [host().reservations[0]!] }));
+  await moveHostSessions(moved.ports, "i-0123456789abcdef0", NOW, quiet);
+  assert.deepEqual(moved.host()?.record.reservations, [], "the session left the host");
+  assert.equal(moved.host()?.record.state, "terminating", "an empty reclaimed host does not become draining");
+  assert.equal(accepts(moved.host()!.record, footprint, "alpha", undefined, true), false, "the move cannot land on it");
 });
 
 test("a host the fleet did not launch, or that has no record, is left alone", async () => {

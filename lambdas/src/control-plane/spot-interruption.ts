@@ -1,6 +1,6 @@
 import type { Footprint } from "../domain/placement.ts";
 import { LifecycleConflict, beginMoving, type LifecycleRecord } from "../domain/lifecycle.ts";
-import { PlacementConflict, release } from "../domain/placement.ts";
+import { PlacementConflict, markReclaimed, release } from "../domain/placement.ts";
 import type { LifecycleStore } from "../lifecycle/coordinator.ts";
 import type { PlacementStore } from "../lifecycle/placement-coordinator.ts";
 import type { SessionVolumes } from "./session-volume-sweep.ts";
@@ -63,6 +63,7 @@ export async function markHostSessionsMoving(
 ): Promise<InterruptionResult> {
   const host = await ports.placement.readHost(hostId);
   if (host === null || host.record.provenance !== "launched") return { hostId, worlds: [], skipped: [] };
+  await reclaimHost(ports, hostId, nowEpochSeconds);
   const worlds: string[] = [];
   const skipped: string[] = [];
   for (const reservation of host.record.reservations) {
@@ -86,6 +87,7 @@ export async function moveHostSessions(
 ): Promise<InterruptionResult> {
   const host = await ports.placement.readHost(hostId);
   if (host === null || host.record.provenance !== "launched") return { hostId, worlds: [], skipped: [] };
+  await reclaimHost(ports, hostId, nowEpochSeconds);
   const volumes = await ports.volumes.list();
   const worlds: string[] = [];
   const skipped: string[] = [];
@@ -144,6 +146,18 @@ async function updateLifecycle(
 
 // The dead host lets the session go, so placement finds it nowhere and the
 // new start reserves a fresh host. A session already released is not an error.
+// No session may be placed on a host AWS is taking back, a moving one least of all.
+async function reclaimHost(ports: InterruptionPorts, hostId: string, nowEpochSeconds: number): Promise<void> {
+  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
+    const current = await ports.placement.readHost(hostId);
+    if (current === null) return;
+    const next = markReclaimed(current.record, nowEpochSeconds);
+    if (next === current.record) return;
+    if (await ports.placement.compareAndSetHost(hostId, current.revision, next)) return;
+  }
+  throw new Error(`host record ${hostId} kept changing`);
+}
+
 async function releaseReservation(ports: InterruptionPorts, hostId: string, sessionId: string, nowEpochSeconds: number): Promise<void> {
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
     const current = await ports.placement.readHost(hostId);

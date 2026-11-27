@@ -39,7 +39,7 @@ Eighty-six records is a wall, and a wall is not a plan. Read the two or three th
 | Worlds, wipes, presets and games | [0040](0040-reusable-presets-and-world-wipes.md), [0097](0097-every-world-is-a-record-in-the-registry.md), [0034](0034-per-game-adapter.md), [0033](0033-connectivity-as-a-strategy.md) |
 | Fleet hosts, placement and several worlds at once | [0048](0048-one-instance-per-active-world.md), [0054](0054-place-a-session-on-a-host-with-room.md), [0062](0062-give-each-fleet-world-a-session-record-of-its-own.md), [0100](0100-delete-a-persistent-host-from-the-panel.md) |
 | Release storage by content | [0080](0080-store-release-files-by-content.md) |
-| The web console and its skins | [0059](0059-separate-the-console-into-bones-and-skins.md), [0072](0072-draw-the-console-in-the-c-a-grammar.md), [0098](0098-the-console-speaks-from-one-message-catalogue.md) |
+| The web console and its skins | [0059](0059-separate-the-console-into-bones-and-skins.md), [0072](0072-draw-the-console-in-the-c-a-grammar.md), [0098](0098-the-console-speaks-from-one-message-catalogue.md), [0106](0106-a-skin-can-be-switched-off.md) |
 | Deploying a change to production | [0043](0043-deploy-production-from-reviewed-pull-requests.md), [0044](0044-apply-github-identities-behind-an-owner-gate.md) |
 | Everything else | Later. Read when the milestone arrives |
 
@@ -170,6 +170,7 @@ written down when it is about to be implemented, not instead of implementing it.
 | [0103](0103-one-interruption-pipeline-for-every-game.md) | One interruption pipeline for every game | Accepted | M6 |
 | [0104](0104-the-tables-send-the-panels-reload-message.md) | The tables send the panel's reload message | Accepted | M6 |
 | [0105](0105-every-operation-writes-its-own-record.md) | Every operation writes its own record | Accepted | M6 |
+| [0106](0106-a-skin-can-be-switched-off.md) | A skin can be switched off, and the terminal skin is off | Accepted | M6 |
 
 ## Decisions still to record
 

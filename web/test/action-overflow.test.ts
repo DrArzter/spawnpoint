@@ -9,6 +9,10 @@ import { action } from "../src/core/actions.ts";
 import { Overflow as ConsoleOverflow } from "../src/skins/console/ui/Overflow.tsx";
 import { Overflow as TerminalOverflow } from "../src/skins/terminal/ui.tsx";
 import { noop } from "./support/fixtures.ts";
+import { skinTest } from "./support/skins.ts";
+
+// The terminal skin's cases skip while it is switched off (ADR-0106).
+const terminalTest = skinTest("terminal");
 
 const refresh = action("refresh", "Refresh", noop, { icon: "refresh" });
 const archive = action("world.archive", "Archive", noop, { icon: "archive" });
@@ -46,7 +50,7 @@ test("console: no Action draws no trigger", () => {
 
 const terminal = (groups: readonly (readonly ReturnType<typeof action>[])[], menu = false) => createElement(TerminalOverflow, { groups, label: "World actions", menu });
 
-test("terminal: one action is its own icon button, not a menu of one", () => {
+terminalTest("terminal: one action is its own icon button, not a menu of one", () => {
   const markup = renderToStaticMarkup(terminal([[refresh]]));
   assert.match(markup, /data-action="refresh"/);
   assert.match(markup, /aria-label="Refresh"/);
@@ -54,7 +58,7 @@ test("terminal: one action is its own icon button, not a menu of one", () => {
   assert.doesNotMatch(markup, /aria-haspopup/);
 });
 
-test("terminal: two actions share a menu, each still reachable by its id", () => {
+terminalTest("terminal: two actions share a menu, each still reachable by its id", () => {
   const markup = renderToStaticMarkup(terminal([[refresh], [archive]]));
   assert.match(markup, /aria-haspopup="menu"/);
   assert.match(markup, /aria-label="World actions"/);
@@ -63,14 +67,14 @@ test("terminal: two actions share a menu, each still reachable by its id", () =>
   assert.match(markup, /data-action="world.archive"/);
 });
 
-test("terminal: a column that asks for the menu keeps it for one action with an icon", () => {
+terminalTest("terminal: a column that asks for the menu keeps it for one action with an icon", () => {
   const markup = renderToStaticMarkup(terminal([[refresh], []], true));
   assert.match(markup, /aria-haspopup="menu"/);
   assert.match(markup, /aria-label="World actions"/);
   assert.match(markup, /data-action="refresh"/);
 });
 
-test("terminal: one action without an icon keeps the menu", () => {
+terminalTest("terminal: one action without an icon keeps the menu", () => {
   const markup = renderToStaticMarkup(terminal([[plain]]));
   assert.match(markup, /aria-haspopup="menu"/);
   assert.match(markup, /data-action="world.open"/);

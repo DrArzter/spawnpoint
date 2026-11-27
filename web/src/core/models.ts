@@ -647,7 +647,8 @@ export type ProfileModel = Readonly<{
   viewer: ViewerProfile;
   avatar: AvatarModel;
   appearance: AppearanceModel;
-  look: LookModel;
+  /** Null while only one face is switched on: there is nothing to choose. */
+  look: LookModel | null;
   /** The language the console speaks, chosen per browser; the same shape as the look. */
   language: LookModel;
   signOut: Action;

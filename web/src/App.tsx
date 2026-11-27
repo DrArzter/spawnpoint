@@ -11,7 +11,7 @@ import { JoinScreen } from "./screens/JoinScreen";
 import { LandingScreen } from "./screens/LandingScreen";
 import { ConnectScreen } from "./screens/ConnectScreen";
 import { useBootCard } from "./shell/hooks";
-import { chooseSkin, currentSkinId, isSkinId, SKIN_CHOICES, wearOnDocument, wearSkin } from "./skins";
+import { chooseSkin, currentSkinId, isEnabledSkin, SKIN_CHOICES, wearOnDocument, wearSkin } from "./skins";
 import { t } from "./i18n";
 
 // The gate in front of the console: who is here, and which door they came
@@ -25,7 +25,7 @@ export function App() {
   const { visible: bootVisible, publish } = useBootCard();
   const emailAction = readEmailActionRoute();
   const skin = useMemo(chooseSkin, []);
-  const looks = useMemo(() => ({ current: currentSkinId(), options: SKIN_CHOICES, wear: (id: string) => { if (isSkinId(id)) wearSkin(id); } }), []);
+  const looks = useMemo(() => ({ current: currentSkinId(), options: SKIN_CHOICES, wear: (id: string) => { if (isEnabledSkin(id)) wearSkin(id); } }), []);
 
   useEffect(() => {
     let active = true;

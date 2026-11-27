@@ -17,7 +17,7 @@ browser; the self-test proves both. A gate stopped by a signal stops its Chrome 
 
 | Input | Values |
 |---|---|
-| Skins | `console` and `terminal` (set `SKIN` for one) |
+| Skins | every skin switched on in `src/skins/skin.ts` (ADR-0106): the console; the terminal is off. `SKIN` narrows to some of them and may not name one that is off |
 | Languages | English and Russian, whose words run longer (set `LOCALE` for one). A Russian job's page name ends in `@ru`; a state's selector that names words reads them from the catalogue (`states.mjs`) |
 | Page widths | 360, 599/600, 759/760, 839/840, 959/960, 1023/1024, 1199/1200, 1440 and 2560: both sides of the steps where the frame, tables and dialogs change (`web/DESIGN.md`, console and terminal). The 40px stride (360–1680) crosses the smaller steps 900, 1280, 1500 and 1600; 2560 shows the grids past 1900 and 2000 |
 | Stride | every 40px from 360 to 1680 on each page, light theme, resized without a reload |
@@ -61,13 +61,15 @@ control on purpose (a select caret, the tab ink, a count badge); nothing else is
 
 **Floating layers.** A state with `onTop: ["tip", "toast"]` opens a surface, shows a tip and raises a toast or snackbar
 while it is open (or before it, where the host must come forward again), then fails when an open modal paints after
-either layer. `layers-drawer` and `layers-dialog` do this in the console. `layers-drawer-terminal` and `layers-dialog-terminal` do it in the terminal; the terminal dialog state checks the toast only. Every
+either layer. `layers-drawer` and `layers-dialog` do this in the console. `layers-drawer-terminal` and `layers-dialog-terminal` do it in the terminal; the terminal dialog state checks the toast only.
+A state with `skins: ["terminal"]` runs only while the terminal skin is on. Every
 layer is a `data-layer` box (`tip`, `menu`, `toast`), a manual popover from `components/ui/layer.ts`.
 
 **Markers.** The console primitives say what they promise with `data-layout`, `data-rail`, `data-col`, `data-status`,
 `data-scope` and `data-layer`, and `web/test/console-markers.test.ts` holds them to it. The terminal skin has no markers;
 `LAYOUT` at the top of `audit.mjs` lists its selectors. So the terminal gets the overlap, width, menu and layout checks
-(one line, pairs, rails, centred), but not the owner-rule checks, which read markers only. A new primitive that
+(one line, pairs, rails, centred), but not the owner-rule checks, which read markers only. All of this applies only
+while the terminal skin is on; it is off now. A new primitive that
 promises a layout emits the marker.
 
 **States.** A state is a route and steps: `{ action: id }` presses the control for that Action, or opens the menu that

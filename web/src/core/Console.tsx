@@ -427,10 +427,10 @@ function ProfilePage({ console, skin, looks }: Controlled & Readonly<{ looks: Lo
   const member = directory.members.find((item) => item.id === session.identity.id) ?? directory.members[0]!;
   const loginAccounts = useLoginAccounts(member.name, notify);
   const open = console.openInBrowser;
-  const look: LookModel = {
+  const look: LookModel | null = looks.options.length > 1 ? {
     current: looks.current,
     options: looks.options.map((option) => ({ ...option, choose: action(`look.${option.id}`, option.name, () => looks.wear(option.id), { disabled: option.id === looks.current, hint: option.id === looks.current ? t("profile.faceWornNow") : t("profile.wearNameFace", { name: option.name }) }) })),
-  };
+  } : null;
   const locale = currentLocale();
   const language: LookModel = {
     current: locale,

@@ -1,18 +1,19 @@
 import { consoleSkin } from "./console";
-import { CHOOSABLE_SKIN_IDS, DEFAULT_SKIN, SKIN_IDS, type Skin, type SkinId } from "./skin";
+import { CHOOSABLE_SKIN_IDS, DEFAULT_SKIN, ENABLED_SKIN_IDS, type Skin, type SkinId } from "./skin";
 import { terminalSkin } from "./terminal";
 
 export type { Skin, SkinId } from "./skin";
 
 const skins: Readonly<Record<SkinId, Skin>> = { console: consoleSkin, terminal: terminalSkin };
 
-/** Every face the console can wear, each held to the skin contract. */
-export const SKINS: readonly Skin[] = SKIN_IDS.map((id) => skins[id]);
+/** Every face switched on, each held to the skin contract; a face switched off is not tested. */
+export const SKINS: readonly Skin[] = ENABLED_SKIN_IDS.map((id) => skins[id]);
 /** The faces offered on the profile page. */
 export const SKIN_CHOICES: readonly Readonly<{ id: SkinId; name: string }>[] = CHOOSABLE_SKIN_IDS.map((id) => ({ id, name: skins[id].name }));
 
-export function isSkinId(value: unknown): value is SkinId {
-  return typeof value === "string" && (SKIN_IDS as readonly string[]).includes(value);
+/** A face that is switched on; a stored or asked-for face that is off reads as no choice. */
+export function isEnabledSkin(value: unknown): value is SkinId {
+  return typeof value === "string" && (ENABLED_SKIN_IDS as readonly string[]).includes(value);
 }
 
 const STORAGE_KEY = "spawnpoint.skin";
@@ -31,9 +32,9 @@ export function currentSkinId(): SkinId {
   let id: SkinId = DEFAULT_SKIN;
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (isSkinId(stored)) id = stored;
+    if (isEnabledSkin(stored)) id = stored;
     const requested = new URLSearchParams(window.location.search).get("skin");
-    if (isSkinId(requested)) {
+    if (isEnabledSkin(requested)) {
       id = requested;
       window.localStorage.setItem(STORAGE_KEY, requested);
     }

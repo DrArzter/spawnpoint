@@ -2,12 +2,15 @@ import "./support/browser.ts";
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { action } from "../src/core/actions.ts";
 import { Address, Drawer, Field, FilterRow, Indicator, LoadError, Log, NoMatches, Pager, Person, Skeleton, SkeletonGroup, Table, TextArea } from "../src/skins/terminal/ui.tsx";
+import { skinTest } from "./support/skins.ts";
+
+// The terminal skin's own tests skip while it is switched off (ADR-0106).
+const test = skinTest("terminal");
 
 test("terminal dense status keeps one visible mark and an accessible label", () => {
   const markup = renderToStaticMarkup(createElement(Indicator, { kind: "ok", label: "Verified" }));

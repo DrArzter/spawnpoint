@@ -5,6 +5,7 @@
 - Milestone: M4
 - Extends: [ADR-0048](0048-one-instance-per-active-world.md) and [ADR-0053](0053-tell-not-built-apart-from-broken.md)
 - Extended by: [ADR-0072](0072-draw-the-console-in-the-c-a-grammar.md) — Draw the console in the C+A grammar
+- Amended by: [ADR-0106](0106-a-skin-can-be-switched-off.md) — A skin can be switched off, and the terminal skin is off
 
 ## Context
 

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { cssRuleTests, parseRules, sourceTexts } from "./support/css.ts";
+import { skinOff } from "./support/skins.ts";
 
 // AGENTS.md holds terminal.css to the rules in support/css.ts. A later rule
 // that cancels an earlier one is how the next screen inherits a value nobody
@@ -19,4 +20,5 @@ cssRuleTests("terminal.css", {
   scope: 'html[data-skin="terminal"]',
   // A token block is a rule that holds custom properties and nothing else.
   mayHoldLiterals: (rule) => [...rule.declarations.keys()].every((property) => property.startsWith("--")),
+  skip: skinOff("terminal"),
 });

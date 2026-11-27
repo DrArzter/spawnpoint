@@ -1,7 +1,6 @@
 import "./support/browser.ts";
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -9,6 +8,10 @@ import type { HostMetrics } from "../src/api/contract.ts";
 import type { MetricsModel } from "../src/core/models.ts";
 import { MetricsPanel, tracePaths } from "../src/skins/terminal/Metrics.tsx";
 import { noop } from "./support/fixtures.ts";
+import { skinTest } from "./support/skins.ts";
+
+// The terminal skin's own tests skip while it is switched off (ADR-0106).
+const test = skinTest("terminal");
 
 // The terminal's metric wells keep every point in its place in the window
 // and break the line where the host reported nothing.

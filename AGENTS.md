@@ -42,7 +42,7 @@ Consistency does **not** mean that two elements happen to look similar. It means
 
 1. Search for the existing semantic primitive before writing markup or CSS.
    - Console primitives live in `web/src/skins/console/ui/` (one file each) and are styled in `web/src/skins/console/styles/` (one sheet each, `c-*` classes under `html[data-skin="console"]`).
-   - Terminal primitives live in `web/src/skins/terminal/ui.tsx` and are styled in `web/src/skins/terminal/terminal.css`.
+   - Terminal primitives live in `web/src/skins/terminal/ui.tsx` and are styled in `web/src/skins/terminal/terminal.css`. The terminal skin is switched off ([ADR-0106](docs/adr/0106-a-skin-can-be-switched-off.md)); its code must still typecheck and build.
    - The front door's parts (sign-in, landing, boot) live in `web/src/components/ui/` and `web/src/styles/`. A skin draws none of its views with them; it may use the shared behaviour there: the snackbar queue (both skins), and `Timestamp`, `Tooltip` and `useFilter` (terminal).
 2. If the intent already exists, use its component. Do not reproduce its DOM, brackets, icon, tooltip, padding, status colour, table layout, or breakpoint behavior locally.
 3. If the same intent appears at least three times and no primitive fits, add or extend a narrowly named shared component or variant. Do not create a generic abstraction for unrelated elements that only look alike.
@@ -55,6 +55,10 @@ Consistency does **not** mean that two elements happen to look similar. It means
 `web/DESIGN.md` lists the console primitives and the owner rules they keep. Use `ActionButton`, `Overflow` (always a menu, so a column has one control), `Table` and `TrackList` (rows on shared tracks, one action column), `Status` and `Indicator`, `DetailList`, `PageHeader` (the breadcrumb is the title), `Card` and `Grid`, `Empty`, `Skeleton`, `Dialog` and `SidePanel` instead of rebuilding them. A console primitive that promises a layout emits its `data-layout` marker.
 
 ### Terminal vocabulary
+
+These rules apply only while the terminal skin is on. `ENABLED_SKIN_IDS` in `web/src/skins/skin.ts` lists the skins
+that are on; the terminal is off ([ADR-0106](docs/adr/0106-a-skin-can-be-switched-off.md)), so its tests skip and the UI
+gate does not check it.
 
 Use these primitives instead of rebuilding them:
 
@@ -91,14 +95,14 @@ If a component lacks a needed capability, extend its typed API and implement the
 - Remove unused selectors when their component is removed. Do not retain speculative utility classes.
 - Use existing tokens and `t-*` scoping. Do not introduce raw colours, spacing values, or unscoped terminal rules when a semantic token already exists.
 
-`web/test/terminal-css.test.ts` enforces two of these rules on `terminal.css`: every styled `t-*` class has a consumer in `web/src` (a class built as `` `t-mark-${kind}` `` counts by its prefix), and no selector sets the same property twice in one cascade context. `web/test/console-css.test.ts` enforces the same two rules on the console sheets for `c-*` classes, and also that every rule is scoped to `html[data-skin="console"]` and that colours, times and easings live only in `tokens.css`. When either fails, consolidate the rules or delete the dead class; do not silence it.
+`web/test/terminal-css.test.ts` enforces two of these rules on `terminal.css`: every styled `t-*` class has a consumer in `web/src` (a class built as `` `t-mark-${kind}` `` counts by its prefix), and no selector sets the same property twice in one cascade context. `web/test/console-css.test.ts` enforces the same two rules on the console sheets for `c-*` classes, and also that every rule is scoped to `html[data-skin="console"]` and that colours, times and easings live only in `tokens.css`. When either fails, consolidate the rules or delete the dead class; do not silence it. A test of one skin uses `skinTest` or `skinOff` (`web/test/support/skins.ts`) and skips while that skin is switched off.
 
 ### Verification
 
 For changes under `web/`:
 
 1. Run `npm test` and `npm run build` from `web/`.
-2. Run `scripts/check.sh ui`, the UI gate: the console and terminal skins at both sides of every step and on a 40px
+2. Run `scripts/check.sh ui`, the UI gate: every skin that is switched on (the console; the terminal is off) at both sides of every step and on a 40px
    stride, every dialog, panel and menu opened, both themes and the stress fixture. It fails on a page wider than the
    screen, overlapping text, icons or controls, a broken layout promise, or a broken owner rule
    (`web/tools/ui-audit/README.md`). A console primitive that promises a layout emits its `data-layout` marker; a new

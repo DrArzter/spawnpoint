@@ -458,7 +458,7 @@ world in the catalog.
 
 Two operator secrets must exist before the first session, because this image takes them from the environment rather
 than generating them: `ZOMBOID_RCON_PASSWORD` (how the probe reads the player count and the stop saves the world) and
-`ZOMBOID_ADMIN_PASSWORD`. A fleet host renders its `.env` from the SecureString parameters under
+`ZOMBOID_ADMIN_PASSWORD`, for the admin account `admin` (`ZOMBOID_ADMIN_USERNAME` names another). A fleet host renders its `.env` from the SecureString parameters under
 `/spawnpoint/host/env/`, so create each one there under its own name; a host launched before that has to be replaced. A
 missing one ends the start with `Compose configuration is invalid (… required variable … is missing a value …)` in the
 host log. The image pins `latest` today; **pin a digest before the first AWS

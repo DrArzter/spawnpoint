@@ -85,8 +85,8 @@ test("a start records its host once the session is ready, and a failure to recor
 test("a stop closes the session's history after it is marked stopped", async () => {
   const { States } = await definition("stop-server-v2");
   assert.equal(States["Mark Session Stopped"]?.Next, "Close Session History");
-  assert.equal(States["Close Session History"]?.Next, "Release Placement");
-  assert.deepEqual(States["Close Session History"]?.Catch?.map((caught) => caught.Next), ["Release Placement"]);
+  assert.equal(States["Close Session History"]?.Next, "Route Session Volume Release");
+  assert.deepEqual(States["Close Session History"]?.Catch?.map((caught) => caught.Next), ["Route Session Volume Release"]);
   assert.equal(States["Close Session History"]?.Parameters?.Payload?.action, "closeSessionHistory");
 });
 

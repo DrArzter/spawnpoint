@@ -293,11 +293,11 @@
           "Next": "Route Stop Failure"
         }
       ],
-      "Next": "Route Session Volume Release"
+      "Next": "Mark Session Stopped"
     },
     "Route Session Volume Release": {
       "Type": "Choice",
-      "Comment": "ADR-0102: the archive is verified, so the session volume is let go. Every failure below leaves the volume to the session volume sweeper and the stop goes on.",
+      "Comment": "ADR-0102: the archive is verified and the session is already marked stopped, so the session volume is let go. Every failure below leaves the volume to the session volume sweeper and the stop goes on. The placement and the stop lease are released only after it, so no start or drain overlaps the release.",
       "Choices": [
         {
           "Variable": "$.sessionVolume.mode",
@@ -305,7 +305,7 @@
           "Next": "Find Session Volume"
         }
       ],
-      "Default": "Mark Session Stopped"
+      "Default": "Release Placement"
     },
     "Find Session Volume": {
       "Type": "Task",
@@ -345,7 +345,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         }
       ],
       "Next": "Route Found Session Volume"
@@ -357,7 +357,7 @@
         {
           "Variable": "$.sessionVolume.found.volumes[0]",
           "IsPresent": false,
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         },
         {
           "Variable": "$.sessionVolume.found.volumes[0].State",
@@ -407,7 +407,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         }
       ],
       "Next": "Wait Before Unmount Poll"
@@ -451,7 +451,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         }
       ],
       "Next": "Unmount Complete"
@@ -482,7 +482,7 @@
           "Next": "Count Unmount Poll"
         }
       ],
-      "Default": "Mark Session Stopped"
+      "Default": "Release Placement"
     },
     "Count Unmount Poll": {
       "Type": "Pass",
@@ -498,7 +498,7 @@
         {
           "Variable": "$.sessionVolume.unmountPolls.count",
           "NumericGreaterThanEquals": 30,
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         }
       ],
       "Default": "Wait Before Unmount Poll"
@@ -528,7 +528,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         }
       ],
       "Next": "Wait Before Detach Poll"
@@ -565,7 +565,7 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         }
       ],
       "Next": "Session Volume Detached"
@@ -595,7 +595,7 @@
         {
           "Variable": "$.sessionVolume.detachPolls.count",
           "NumericGreaterThanEquals": 30,
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         }
       ],
       "Default": "Wait Before Detach Poll"
@@ -624,10 +624,10 @@
             "States.ALL"
           ],
           "ResultPath": "$.sessionVolumeFailure",
-          "Next": "Mark Session Stopped"
+          "Next": "Release Placement"
         }
       ],
-      "Next": "Mark Session Stopped"
+      "Next": "Release Placement"
     },
     "Mark Session Stopped": {
       "Type": "Task",
@@ -687,10 +687,10 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.sessionHistoryFailure",
-          "Next": "Release Placement"
+          "Next": "Route Session Volume Release"
         }
       ],
-      "Next": "Release Placement"
+      "Next": "Route Session Volume Release"
     },
     "Release Placement": {
       "Type": "Task",

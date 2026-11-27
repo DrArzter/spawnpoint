@@ -84,11 +84,11 @@ test("V2 stop holds one fenced lease across the accepted verified stop", async (
   assert.equal(release["sessionId.$"], "$.request.sessionId");
   assert.equal("hostId.$" in release, false, "the reservation is found by session, wherever it is");
   assert.equal(state(definition, "Stop Accepted V1").Resource, "arn:aws:states:::states:startExecution.sync:2");
-  // ADR-0102: the session volume is released between the verified stop and the mark, and only ever goes on to it.
-  assert.equal(state(definition, "Stop Accepted V1").Next, "Route Session Volume Release");
-  assert.equal(state(definition, "Route Session Volume Release").Default, "Mark Session Stopped");
+  // The session is marked stopped once its archive is verified; the volume is released after, before the placement.
+  assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Session Stopped");
   assert.equal(state(definition, "Mark Session Stopped").Next, "Close Session History");
-  assert.equal(state(definition, "Close Session History").Next, "Release Placement");
+  assert.equal(state(definition, "Close Session History").Next, "Route Session Volume Release");
+  assert.equal(state(definition, "Route Session Volume Release").Default, "Release Placement");
   assert.equal(state(definition, "Release Placement").Next, "Route Emptied Host");
   assert.equal(state(definition, "Release Placement").Catch?.[0]?.Next, "Release Stop Lease");
   assert.equal(state(definition, "Release Stop Lease").Next, "Stopped");
@@ -226,4 +226,32 @@ test("a V2 stop carries its players policy to the host stop, refusing by default
   assert.match(JSON.stringify(state(definition, "Initialize")), /"players":"refuse"/);
   assert.match(JSON.stringify(state(definition, "Apply Request Defaults")), /States\.JsonMerge\(\$\.defaults, \$\.request, false\)/);
   assert.match(JSON.stringify(state(definition, "Stop Accepted V1")), /"players\.\$":"\$\.request\.players"/);
+});
+
+test("the session is marked stopped before the session volume is released, and the volume before the placement", async () => {
+  const definition = await loadDefinition();
+  assert.equal(state(definition, "Stop Accepted V1").Next, "Mark Session Stopped");
+  assert.equal(state(definition, "Mark Session Stopped").Next, "Close Session History");
+  assert.deepEqual([...new Set(targets(state(definition, "Close Session History")))], ["Route Session Volume Release"]);
+
+  const volume = ["Route Session Volume Release", "Find Session Volume", "Route Found Session Volume", "Unmount Session Volume",
+    "Wait Before Unmount Poll", "Get Unmount Command", "Unmount Complete", "Count Unmount Poll", "Unmount Poll Limit Reached",
+    "Detach Session Volume", "Wait Before Detach Poll", "Describe Detached Session Volume", "Session Volume Detached",
+    "Count Detach Poll", "Detach Poll Limit Reached", "Delete Session Volume"];
+  for (const name of volume) {
+    for (const target of targets(state(definition, name))) {
+      assert.ok(volume.includes(target) || target === "Release Placement", `${name} leads to ${target}`);
+    }
+  }
+
+  // Every path from Close Session History meets the volume route before Release Placement.
+  const seen = new Set<string>();
+  const queue = targets(state(definition, "Close Session History"));
+  while (queue.length > 0) {
+    const name = queue.shift()!;
+    if (seen.has(name) || name === "Route Session Volume Release") continue;
+    seen.add(name);
+    assert.notEqual(name, "Release Placement", "a path skips the volume route");
+    queue.push(...targets(state(definition, name)));
+  }
 });

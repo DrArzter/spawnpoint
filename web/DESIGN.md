@@ -305,14 +305,21 @@ also takes back the column widths it had at the same width last time, so its col
 ## Skins
 
 A skin is a set of views over the same models; it may not change what a page offers, only how it is drawn
-([ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md)). Two skins ship: `console`, the default,
-described above, and `terminal`. A person picks one in Profile › Appearance › Look, or tries one with `?skin=`.
+([ADR-0059](../docs/adr/0059-separate-the-console-into-bones-and-skins.md)). Two skins exist: `console`, the default,
+described above, and `terminal`. `ENABLED_SKIN_IDS` in `skins/skin.ts` says which are switched on
+([ADR-0106](../docs/adr/0106-a-skin-can-be-switched-off.md)); only the console is on now. A person picks a skin that is
+on in Profile › Appearance › Look, or tries one with `?skin=`; with one skin on there is no Look to pick. A stored or
+asked-for skin that is off falls back to the console. At run time the feature flags may narrow this list further
+([ADR-0107](../docs/adr/0107-feature-flags-in-parameter-store.md)): the session's `skins`, which must include the console.
 
-`index.html` stamps `html[data-skin]` from `spawnpoint.skin` (or `?skin=`, else `console`) before the first paint and
+`index.html` stamps `html[data-skin]` from `spawnpoint.skin` (or `?skin=`, else `console`), if that skin is on, before the first paint and
 asks for the skin's fonts. `main.tsx` paints the remembered accent and theme before the first render, and `App`
 confirms or removes the stamp for the surface it shows (`wearOnDocument`): the front door never wears a skin.
 
 ### Terminal
+
+The terminal skin is switched off (ADR-0106). These rules apply only while it is on; its code must still typecheck
+and build, but no test or gate checks it.
 
 `skins/terminal` draws the console as one monospace screen: a top row, a menu row, then the grid, every row the full
 width on a phone as on a 4K monitor. Every view is the face's own, built from its own vocabulary in `ui.tsx` (panel,

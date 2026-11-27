@@ -577,6 +577,7 @@ export const en = {
   "error.no_release_selected": "This world's release pointer names no release yet.",
   "error.not_a_spawnpoint_host": "Only Spawnpoint's persistent host can be deleted here.",
   "error.not_found": "Spawnpoint does not offer this yet.",
+  "error.feature_off": "This feature is switched off.",
   "error.operation_in_progress": "Another operation is running for this world.",
   "error.operation_progress_unavailable": "The operation's progress cannot be read now.",
   "error.panel_url_unavailable": "The invitation link cannot be made now.",

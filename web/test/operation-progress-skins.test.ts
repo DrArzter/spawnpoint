@@ -12,6 +12,10 @@ import { OperationProgress as ConsoleProgress } from "../src/skins/console/Opera
 import { DetailsTab as ConsoleDetails } from "../src/skins/console/tabs/Details.tsx";
 import { World as TerminalWorld } from "../src/skins/terminal/World.tsx";
 import { noop } from "./support/fixtures.ts";
+import { skinTest } from "./support/skins.ts";
+
+// The terminal skin's cases skip while it is switched off (ADR-0106).
+const terminalTest = skinTest("terminal");
 
 /*
  * The operation's progress in both skins: the same rows from one model, a
@@ -82,7 +86,7 @@ function terminalPage(progress: ReturnType<typeof progressModel>): string {
   return render(createElement(TerminalWorld, { model: model as never }), 42);
 }
 
-test("terminal: a running operation takes the session's group in the details, after the tabs, with one busy state and the same rows", () => {
+terminalTest("terminal: a running operation takes the session's group in the details, after the tabs, with one busy state and the same rows", () => {
   const markup = terminalPage(runningModel());
   assert.match(markup, /<section class="t-details-group"><div class="t-group-head"><h2 class="t-group-name">Promoting release<\/h2><span class="t-state t-state-progress">/);
   assert.ok(markup.indexOf("Promoting release") > markup.indexOf('role="tablist"'), "the progress is not above the tabs");
@@ -92,7 +96,7 @@ test("terminal: a running operation takes the session's group in the details, af
   for (const text of ["Step", "Starting on the new release", "Sub-step", "Waiting for the host", "Elapsed", "0:42", "Expected", "ETA ~0:18"]) assert.ok(markup.includes(text), text);
 });
 
-test("terminal: a failure shows one error state, the error, the whole cause and what was caught", () => {
+terminalTest("terminal: a failure shows one error state, the error, the whole cause and what was caught", () => {
   const markup = terminalPage(failedModel());
   assert.equal(count(markup, /t-state-error/), 1);
   assert.ok(markup.includes("Ec2.InsufficientInstanceCapacity"));
@@ -100,7 +104,7 @@ test("terminal: a failure shows one error state, the error, the whole cause and 
   for (const text of ["SessionStartFailed", "The host never reported ready.", "Caught at"]) assert.ok(markup.includes(text), text);
 });
 
-test("terminal: no progress, the session's group", () => {
+terminalTest("terminal: no progress, the session's group", () => {
   const markup = terminalPage(null);
   assert.doesNotMatch(markup, /Promoting release/);
   assert.match(markup, /<h2 class="t-group-name">Session<\/h2>/);
@@ -156,7 +160,7 @@ test("console: until the API answers, the step rows are placeholders announced a
   for (const text of ["Step", "Sub-step", "Elapsed"]) assert.ok(markup.includes(text), text);
 });
 
-test("terminal: the log sits in the progress panel with the same lines and faults named in text", () => {
+terminalTest("terminal: the log sits in the progress panel with the same lines and faults named in text", () => {
   const markup = terminalPage(logModel());
   assert.equal(count(markup, /role="log"/), 1);
   assert.match(markup, /aria-label="Promoting release: host log"/);
@@ -171,7 +175,7 @@ test("terminal: the log sits in the progress panel with the same lines and fault
   assert.doesNotMatch(terminalPage(failedModel()), /role="log"/);
 });
 
-test("terminal: until the API answers, the step rows are placeholders announced as loading", () => {
+terminalTest("terminal: until the API answers, the step rows are placeholders announced as loading", () => {
   const markup = terminalPage(progressModel(live, null)!);
   assert.equal(count(markup, /<span><span aria-hidden="true" class="t-skeleton t-skeleton-text t-skeleton-medium"><\/span><span class="visually-hidden">Loading<\/span><\/span>/), 2);
 });

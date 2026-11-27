@@ -71,6 +71,7 @@ export const demoSession: ActiveSession = {
   // Demo capabilities include unfinished prototypes so their screens remain
   // explorable without advertising those destinations in production.
   capabilities: ["releaseBuilds", "releaseManifest", "hostMetrics", "worldMetrics", "consoleGateway", "invitations", "clientPacks", "backups", "worldLifecycle", "accessManagement", "accessInvitations", "gameSettings", "releaseFiles", "releaseDiff", "backupDownloads", "whitelist", "configFiles", "worldLog", "assistant", "releasePromotion", "operationProgress", "hostDeletion"],
+  skins: null,
   role: { id: "owner", name: "Owner", description: "Full access to Spawnpoint, including access management.", protected: true, permissions: ["status.read", "connection.read", "session.start", "session.stop", "session.stop.force", "invitation.send", "metrics.read", "console.use", "whitelist.manage", "config.edit", "log.read", "assistant.use", "release.read", "release.build", "release.promote", "backup.read", "backup.download", "backup.restore", "world.manage", "host.manage", "access.read", "access.manage", "access.invite", "release.retire", "access.owner.grant"] },
   profile: { provider: "telegram", platformUserId: "100000001", telegramId: "100000001", username: "drarzter", email: null, photoUrl: null },
   bootstrap: { state: "claimed", ownerId: "identity-owner", telegramId: "100000001", claimedAt: "2026-08-28T18:24:00.000Z" },

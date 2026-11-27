@@ -13,6 +13,7 @@ import { MOTION } from "./ui/motion";
 import { canTransition, runTransition } from "./ui/transition";
 import { Palette } from "./ui/Palette";
 import { ToastProvider } from "./ui/Toast";
+import { ensureConsoleFont } from "./font";
 import { TooltipLayer } from "./ui/Tooltip";
 import { t } from "../../i18n";
 
@@ -205,6 +206,7 @@ export function Shell({ model, children }: Readonly<{ model: ShellModel; childre
   const [keys, setKeys] = useState(false);
   const main = useRef<HTMLElement>(null);
   const [hash, setHash] = useState(() => typeof window === "undefined" ? "" : window.location.hash);
+  useLayoutEffect(ensureConsoleFont, []);
   useEffect(() => {
     const onHash = () => setHash(window.location.hash);
     window.addEventListener("hashchange", onHash);

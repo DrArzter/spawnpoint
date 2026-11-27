@@ -55,6 +55,9 @@ test("profile: Appearance holds the theme and the looks as radio cards, each loo
   assert.match(markup, /data-action="look\.terminal"[^>]*name="look"[^>]*type="radio"|name="look"[^>]*data-action="look\.terminal"|data-action="look\.terminal"[^>]*type="radio"/);
   const onTerminal = renderToStaticMarkup(createElement(Profile, { model: { ...profile, look: { ...profile.look, current: "terminal" } } }));
   assert.match(onTerminal, /checked=""[^>]*data-action="look\.terminal"|data-action="look\.terminal"[^>]*checked=""|checked=""[^>]*name="look"/, "the current look reads as chosen");
+  const single = renderToStaticMarkup(createElement(Profile, { model: { ...profile, look: null } }));
+  assert.doesNotMatch(single, /name="look"/, "with one face switched on there is no look to choose");
+  assert.equal(single.match(/name="theme"/g)?.length, 3);
 });
 
 test("profile: the accent well shows the picked colour, and Reset is refused while the default is in use", () => {

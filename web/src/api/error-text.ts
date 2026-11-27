@@ -12,6 +12,7 @@ export const API_ERROR_TEXT: Readonly<Record<ApiErrorCode, string>> = {
   // Any request
   forbidden: t("error.forbidden"),
   not_found: t("error.not_found"),
+  feature_off: t("error.feature_off"),
   invalid_json: t("error.invalid_json"),
   untrusted_origin: t("error.untrusted_origin"),
   invalid_or_expired_session: t("error.invalid_or_expired_session"),

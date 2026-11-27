@@ -18,7 +18,13 @@ import { intlLocale, t } from "../i18n";
 export const POLL_MS = 4000;
 /** About half an hour of polling at the cadence above. */
 export const MAX_POLLS = 450;
-export const MAX_FAILURES = 3;
+/** Failed reads in a row wait twice as long each time, up to this. */
+export const MAX_BACKOFF_MS = 30_000;
+
+/** The wait before the next read, after this many failed reads in a row. */
+export function pollDelay(failures: number): number {
+  return Math.min(POLL_MS * 2 ** failures, MAX_BACKOFF_MS);
+}
 
 /** The words of the rows, in one place. */
 export const PROGRESS_LABELS = {
@@ -182,8 +188,8 @@ export type Poller = Readonly<{
 
 /**
  * Reads one operation now and every few seconds. It ends when the operation is
- * no longer running (and says so through `onEnded`, as the snapshot is then behind), after too many reads or failed reads in a row, or on
- * `stop`. A failed read keeps the last good value; a read that finds nothing
+ * no longer running (and says so through `onEnded`, as the snapshot is then behind), after too many reads, or on
+ * `stop`. Failed reads in a row back off to 30 s instead of ending it. A failed read keeps the last good value; a read that finds nothing
  * counts as a failure. No timer runs while hidden.
  */
 export function startPolling(options: Readonly<{ read: () => Promise<OperationProgress | null>; onProgress: (progress: OperationProgress) => void; visible: () => boolean; onEnded?: () => void }>): Poller {
@@ -192,7 +198,7 @@ export function startPolling(options: Readonly<{ read: () => Promise<OperationPr
   let reads = 0;
   let failures = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const later = () => { timer = setTimeout(() => { void tick(); }, POLL_MS); };
+  const later = () => { timer = setTimeout(() => { void tick(); }, pollDelay(failures)); };
   async function tick(): Promise<void> {
     clearTimeout(timer);
     if (stopped || inflight || !options.visible()) return;
@@ -213,7 +219,7 @@ export function startPolling(options: Readonly<{ read: () => Promise<OperationPr
     } finally {
       inflight = false;
     }
-    if (failures >= MAX_FAILURES || reads >= MAX_POLLS) { stopped = true; return; }
+    if (reads >= MAX_POLLS) { stopped = true; return; }
     later();
   }
   void tick();

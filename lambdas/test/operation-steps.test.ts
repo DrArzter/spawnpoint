@@ -1,26 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { ENDED, mappedStates, STEP_LABELS, stepOfState, WORKFLOW_FILES, workflowOfMachine, type WorkflowName } from "../src/control-plane/operation-steps.ts";
 
-// A template's placeholders become plain strings; only the state names matter.
-function statesOf(workflow: WorkflowName): string[] {
-  const text = readFileSync(new URL(`../../workflows/${WORKFLOW_FILES[workflow]}`, import.meta.url), "utf8")
-    .replaceAll("${allowed_instance_types}", "[]")
-    .replace(/\$\{[^}]*\}/g, "x");
-  return Object.keys((JSON.parse(text) as { States: Record<string, unknown> }).States);
-}
-
+// Every state of every workflow has a step or is listed as not shown:
+// operation-workflows.test.ts holds the workflow files to it (ADR-0105).
 const WORKFLOWS = Object.keys(WORKFLOW_FILES) as WorkflowName[];
-
-for (const workflow of WORKFLOWS) {
-  test(`every state of the ${workflow} workflow has a step, and no step names a state it lacks`, () => {
-    const states = statesOf(workflow);
-    assert.deepEqual(states.filter((state) => stepOfState(workflow, state) === null), [], "states without a step");
-    assert.deepEqual(mappedStates(workflow).filter((state) => !states.includes(state)), [], "steps for states that are gone");
-  });
-}
 
 test("every step key has plain words, and the labels name no key that is unused", () => {
   const used = new Set(WORKFLOWS.flatMap((workflow) => mappedStates(workflow).map((state) => stepOfState(workflow, state)!.key)));

@@ -162,6 +162,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
+declare -A linked_objects=()
 while IFS=$'\t' read -r filename expected_sha expected_bytes; do
   if [[ "${layout}" == "objects-v1" ]]; then
     # The cache object is the source. The link shares its inode, so its owner
@@ -171,6 +172,7 @@ while IFS=$'\t' read -r filename expected_sha expected_bytes; do
     actual_bytes="$(stat --format '%s' -- "${source_file}")"
     [[ "${actual_bytes}" == "${expected_bytes}" ]] || die "size mismatch for ${filename}: expected ${expected_bytes}, got ${actual_bytes}"
     object_cache_link_or_copy "${source_file}" "${stage_dir}/${filename}" "${expected_sha}" "${expected_bytes}"
+    [[ "${OBJECT_LINKED}" != true ]] || linked_objects["${filename}"]=1
     if [[ "${start_check}" == "size" && "${OBJECT_LINKED}" == true ]]; then
       object_cache_trusted "${stage_dir}/${filename}" "${expected_bytes}" ||
         die "object ${expected_sha} for ${filename} is not a root-owned 0444 file of ${expected_bytes} bytes"
@@ -200,6 +202,22 @@ actual_count="$(find "${stage_dir}" -maxdepth 1 -type f \( -name '*.jar' -o -nam
 [[ "${actual_count}" == "${expected_count}" ]] || die "staged mod count mismatch: expected ${expected_count}, got ${actual_count}"
 cp -- "${manifest}" "${stage_dir}/.spawnpoint-release.json"
 chmod 0644 -- "${stage_dir}/.spawnpoint-release.json"
+
+# The game runs as its own user, and a mod may rewrite its own jar at boot
+# (SimplySwords adds a recipe when Eldritch End is loaded), which needs the jar
+# and its directory. The image hands /data to that user only while /data is not
+# yet its own, so a world that already ran there (a session volume after a Spot
+# move, a warm host) met root-owned mods and failed with ReadOnlyFileSystemException.
+# The overrides have the same rule (reconcile-server-overrides.sh). A mod linked
+# from the object cache shares the cache's root-owned inode and keeps it.
+if ((EUID == 0)); then
+  game_owner="${GAME_DATA_OWNER:-1000:1000}"
+  [[ "${game_owner}" =~ ^[0-9]+:[0-9]+$ ]] || die "GAME_DATA_OWNER must be uid:gid: ${game_owner}"
+  chown -- "${game_owner}" "${stage_dir}" "${stage_dir}/.spawnpoint-release.json"
+  while IFS= read -r -d '' staged; do
+    [[ -n "${linked_objects[$(basename -- "${staged}")]:-}" ]] || chown -- "${game_owner}" "${staged}"
+  done < <(find "${stage_dir}" -mindepth 1 -maxdepth 1 -type f \( -name '*.jar' -o -name '*.zip' \) -print0)
+fi
 
 if [[ -d "${target_dir}" ]]; then
   mapfile -d '' world_folders < <(find "${target_dir}" -mindepth 1 -maxdepth 1 -type d -printf '%f\0' | sort -z)

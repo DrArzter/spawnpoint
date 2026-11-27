@@ -72,6 +72,16 @@ cmp -- "${manifest}" "${target}/.spawnpoint-release.json"
 [[ "$(stat --format '%a' -- "${target}")" == "755" ]]
 [[ "$(stat --format '%a' -- "${target}/alpha.jar")" == "644" ]]
 [[ "$(stat --format '%a' -- "${target}/.spawnpoint-release.json")" == "644" ]]
+# The game user owns the mods and their directory, so a mod may rewrite its
+# own jar at boot even where the image does not hand /data over again
+# (a session volume after a Spot move, 2026-11-27).
+if ((EUID == 0)); then
+  [[ "$(stat --format '%u:%g' -- "${target}")" == "1000:1000" ]]
+  [[ "$(stat --format '%u:%g' -- "${target}/alpha.jar")" == "1000:1000" ]]
+  owned="${fixture}/owned/mods"
+  GAME_DATA_OWNER=1234:5678 "${SCRIPTS}/reconcile-release.sh" "${manifest}" "${owned}" >/dev/null
+  [[ "$(stat --format '%u:%g' -- "${owned}/alpha.jar")" == "1234:5678" ]]
+fi
 
 # Reconcile keeps its lock file beside the target; stage and backup directories
 # must not survive, in success or in failure.

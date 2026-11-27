@@ -203,8 +203,11 @@ export function instanceOfInput(input: string | undefined): string | null {
   if (input === undefined) return null;
   try {
     const parsed: unknown = JSON.parse(input);
-    const request = parsed !== null && typeof parsed === "object" ? (parsed as { request?: unknown }).request : undefined;
-    const id = request !== null && typeof request === "object" ? (request as { instanceId?: unknown }).instanceId : undefined;
+    if (parsed === null || typeof parsed !== "object") return null;
+    // A configured start names its host in `request`; a fleet start, at the top, from its placement.
+    const request = (parsed as { request?: unknown }).request;
+    const nested = request !== null && typeof request === "object" ? (request as { instanceId?: unknown }).instanceId : undefined;
+    const id = nested ?? (parsed as { instanceId?: unknown }).instanceId;
     return typeof id === "string" && /^i-[0-9a-f]{8,17}$/.test(id) ? id : null;
   } catch {
     return null;

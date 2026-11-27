@@ -48,6 +48,25 @@ resource "aws_iam_role_policy_attachment" "control_plane_projector_logs" {
 }
 
 data "aws_iam_policy_document" "control_plane_projector" {
+  # The projection lists the running operations from their records (ADR-0105).
+  statement {
+    sid       = "ReadOperationRecords"
+    actions   = ["dynamodb:GetItem"]
+    resources = [local.control_plane_view_table_arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["OPERATION#*"]
+    }
+  }
+
+  statement {
+    sid       = "ListOpenOperationRecords"
+    actions   = ["dynamodb:Query"]
+    resources = ["${local.control_plane_view_table_arn}/index/open_operations"]
+  }
+
   # It ends a record whose run ended without its own end write (ADR-0105); only record keys.
   statement {
     sid       = "WriteOperationRecords"

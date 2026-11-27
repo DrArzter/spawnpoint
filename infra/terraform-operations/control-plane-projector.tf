@@ -443,4 +443,3 @@ resource "aws_cloudwatch_event_target" "control_plane_terminal_reconcile" {
 
   depends_on = [aws_iam_role_policy.control_plane_reconcile_events]
 }
-

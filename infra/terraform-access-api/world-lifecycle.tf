@@ -212,4 +212,3 @@ resource "aws_sfn_state_machine" "world_lifecycle" {
     operation_table_name         = var.control_plane_view_table_name
   })
 }
-

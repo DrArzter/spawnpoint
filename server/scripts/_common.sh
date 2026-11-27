@@ -105,8 +105,12 @@ validate_compose() {
     [[ -f "${compose_file}" ]] || die "Compose file does not exist: ${compose_file}"
   done
 
-  if ! compose config --quiet; then
-    die "Compose configuration is invalid; check the configured Compose files and ${ENV_FILE}"
+  local reason
+  if ! reason="$(compose config --quiet 2>&1)"; then
+    # Compose's own first line names the cause, such as a missing variable; it
+    # names keys, not their values.
+    reason="$(printf '%s\n' "${reason}" | sed -n '/[^[:space:]]/{p;q;}' | cut -c1-300)"
+    die "Compose configuration is invalid (${reason:-no reason given}); check the configured Compose files and ${ENV_FILE}"
   fi
 }
 

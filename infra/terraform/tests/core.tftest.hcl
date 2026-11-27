@@ -274,8 +274,12 @@ run "stop_workflow_is_standard_and_stops_only_after_backup_step" {
   }
 
   assert {
-    condition     = jsondecode(aws_sfn_state_machine.stop_server.definition).States["Stop Command Complete"].Choices[0].Next == "Stop Instance"
-    error_message = "EC2 stop must be reachable only after the host save/backup command succeeds."
+    condition = alltrue([
+      jsondecode(aws_sfn_state_machine.stop_server.definition).States["Stop Command Complete"].Choices[0].Next == "Describe Host Market",
+      jsondecode(aws_sfn_state_machine.stop_server.definition).States["Describe Host Market"].Next == "Host Is Spot",
+      jsondecode(aws_sfn_state_machine.stop_server.definition).States["Host Is Spot"].Default == "Stop Instance",
+    ])
+    error_message = "EC2 stop must be reachable only after the host save/backup command succeeds, and only for a host that is not Spot (ADR-0102)."
   }
 
   assert {

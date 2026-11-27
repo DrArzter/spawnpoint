@@ -1956,8 +1956,10 @@
           "Next": "Delete Session Volume After Failed Start"
         },
         {
-          "Variable": "$.hostStop.Output.status",
-          "StringEquals": "session_stopped_host_busy",
+          "Or": [
+            { "Variable": "$.hostStop.Output.status", "StringEquals": "session_stopped_host_busy" },
+            { "Variable": "$.hostStop.Output.status", "StringEquals": "session_stopped_spot_host" }
+          ],
           "Next": "Unmount Session Volume After Failed Start"
         }
       ],

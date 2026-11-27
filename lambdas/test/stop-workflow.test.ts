@@ -25,7 +25,7 @@ test("stop workflow stops EC2 only after the host command succeeds", async () =>
   const definition = await loadDefinition();
   const choice = definition.States["Stop Command Complete"];
   assert.ok(choice);
-  const toStop = choice.Choices?.filter((candidate) => candidate.Next === "Stop Instance") ?? [];
+  const toStop = choice.Choices?.filter((candidate) => candidate.Next === "Describe Host Market") ?? [];
   const playerRace = choice.Choices?.find((candidate) => JSON.stringify(candidate).includes('"NumericEquals":3'));
 
   assert.equal(toStop.length, 1);
@@ -49,7 +49,7 @@ test("SSM Success alone never stops the host; the verified-archive line does (AD
   const definition = await loadDefinition();
   const choice = definition.States["Stop Command Complete"];
   assert.ok(choice);
-  const toStop = choice.Choices?.find((candidate) => candidate.Next === "Stop Instance") as Record<string, any>;
+  const toStop = choice.Choices?.find((candidate) => candidate.Next === "Describe Host Market") as Record<string, any>;
   const [status, line] = toStop.And as [Record<string, any>, Record<string, any>];
 
   assert.deepEqual(status, { Variable: "$.observed.invocation.Status", StringEquals: "Success" });
@@ -153,5 +153,25 @@ test("a stop refuses with players online unless its request asks to disconnect t
   assert.equal(definition.States["Unknown Players Policy"]?.Type, "Fail");
   for (const name of ["Stop Placed Session Command", "Stop Session Command"]) {
     assert.equal(hostParameters(definition, name)["players.$"], "States.Array($.request.players)");
+  }
+});
+
+// 2026-11-27: EC2 refuses to stop a one-time Spot instance, so every stop of a
+// world on a Spot host failed after its backup was verified.
+test("a verified stop leaves a Spot host running for the drain, and stops any other host", async () => {
+  const definition = await loadDefinition();
+  assert.equal(definition.States["Describe Host Market"]?.Resource, "arn:aws:states:::aws-sdk:ec2:describeInstances");
+  assert.equal(definition.States["Describe Host Market"]?.Next, "Host Is Spot");
+  const market = definition.States["Host Is Spot"]!;
+  assert.equal(market.Default, "Stop Instance", "an on-demand host stops as before");
+  assert.equal(market.Choices?.[0]?.Next, "Spot Host Left For Drain");
+  assert.deepEqual((market.Choices?.[0]?.And as unknown[])[1], { Variable: "$.observed.market.lifecycle.InstanceLifecycle", StringEquals: "spot" });
+  const left = definition.States["Spot Host Left For Drain"]!;
+  assert.equal(left.End, true);
+  assert.match(JSON.stringify(left), /"status":"session_stopped_spot_host"/);
+
+  for (const file of ["stop-server-v2.asl.json.tftpl", "start-server-v2.asl.json.tftpl"]) {
+    const text = await readFile(new URL(`../../workflows/${file}`, import.meta.url), "utf8");
+    assert.match(text, /"StringEquals": "session_stopped_spot_host"/, `${file} unmounts the volume of a Spot host that stays running`);
   }
 });

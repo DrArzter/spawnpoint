@@ -12,7 +12,8 @@ configure_game_compose
 # shellcheck source=_common.sh
 source "${SCRIPT_DIR}/_common.sh"
 
-timeout_seconds="${START_TIMEOUT_SECONDS:-600}"
+# A game that installs itself at start may need longer; its module says so.
+timeout_seconds="${START_TIMEOUT_SECONDS:-${GAME_START_TIMEOUT_SECONDS:-600}}"
 poll_seconds="${START_POLL_SECONDS:-5}"
 
 [[ "${timeout_seconds}" =~ ^[1-9][0-9]*$ ]] || die "START_TIMEOUT_SECONDS must be a positive integer"

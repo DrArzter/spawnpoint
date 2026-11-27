@@ -20,6 +20,9 @@
 GAME_COMPOSE_FILES="games/zomboid/compose.yaml"
 GAME_FOOTPRINT_COMPOSE_FILE="games/zomboid/compose.footprint.yaml"
 GAME_COMPOSE_SERVICE="zomboid"
+# A new host downloads the server (about four minutes) before the world loads
+# (about five and a half), so the default ten minutes ended starts that worked.
+GAME_START_TIMEOUT_SECONDS=1500
 # Why the facts in game.json are what they are (ADR-0088):
 # - slottable false: the server tells a client to continue on its second port
 #   (UDPPort, 16262 by default), which a slot's host mapping would not carry.
@@ -100,6 +103,18 @@ game_announce() {
 game_tick_time_ms() {
   printf 'error: Project Zomboid reports no tick time over RCON\n' >&2
   return 2
+}
+
+# The image writes the RCON password into the server's ini only when that file
+# exists, and the server creates it with RCON off on a world's first start. So
+# the probe never got an answer and the stop could not save. Seeding the keys
+# the image patches lets it fill them in; the server adds every other default.
+game_prepare_session() {
+  # Read now: the world's directory is chosen after this module loads.
+  local ini="${SPAWNPOINT_WORLD_DATA_DIRECTORY:-${ZOMBOID_DATA_DIR}}/Server/dedicated.ini"
+  [[ -f "${ini}" ]] && return 0
+  mkdir -p -- "$(dirname -- "${ini}")"
+  printf '%s=\n' PVP MaxPlayers RCONPassword RCONPort Password Public DefaultPort UDPPort >"${ini}"
 }
 
 game_save() {

@@ -1330,6 +1330,7 @@ export const ru: Catalogue = {
   "world.runningCountWorldsRunningEach": "Запущено миров: {runningCount}, каждый на своём хосте из парка.",
   "world.runningOperations": "Выполняемые операции",
   "world.saveBackUpSession": "Сохранить и сделать бэкап этой сессии, затем освободить её хост",
+  "world.stopDidNotFinish": "Последняя остановка не завершилась. Остановите снова; пока неудачная попытка держит мир, до 30 минут, повтор будет отклонён.",
   "world.saveBackUpStop": "Сохранить, сделать бэкап и остановить эту сессию?",
   "world.saveBackUpStopSession": "Сохранить, сделать бэкап и остановить эту сессию",
   "world.saveSettings": "Сохранить настройки",

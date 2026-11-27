@@ -50,7 +50,7 @@ export function aWorld(over: Partial<World> = {}): World {
 export function aGame(over: Partial<Game> = {}): Game {
   return {
     id: "minecraft", code: "MC", displayName: "Minecraft", lifecycle: null, settings: [], whitelist: false, playerName: null,
-    consoleSuggestions: [], presentation: { tint: "teal", glyph: "cube", scene: "creeper" }, presets: [], worlds: [], ...over,
+    consoleSuggestions: [], presentation: { tint: "teal", glyph: "cube", scene: "creeper" }, proven: true, presets: [], worlds: [], ...over,
   };
 }
 
@@ -59,7 +59,7 @@ export function aShell(game: Game, over: Partial<ShellModel> = {}): ShellModel {
   return {
     navigation: [{ id: "worlds", label: "Worlds", href: "#/worlds/minecraft", current: true }, { id: "access", label: "Access", href: "#/access/users", current: false }],
     page: "worlds",
-    scope: { game, games: [game], statusOf: () => ({ kind: "ok", label: "Online" }), open: false, show: spy("scope.show", "Minecraft"), close: spy("scope.close", "Cancel"), select: noop },
+    scope: { game, games: [game], statusOf: () => ({ kind: "ok", label: "Online" }), noteOf: () => null, open: false, show: spy("scope.show", "Minecraft"), close: spy("scope.close", "Cancel"), select: noop },
     viewer: { displayName: "DrArzter", inTelegram: false },
     demo: true,
     observedAt: "Nov 21, 2026, 10:00 AM",

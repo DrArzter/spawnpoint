@@ -247,6 +247,27 @@ test("a new world is not opened on a release that is being retired, retired or n
   }
 });
 
+// ADR-0109: a game no session has run here is the Owner's to try; any other role is refused before anything runs.
+test("only the Owner creates or starts a world of a game that has not run here", async (t) => {
+  const inputs = scenario(t);
+  const sources = awsControlPlaneSources as Required<ControlPlaneSources>;
+  t.mock.method(sources, "listPresets", async () => [{
+    id: "industrial", displayName: "Industrial", gameId: "minecraft", repository: record.preset.repository, commit: record.preset.commit,
+    profileDigest: record.preset.profileDigest, releases: ["1.2"], latestRelease: "1.2", buildStatus: "ready" as const,
+  }]);
+  const operator = { id: "op", displayName: "Operator", roleId: "operator", directGrants: ["world.manage" as const] };
+  t.mock.method(sources, "listProvenGames", async () => new Set<string>());
+  const start = await controlSession(operator, "start", record.gameId, record.worldId);
+  assert.deepEqual([start.statusCode, JSON.parse(start.body)], [403, { error: "game_not_proven" }]);
+  const create = await createWorld(operator, "minecraft", "industrial", JSON.stringify({ displayName: "Test", release: "1.2" }));
+  assert.deepEqual([create.statusCode, JSON.parse(create.body)], [403, { error: "game_not_proven" }]);
+  assert.deepEqual(inputs, []);
+
+  assert.equal((await controlSession(identity, "start", record.gameId, record.worldId)).statusCode, 202, "the Owner may try it");
+  t.mock.method(sources, "listProvenGames", async () => new Set(["minecraft"]));
+  assert.equal((await controlSession(operator, "start", record.gameId, record.worldId)).statusCode, 202, "a proven game is anyone's with the permission");
+});
+
 test("purge still requires an archived world even with the exact confirmation", async (t) => {
   const inputs = scenario(t);
   const result = await controlWorldLifecycle(identity, "purge", record.gameId, record.worldId, JSON.stringify({ confirmation: record.worldId }));

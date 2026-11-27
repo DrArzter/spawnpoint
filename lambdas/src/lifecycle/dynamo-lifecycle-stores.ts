@@ -7,20 +7,22 @@ import {
 
 import type { LifecycleStore, VersionedLifecycle } from "./coordinator.ts";
 import type { PlacementStore, VersionedHost } from "./placement-coordinator.ts";
-import type { SessionHistoryStore } from "./session-history.ts";
+import type { GameProofStore, SessionHistoryStore } from "./session-history.ts";
+import { provenGameKey } from "../domain/proven-games.ts";
 import type { LifecycleRecord } from "../domain/lifecycle.ts";
 import type { HostRecord } from "../domain/placement.ts";
 import type { SessionHost } from "../domain/session-history.ts";
 
 /**
- * The coordinator's three stores over the lifecycle table: the lifecycle
- * record per key, the host records ("host#") and the session history
- * ("sessions#"). Each write is conditional on the revision it read.
+ * The coordinator's stores over the lifecycle table: the lifecycle record per
+ * key, the host records ("host#"), the session history ("sessions#") and each
+ * game's proof ("proven#", ADR-0109). Each write is conditional.
  */
 export function dynamoLifecycleStores(documentClient: DynamoDBDocumentClient, tableName: string): Readonly<{
   store: LifecycleStore;
   placementStore: PlacementStore;
   sessionHistoryStore: SessionHistoryStore;
+  gameProofStore: GameProofStore;
 }> {
   function isConditionalFailure(error: unknown): boolean {
     return error instanceof Error && error.name === "ConditionalCheckFailedException";
@@ -202,5 +204,20 @@ export function dynamoLifecycleStores(documentClient: DynamoDBDocumentClient, ta
     },
   };
 
-  return { store, placementStore, sessionHistoryStore };
+  // Written once per game: the first ready session is the one kept.
+  const gameProofStore: GameProofStore = {
+    async record(proof) {
+      try {
+        await documentClient.send(new PutCommand({
+          TableName: tableName,
+          Item: { server_id: provenGameKey(proof.gameId), game_id: proof.gameId, world_id: proof.worldId, first_ready_at: proof.firstReadyAt },
+          ConditionExpression: "attribute_not_exists(server_id)",
+        }));
+      } catch (error) {
+        if (!isConditionalFailure(error)) throw error;
+      }
+    },
+  };
+
+  return { store, placementStore, sessionHistoryStore, gameProofStore };
 }

@@ -63,6 +63,27 @@ test("the coordinator keeps one item per world, creates it on the first open and
   await assert.rejects(run({ action: "openSessionHistory", worldId: "w", sessionId: "s2", hostId: "" }), /hostId/);
 });
 
+// ADR-0109: the first ready session of a game proves it; nothing else does, and a failed proof fails nothing.
+test("an opened history records its game's proof, once per open, and a proof that fails is only logged", async (t) => {
+  const items = new Map<string, { revision: number; entries: readonly SessionHost[] }>();
+  const store: SessionHistoryStore = {
+    read: async (worldId) => items.get(worldId) ?? null,
+    create: async (worldId, entries) => { items.set(worldId, { revision: 1, entries }); return true; },
+    compareAndSet: async (worldId, revision, entries) => { items.set(worldId, { revision: revision + 1, entries }); return true; },
+  };
+  const proofs: unknown[] = [];
+  const run = createSessionHistoryCoordinator(store, () => at(0), { record: async (proof) => { proofs.push(proof); } });
+  await run({ action: "openSessionHistory", worldId: "w", sessionId: "s1", hostId: "i-aaaa1111", gameId: "valheim" });
+  await run({ action: "openSessionHistory", worldId: "w", sessionId: "s2", hostId: "i-aaaa1111" });
+  await run({ action: "openSessionHistory", worldId: "w", sessionId: "s3", hostId: "i-aaaa1111", gameId: "Not A Game" });
+  await run({ action: "closeSessionHistory", worldId: "w", sessionId: "s3" });
+  assert.deepEqual(proofs, [{ gameId: "valheim", worldId: "w", firstReadyAt: iso(0) }]);
+
+  t.mock.method(console, "warn", () => undefined);
+  const failing = createSessionHistoryCoordinator(store, () => at(0), { record: async () => { throw new Error("throttled"); } });
+  assert.deepEqual(await failing({ action: "openSessionHistory", worldId: "x", sessionId: "s1", hostId: "i-aaaa1111", gameId: "valheim" }), { entries: 1 });
+});
+
 // --- the workflows write it ----------------------------------------------------
 
 type Definition = { States: Record<string, { Next?: string; Parameters?: { Payload?: Record<string, unknown> }; Catch?: { Next: string }[] }> };
@@ -78,7 +99,7 @@ test("a start records its host once the session is ready, and a failure to recor
   const record = States["Record Session Host"]!;
   assert.equal(record.Next, "Route Release Commit");
   assert.deepEqual(record.Catch?.map((caught) => caught.Next), ["Route Release Commit"]);
-  assert.deepEqual(record.Parameters?.Payload, { action: "openSessionHistory", "worldId.$": "$.request.worldId", "sessionId.$": "$.request.sessionId", "hostId.$": "$.request.placed.hostId" });
+  assert.deepEqual(record.Parameters?.Payload, { action: "openSessionHistory", "worldId.$": "$.request.worldId", "sessionId.$": "$.request.sessionId", "hostId.$": "$.request.placed.hostId", "gameId.$": "$.request.gameId" });
   assert.equal(States["Mark Compensated Session Stopped"]?.Next, "Close Compensated Session History");
   assert.equal(States["Mark Forced Session Stopped"]?.Next, "Close Forced Session History");
 });

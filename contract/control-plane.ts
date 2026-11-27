@@ -130,6 +130,8 @@ export type Game = Readonly<{
   consoleSuggestions: readonly string[];
   /** How a skin draws the game, in each skin's own vocabulary: a tint, a glyph and a scene name; null for the default (ADR-0090). */
   presentation: GamePresentation;
+  /** A session of this game became ready in this deployment (ADR-0109); until then only an Owner may create or start its worlds. */
+  proven: boolean;
   presets: readonly Preset[];
   worlds: readonly World[];
 }>;

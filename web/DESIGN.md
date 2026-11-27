@@ -275,7 +275,7 @@ stays focusable and shows the hint) and `aria-busy` while busy. Contract tests: 
 | `Card`, `Grid`, `SplitPage`, `ListColumn` | Surfaces and layout |
 | `PageHeader`, `Tabs` | Page structure. A tab strip that fits only without its icons drops them (`data-compact`); one that overflows anyway keeps them and scrolls |
 | `Table`, `TrackList`, `DetailList` | Rows on shared tracks; key-value sections in equal columns |
-| `Status`, `Indicator`, `Chip`, `Tile`, `Tick` | State: icon and label; icon with the label in the tooltip; facts; status count tiles; ticking counts |
+| `Status`, `Indicator`, `Chip`, `Tile`, `Tick` | State: icon and label; icon with the label in the tooltip (`inControl` inside a button: no tab stop of its own); facts; status count tiles; ticking counts |
 | `Decision` | A request row's Approve and Dismiss: two named icon buttons of one style in the row's action column. A page header keeps its worded buttons |
 | `Notice`, `Empty`, `Skeleton`, `ProgressBar` | One-line notices; empty and error states; loading at the final geometry (`Skeleton fill` takes a column's free height; `SkeletonGroup flow` lays its placeholders in the parent's own layout); indeterminate work |
 | `Settle` | Wraps the tab panel so its height glides when the content changes size (A3h) |

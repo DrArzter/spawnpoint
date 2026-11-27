@@ -1,6 +1,2 @@
-# Add an exact resource address only for one reviewed destructive deployment,
-# then remove it after that deployment succeeds.
-# ADR-0104: the panel streams replace the projection and session events on the bus.
-aws_cloudwatch_event_rule.control_plane_projection_updated
-aws_cloudwatch_event_target.control_plane_projection_updated
-aws_lambda_permission.control_plane_projection_updated
+# Intentionally empty. Add an exact resource address only for one reviewed
+# destructive deployment, then remove it after that deployment succeeds.

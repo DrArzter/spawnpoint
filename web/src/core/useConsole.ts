@@ -10,7 +10,7 @@ import { capitalize, formatDateTime } from "../lib/format";
 import { useAccessDirectory, type AccessDirectory } from "./access-directory";
 import type { ControlPlaneSnapshot, Game, OwnerBootstrap, Page, Preset, ServerState, SettingValue, World } from "../model";
 import { routeHash, type AppRoute } from "../routing";
-import { configuredHosts, deriveSharedHostSession, gameOperations, nextReadingExpiry, worldSessionActive, type SharedHostSession } from "../session";
+import { configuredHosts, deriveSharedHostSession, gameOperations, nextReadingExpiry, operationTransition, worldSessionActive, type SharedHostSession } from "../session";
 import { NO_PENDING, pendingOf, withoutPending, withPending, type Confirmation, type Pending, type PendingMap, type SessionAction, type WorldActionKind } from "../shell/actions";
 import { useAppearance, useBootCard, useRoute, useStoredState } from "../shell/hooks";
 import { initializeTelegram, openInBrowser, type ViewerProfile } from "../telegram";
@@ -59,8 +59,8 @@ function hostServerState(snapshot: ControlPlaneSnapshot | null): ServerState {
 export function deriveServerState(game: Game | undefined, snapshot: ControlPlaneSnapshot | null): ServerState {
   if (snapshot?.deployment?.placement === "fleet") return fleetServerState(game);
   const operation = gameOperations(game, snapshot)[0];
-  if (operation?.type === "start") return "starting";
-  if (operation?.type === "stop") return "stopping";
+  const transition = operationTransition(operation, operation?.worldId == null ? undefined : game?.lifecycle?.observedState);
+  if (transition !== null) return transition;
   const observed = game?.lifecycle?.observedState;
   if (observed === "ready") return "running";
   return observed ?? hostServerState(snapshot);
